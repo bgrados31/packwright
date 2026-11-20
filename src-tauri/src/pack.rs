@@ -169,9 +169,10 @@ pub async fn pack_create(
     let meta_dir = target.join(".packwright");
     std::fs::create_dir_all(meta_dir.join("assets"))?;
     let meta = format!(
-        "summary = \"\"\nlicense = \"\"\nhomepage = \"\"\nsource = \"\"\ncategories = []\nicon = \"assets/icon.png\"\nbanner = \"assets/banner.png\"\nreadme = \"README.md\"\n# pack: {name}\n"
+        "summary = \"\"\nlicense = \"\"\nhomepage = \"\"\nsource = \"\"\ncategories = []\nicon = \".packwright/assets/icon.png\"\nbanner = \".packwright/assets/banner.png\"\nreadme = \"README.md\"\n# pack: {name}\n"
     );
     std::fs::write(meta_dir.join("meta.toml"), meta)?;
+    std::fs::write(meta_dir.join("assets").join("icon.png"), crate::meta::DEFAULT_ICON)?;
 
     model::read_pack_info(&target)
 }

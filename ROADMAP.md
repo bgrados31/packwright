@@ -29,11 +29,13 @@
 - [x] Sandbox de rutas (path traversal) y Ctrl+S
 - [x] UI rediseñada con Tailwind 4: estética blueprint/forge, sin look genérico
 
-### 1.3 Metadatos profesionales
-- [ ] Campos extendidos en `.packwright/meta.toml`
-- [ ] Icono (`overrides/icon.png`) y banner
-- [ ] Descripción markdown larga, autor, licencia, categorías
-- [ ] Preview de la ficha antes de exportar
+### 1.3 Metadatos profesionales ✅
+- [x] Campos extendidos en `.packwright/meta.toml` con guardado atómico
+- [x] Icono automático en cada pack + botón "Usar isotipo"
+- [x] Resumen, licencia, web, código y categorías (máx. 6)
+- [x] Generador de README con instrucciones por launcher
+- [x] Preview de la ficha + pestaña "Detalles" en el editor
+- [x] Banner y Open Graph conectados al README
 
 ### 1.4 Catálogo e instalación de mods
 - [ ] Cliente Modrinth (búsqueda, filtros, versiones compatibles)

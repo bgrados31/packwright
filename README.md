@@ -1,3 +1,5 @@
+![Packwright](public/banner_readme.jpg)
+
 # Packwright
 
 > Build modpacks. Launch servers. One desktop app.
@@ -107,6 +109,10 @@ bun run tauri build      # instaladores .msi / .deb / .dmg
 ## Estado
 
 🚧 Proyecto en fase inicial (MVP). No lanzar aún en producción.
+
+## Identidad visual
+
+El isotipo, el monocromo y las imágenes de marca están en `public/`. La imagen para redes sociales (Open Graph) está en [`public/open_graph.jpg`](public/open_graph.jpg). Los prompts usados para generarlos y la paleta aceptada están en [`docs/ASSETS-PROMPT.md`](docs/ASSETS-PROMPT.md).
 
 ## Licencia
 

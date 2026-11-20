@@ -34,6 +34,16 @@ type FileEntry = { path: string; name: string; size: number };
 type Diagnostic = { line: number; column: number; message: string; severity: string };
 
 type HistoryEntry = { id: string; path: string };
+type PackMeta = {
+  summary: string;
+  license: string;
+  homepage: string;
+  source: string;
+  categories: string[];
+  icon: string;
+  banner: string;
+  readme: string;
+};
 
 const LOADERS = ["neoforge", "forge", "fabric", "quilt", "purpur"];
 const emptyForm = {
@@ -89,6 +99,10 @@ function App() {
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [editorTab, setEditorTab] = useState<"files" | "details">("files");
+  const [metaForm, setMetaForm] = useState<PackMeta | null>(null);
+  const [metaDirty, setMetaDirty] = useState(false);
+  const [hasIcon, setHasIcon] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -130,6 +144,11 @@ function App() {
       setSelectedPack(dir);
       setDiagnostics([]);
       setShowHistory(false);
+      setEditorTab("files");
+      const meta = await invoke<PackMeta>("meta_get", { dir });
+      setMetaForm(meta);
+      setMetaDirty(false);
+      setHasIcon(await invoke<boolean>("pack_has_icon", { dir, path: meta.icon || "assets/icon.png" }));
       const first = list.find((f) => f.path === "pack.toml") ?? list[0];
       if (first) {
         setActiveFile(first.path);
@@ -241,6 +260,49 @@ function App() {
   const reveal = async (dir: string) => {
     try {
       await invoke("pack_reveal", { dir });
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  const saveMeta = async () => {
+    if (!selectedPack || !metaForm) return;
+    try {
+      await invoke("meta_set", { dir: selectedPack, meta: metaForm });
+      setMetaDirty(false);
+      await loadAll();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  const useDefaultIcon = async () => {
+    if (!selectedPack) return;
+    try {
+      const path = await invoke<string>("pack_icon_set_default", { dir: selectedPack });
+      setMetaForm((prev) => prev ? { ...prev, icon: ".packwright/assets/icon.png" } : prev);
+      setMetaDirty(true);
+      setHasIcon(await invoke<boolean>("pack_has_icon", { dir: selectedPack, path: ".packwright/assets/icon.png" }));
+      // la ruta devuelta es solo informativa; el valor canónico es relativo al pack
+      void path;
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  const generateReadme = async () => {
+    if (!selectedPack) return;
+    try {
+      await invoke("pack_generate_readme", { dir: selectedPack });
+      const list = await invoke<FileEntry[]>("pack_files", { dir: selectedPack });
+      setFiles(list);
+      setEditorTab("files");
+      const readme = list.find((f) => f.path === "README.md");
+      if (readme) {
+        setActiveFile(readme.path);
+        setContent(await invoke<string>("file_read", { dir: selectedPack, path: readme.path }));
+        setDirty(false);
+      }
     } catch (err) {
       setError(errorText(err));
     }
@@ -392,11 +454,32 @@ function App() {
                 <p className="mt-1 font-mono text-xs text-muted">{selectedPack}</p>
               </div>
               <div className="flex gap-2">
-                <button className="btn btn-secondary" onClick={loadHistory}>Historial</button>
-                <button className="btn btn-primary" onClick={saveFile} disabled={!dirty}>Guardar</button>
+                {editorTab === "files" ? (
+                  <>
+                    <button className="btn btn-secondary" onClick={loadHistory}>Historial</button>
+                    <button className="btn btn-primary" onClick={saveFile} disabled={!dirty}>Guardar</button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary" onClick={saveMeta} disabled={!metaDirty}>Guardar metadata</button>
+                )}
               </div>
             </div>
 
+            <div className="mt-5 flex gap-1 border-b border-line">
+              {(["files", "details"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  className={`border-b-2 px-3 pb-2 text-sm transition-colors ${
+                    editorTab === tab ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"
+                  }`}
+                  onClick={() => setEditorTab(tab)}
+                >
+                  {tab === "files" ? "Archivos" : "Detalles"}
+                </button>
+              ))}
+            </div>
+
+            {editorTab === "files" ? (
             <div className="card mt-6 overflow-hidden">
               <div className="grid grid-cols-[210px_1fr]">
                 <aside className="max-h-[600px] overflow-auto border-r border-line p-2">
@@ -468,6 +551,91 @@ function App() {
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="mt-6 grid grid-cols-[1fr_320px] gap-6">
+                <div className="card p-6">
+                  <h2 className="text-lg font-semibold">Detalles del pack</h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Esta información aparece al compartir o publicar el modpack.
+                  </p>
+                  {metaForm && (
+                    <div className="mt-6 flex flex-col gap-4">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-muted">Resumen</span>
+                        <textarea
+                          className="field resize-y"
+                          rows={3}
+                          maxLength={200}
+                          value={metaForm.summary}
+                          onChange={(e) => { setMetaForm({ ...metaForm, summary: e.target.value }); setMetaDirty(true); }}
+                          placeholder="Una frase que describa tu pack"
+                        />
+                      </label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-xs text-muted">Licencia</span>
+                          <input className="field" value={metaForm.license} onChange={(e) => { setMetaForm({ ...metaForm, license: e.target.value }); setMetaDirty(true); }} placeholder="MIT" />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-xs text-muted">Categorías</span>
+                          <input
+                            className="field"
+                            value={metaForm.categories.join(", ")}
+                            onChange={(e) => {
+                              setMetaForm({
+                                ...metaForm,
+                                categories: e.target.value.split(",").map((c) => c.trim()).filter(Boolean),
+                              });
+                              setMetaDirty(true);
+                            }}
+                            placeholder="Aventura, Performance"
+                          />
+                        </label>
+                      </div>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs text-muted">Web</span>
+                        <input className="field" value={metaForm.homepage} onChange={(e) => { setMetaForm({ ...metaForm, homepage: e.target.value }); setMetaDirty(true); }} placeholder="https://…" />
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs text-muted">Código fuente</span>
+                        <input className="field" value={metaForm.source} onChange={(e) => { setMetaForm({ ...metaForm, source: e.target.value }); setMetaDirty(true); }} placeholder="https://github.com/…" />
+                      </label>
+                      <div className="mt-2 flex flex-wrap gap-2 border-t border-line pt-4">
+                        <button className="btn btn-secondary" onClick={useDefaultIcon}>Usar isotipo como icono</button>
+                        <button className="btn btn-secondary" onClick={generateReadme}>Generar README</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-xs font-medium text-muted">Vista previa</div>
+                  <div className="card mt-2 overflow-hidden">
+                    <div className="flex h-28 items-center justify-center bg-subtle">
+                      <img src="/packwright-mark.png" alt="" className="h-16 w-16" />
+                    </div>
+                    <div className="p-5">
+                      <h3 className="font-semibold">{packs.find((p) => p.dir === selectedPack)?.name ?? selectedPack}</h3>
+                      <p className="mt-2 line-clamp-3 text-sm leading-5 text-muted">
+                        {metaForm?.summary || packs.find((p) => p.dir === selectedPack)?.description || "Sin resumen"}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {packs.find((p) => p.dir === selectedPack)?.minecraft_version && (
+                          <span className="chip">MC {packs.find((p) => p.dir === selectedPack)?.minecraft_version}</span>
+                        )}
+                        {metaForm?.categories.slice(0, 3).map((c) => <span key={c} className="chip">{c}</span>)}
+                      </div>
+                      <p className="mt-4 text-xs text-muted">
+                        v{packs.find((p) => p.dir === selectedPack)?.version ?? "—"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted">
+                    Icono: <span className={hasIcon ? "text-ok" : "text-bad"}>{hasIcon ? "configurado" : "pendiente"}</span>
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div>

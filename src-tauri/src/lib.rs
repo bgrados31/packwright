@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod files;
+mod meta;
 mod model;
 mod pack;
 mod process;
@@ -34,6 +35,11 @@ pub fn run() {
             files::file_validate,
             files::file_history,
             files::file_restore,
+            meta::meta_get,
+            meta::meta_set,
+            meta::pack_icon_set_default,
+            meta::pack_generate_readme,
+            meta::pack_has_icon,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
