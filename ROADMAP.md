@@ -22,11 +22,12 @@
 - [x] Listar packs, detectar issues y abrir carpeta
 - [x] UI inicial: formulario, tarjetas de pack y consola en vivo
 
-### 1.2 Editor de archivos
-- [ ] Árbol de archivos del pack + Monaco/CodeMirror
-- [ ] Validación TOML en vivo con `toml_edit`
-- [ ] Guardado atómico + historial/backup
-- [ ] Sandbox de rutas (path traversal)
+### 1.2 Editor de archivos ✅
+- [x] Árbol de archivos del pack + Monaco local con tokenizador TOML y tema propio
+- [x] Validación TOML/JSON en vivo con `toml_edit` / `serde_json` y marcadores en Monaco
+- [x] Guardado atómico (.tmp + rename) + historial con restore
+- [x] Sandbox de rutas (path traversal) y Ctrl+S
+- [x] UI rediseñada con Tailwind 4: estética blueprint/forge, sin look genérico
 
 ### 1.3 Metadatos profesionales
 - [ ] Campos extendidos en `.packwright/meta.toml`
