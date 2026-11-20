@@ -1,7 +1,20 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, Boxes, LayoutGrid, Plus, Search, TriangleAlert } from "lucide-react";
+import {
+  ArrowUpRight,
+  Boxes,
+  Compass,
+  FolderOpen,
+  LayoutGrid,
+  List,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { useI18n } from "../i18n";
 import type { PackInfo } from "../lib/types";
+import MinecraftScene from "./MinecraftScene";
 import Select from "./Select";
 
 type Props = {
@@ -13,64 +26,91 @@ type Props = {
 };
 
 type SortMode = "name" | "recent" | "mods";
+type ViewMode = "grid" | "list";
+
+const LOADER_TONES: Record<string, string> = {
+  fabric: "tone-fabric",
+  forge: "tone-forge",
+  neoforge: "tone-neoforge",
+  quilt: "tone-quilt",
+  purpur: "tone-purpur",
+};
 
 export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }: Props) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortMode>("name");
+  const [loaderFilter, setLoaderFilter] = useState("all");
+  const [view, setView] = useState<ViewMode>("grid");
 
-  const visible = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const filtered = term
-      ? packs.filter((pack) =>
-          [pack.name, pack.description ?? "", pack.loader ?? "", pack.minecraft_version ?? ""]
-            .some((value) => value.toLowerCase().includes(term)),
-        )
-      : packs;
-    const sorted = [...filtered];
-    if (sort === "name") sorted.sort((a, b) => a.name.localeCompare(b.name));
-    if (sort === "mods") sorted.sort((a, b) => b.mod_count - a.mod_count);
-    if (sort === "recent") sorted.reverse();
-    return sorted;
-  }, [packs, search, sort]);
+  const loaders = useMemo(() => {
+    const counts = new Map<string, number>();
+    packs.forEach((pack) => {
+      if (pack.loader) counts.set(pack.loader, (counts.get(pack.loader) ?? 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [packs]);
 
   const totalMods = useMemo(
     () => packs.reduce((total, pack) => total + pack.mod_count, 0),
     [packs],
   );
 
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = packs.filter((pack) => {
+      const matchesTerm =
+        !term ||
+        [pack.name, pack.description ?? "", pack.loader ?? "", pack.minecraft_version ?? ""]
+          .some((value) => value.toLowerCase().includes(term));
+      const matchesLoader = loaderFilter === "all" || pack.loader === loaderFilter;
+      return matchesTerm && matchesLoader;
+    });
+    const sorted = [...filtered];
+    if (sort === "name") sorted.sort((a, b) => a.name.localeCompare(b.name));
+    if (sort === "mods") sorted.sort((a, b) => b.mod_count - a.mod_count);
+    if (sort === "recent") sorted.reverse();
+    return sorted;
+  }, [packs, search, sort, loaderFilter]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setLoaderFilter("all");
+  };
+
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{t("nav.workspace")}</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight">{t("packs.title")}</h1>
-          <p className="mt-1 text-sm text-muted">{t("packs.subtitle", { count: packs.length })}</p>
-          <p className="mt-1 max-w-lg truncate font-mono text-[11px] text-muted/70">{workspace}</p>
-        </div>
-        <button className="btn btn-primary" onClick={onNew}>
-          <Plus size={15} strokeWidth={2} />
-          {t("nav.newPack")}
-        </button>
-      </div>
-
-      <div className="mt-7 grid grid-cols-2 gap-3">
-        {[
-          { icon: LayoutGrid, label: t("packs.statPacks"), value: String(packs.length) },
-          { icon: Boxes, label: t("packs.statMods"), value: String(totalMods) },
-        ].map((stat) => (
-          <div key={stat.label} className="card flex items-center gap-3 p-4">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
-              <stat.icon size={16} strokeWidth={1.8} />
+    <div className="view-enter">
+      {/* Banner */}
+      <section className="mc-hero mc-hero-compact">
+        <MinecraftScene variant="nether" />
+        <div className="mc-hero-scrim" />
+        <div className="mc-hero-content">
+          <span className="mc-hero-badge">
+            <Sparkles size={12} /> {t("packs.heroBadge")}
+          </span>
+          <h1 className="mt-3 text-[30px] font-semibold leading-tight tracking-tight drop-shadow-sm">
+            {t("packs.title")}
+          </h1>
+          <p className="mt-2 text-[13px] text-muted">{t("packs.subtitle", { count: packs.length })}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="hero-pill">
+              <LayoutGrid size={12} /> {packs.length} {t("packs.statPacks")}
             </span>
-            <div className="min-w-0">
-              <p className="truncate font-mono text-xs text-muted">{stat.label}</p>
-              <p className="truncate text-lg font-semibold leading-6">{stat.value}</p>
-            </div>
+            <span className="hero-pill">
+              <Boxes size={12} /> {totalMods} {t("packs.statMods")}
+            </span>
+            <span className="hero-pill max-w-[280px] truncate font-mono text-[10px]">{workspace}</span>
           </div>
-        ))}
-      </div>
+        </div>
+        <div className="hero-cta">
+          <button className="btn btn-primary" onClick={onNew}>
+            <Plus size={15} strokeWidth={2} />
+            {t("nav.newPack")}
+          </button>
+        </div>
+      </section>
 
+      {/* Barra de herramientas */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
@@ -81,7 +121,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
             placeholder={t("packs.search")}
           />
         </div>
-        <div className="w-48">
+        <div className="w-44">
           <Select
             value={sort}
             onChange={(value) => setSort(value as SortMode)}
@@ -92,57 +132,181 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
             ]}
           />
         </div>
+        <div className="view-toggle">
+          <button
+            className={view === "grid" ? "active" : ""}
+            onClick={() => setView("grid")}
+            title={t("packs.viewGrid")}
+            aria-label={t("packs.viewGrid")}
+          >
+            <LayoutGrid size={14} />
+          </button>
+          <button
+            className={view === "list" ? "active" : ""}
+            onClick={() => setView("list")}
+            title={t("packs.viewList")}
+            aria-label={t("packs.viewList")}
+          >
+            <List size={14} />
+          </button>
+        </div>
       </div>
 
+      {/* Filtros por loader */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SlidersHorizontal size={13} className="text-muted" />
+        <button
+          className={`filter-chip ${loaderFilter === "all" ? "active" : ""}`}
+          onClick={() => setLoaderFilter("all")}
+        >
+          {t("packs.filterAll")} <span className="filter-count">{packs.length}</span>
+        </button>
+        {loaders.map(([loader, count]) => (
+          <button
+            key={loader}
+            className={`filter-chip ${loaderFilter === loader ? "active" : ""}`}
+            onClick={() => setLoaderFilter(loader)}
+          >
+            <span className={`loader-dot ${LOADER_TONES[loader] ?? ""}`} />
+            {loader} <span className="filter-count">{count}</span>
+          </button>
+        ))}
+        <span className="ml-auto font-mono text-[10px] text-muted">
+          {t("packs.showing", { count: visible.length })}
+        </span>
+      </div>
+
+      {/* Resultados */}
       {visible.length === 0 ? (
         <div className="card mt-5 grid place-items-center py-20">
           <div className="text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft text-accent">
-              <Search size={20} strokeWidth={1.7} />
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-accent-soft text-accent">
+              <Compass size={22} strokeWidth={1.7} />
             </div>
             <p className="mt-4 font-mono text-xs text-muted">
               {packs.length === 0 ? t("packs.emptyTitle") : t("packs.noResults")}
             </p>
-            <p className="mt-1 text-xs text-muted">{t("packs.emptySubtitle")}</p>
+            <p className="mt-1 text-xs text-muted">
+              {packs.length === 0 ? t("packs.emptySubtitle") : t("packs.noResultsHint")}
+            </p>
+            {packs.length === 0 ? (
+              <button className="btn btn-primary mt-5" onClick={onNew}>
+                <Plus size={14} /> {t("nav.newPack")}
+              </button>
+            ) : (
+              <button className="btn btn-secondary mt-5" onClick={resetFilters}>
+                {t("packs.clearFilters")}
+              </button>
+            )}
           </div>
         </div>
-      ) : (
+      ) : view === "grid" ? (
         <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-4">
-          {visible.map((pack) => (
-            <article key={pack.dir} className="pack-card p-5">
-              <div className="flex items-start justify-between">
-                <img src="/packwright-mark.png" alt="" className="h-9 w-9 rounded-lg" />
-                <span className="rounded-md bg-subtle px-2 py-1 font-mono text-[10px] text-muted">
-                  v{pack.version ?? "—"}
-                </span>
-              </div>
-
-              <h2 className="mt-4 truncate text-[15px] font-semibold tracking-tight">{pack.name}</h2>
-              <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-muted">
-                {pack.description || t("packs.noDescription")}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                <span className="chip">MC {pack.minecraft_version ?? "—"}</span>
-                <span className="chip">{pack.loader ?? "—"}</span>
-                <span className="chip">{t("packs.modCount", { count: pack.mod_count })}</span>
-              </div>
-
-              {pack.issues.length > 0 && (
-                <div className="mt-3 flex items-start gap-2 rounded-lg bg-bad/5 px-3 py-2 text-[11px] text-bad">
-                  <TriangleAlert size={13} className="mt-0.5 shrink-0" />
-                  <span className="line-clamp-2">{pack.issues[0]}</span>
+          {visible.map((pack, index) => (
+            <article
+              key={pack.dir}
+              className="pack-card pack-card-v2 stagger"
+              style={{ animationDelay: `${index * 40}ms` }}
+            >
+              <div className="pack-card-strip" />
+              <div className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="relative">
+                    <img src="/packwright-mark.png" alt="" className="pack-card-icon h-9 w-9 rounded-lg" />
+                    <span
+                      className={`loader-dot absolute -bottom-0.5 -right-0.5 ring-2 ring-surface ${LOADER_TONES[pack.loader ?? ""] ?? ""}`}
+                    />
+                  </div>
+                  <span className="rounded-md bg-subtle px-2 py-1 font-mono text-[10px] text-muted">
+                    v{pack.version ?? "—"}
+                  </span>
                 </div>
-              )}
 
-              <div className="mt-5 flex items-center gap-2">
-                <button className="btn btn-primary flex-1" onClick={() => onOpen(pack.dir)}>
-                  {t("packs.open")}
-                </button>
-                <button className="btn btn-secondary px-3" onClick={() => onReveal(pack.dir)} title={t("packs.folder")}>
-                  <ArrowUpRight size={15} />
-                </button>
+                <h2 className="mt-4 truncate text-[15px] font-semibold tracking-tight">{pack.name}</h2>
+                <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-muted">
+                  {pack.description || t("packs.noDescription")}
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                  <span className="chip">
+                    <Boxes size={11} /> MC {pack.minecraft_version ?? "—"}
+                  </span>
+                  <span className={`chip chip-loader ${LOADER_TONES[pack.loader ?? ""] ?? ""}`}>
+                    {pack.loader ?? "—"}
+                  </span>
+                  {pack.issues.length > 0 && (
+                    <span className="chip chip-issue">
+                      <TriangleAlert size={11} /> {pack.issues.length}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-center gap-1">
+                  {Array.from({ length: 8 }, (_, block) => (
+                    <span
+                      key={block}
+                      className={`pack-block ${block < Math.min(8, Math.ceil(pack.mod_count / 5)) ? "filled" : ""}`}
+                    />
+                  ))}
+                  <span className="ml-auto font-mono text-[9px] text-muted">{pack.mod_count} mods</span>
+                </div>
+
+                {pack.issues.length > 0 && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-bad/5 px-3 py-2 text-[11px] text-bad">
+                    <TriangleAlert size={13} className="mt-0.5 shrink-0" />
+                    <span className="line-clamp-2">{pack.issues[0]}</span>
+                  </div>
+                )}
+
+                <div className="mt-5 flex items-center gap-2">
+                  <button className="btn btn-primary flex-1" onClick={() => onOpen(pack.dir)}>
+                    {t("packs.open")}
+                  </button>
+                  <button
+                    className="btn btn-secondary px-3"
+                    onClick={() => onReveal(pack.dir)}
+                    title={t("packs.folder")}
+                  >
+                    <ArrowUpRight size={15} />
+                  </button>
+                </div>
               </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 flex flex-col gap-2">
+          {visible.map((pack, index) => (
+            <article
+              key={pack.dir}
+              className="pack-row stagger"
+              style={{ animationDelay: `${index * 25}ms` }}
+            >
+              <img src="/packwright-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate text-sm font-medium">{pack.name}</h3>
+                  <span className={`loader-dot ${LOADER_TONES[pack.loader ?? ""] ?? ""}`} />
+                </div>
+                <p className="truncate text-[11px] text-muted">
+                  {pack.description || t("packs.noDescription")}
+                </p>
+              </div>
+              <span className="chip">MC {pack.minecraft_version ?? "—"}</span>
+              <span className={`chip chip-loader ${LOADER_TONES[pack.loader ?? ""] ?? ""}`}>
+                {pack.loader ?? "—"}
+              </span>
+              <span className="w-16 text-right font-mono text-[11px] text-muted">{pack.mod_count} mods</span>
+              <button
+                className="btn btn-secondary px-3"
+                onClick={() => onReveal(pack.dir)}
+                title={t("packs.folder")}
+              >
+                <FolderOpen size={14} />
+              </button>
+              <button className="btn btn-primary px-3" onClick={() => onOpen(pack.dir)}>
+                {t("packs.open")}
+              </button>
             </article>
           ))}
         </div>

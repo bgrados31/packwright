@@ -140,6 +140,13 @@
   "packs.statMods": "Mods installed",
   "packs.statLoader": "Main loader",
   "packs.noResults": "No packs match your search",
+  "packs.heroBadge": "YOUR COLLECTION",
+  "packs.filterAll": "All",
+  "packs.showing": "Showing {count}",
+  "packs.noResultsHint": "Try another search or loader filter.",
+  "packs.clearFilters": "Clear filters",
+  "packs.viewGrid": "Grid view",
+  "packs.viewList": "List view",
 
   "home.eyebrow": "OVERVIEW",
   "home.title": "Your workspace at a glance.",
