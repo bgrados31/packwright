@@ -143,7 +143,7 @@ function App() {
 
   const loadMcVersions = useCallback(async () => {
     try {
-      const list = await invoke<McVersion[]>("versions_minecraft", { include_snapshots: false });
+      const list = await invoke<McVersion[]>("versions_minecraft", { includeSnapshots: false });
       setMcVersions(list);
     } catch {
       setMcVersions([]);
@@ -154,7 +154,7 @@ function App() {
     if (!loader || !mc) return;
     setLoadingVersions(true);
     try {
-      const list = await invoke<LoaderVersion[]>("versions_loader", { loader, mc_version: mc });
+      const list = await invoke<LoaderVersion[]>("versions_loader", { loader, mcVersion: mc });
       setLoaderVersions(list);
     } catch {
       setLoaderVersions([]);
@@ -282,7 +282,7 @@ function App() {
       await invoke<PackInfo>("pack_create", {
         ...form,
         author: form.author || "Packwright",
-        loader_version: form.loader_version.trim() || null,
+        loaderVersion: form.loader_version.trim() || null,
       });
       setForm(emptyForm);
       setShowCreate(false);
