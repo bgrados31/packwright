@@ -375,7 +375,7 @@ export default function App() {
             workspace={config?.workspace ?? "—"}
           />
         ) : showCreate ? (
-          <div className="mx-auto max-w-lg">
+          <div className="view-enter mx-auto max-w-lg">
             <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setShowCreate(false)}>
               ← {t("editor.back")}
             </button>
@@ -395,6 +395,7 @@ export default function App() {
             </div>
           </div>
         ) : selectedPack ? (
+          <div className="view-enter">
           <PackEditor
             packName={activePack?.name ?? selectedPack}
             dir={selectedPack}
@@ -422,8 +423,9 @@ export default function App() {
             onUseIcon={() => void useDefaultIcon()}
             onGenerateReadme={() => void generateReadme()}
           />
+          </div>
         ) : (
-          <div>
+          <div className="view-enter">
             <div className="flex items-baseline justify-between">
               <h1 className="text-2xl font-semibold tracking-tight">{t("packs.title")}</h1>
               <span className="text-sm text-muted">

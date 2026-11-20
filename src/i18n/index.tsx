@@ -36,6 +36,8 @@ const en = {
   "form.more": "More options",
   "form.latest": "latest",
   "form.unstable": "unstable",
+  "form.search": "Search versions…",
+  "form.noResults": "No matching versions",
   "form.submit": "Create modpack",
   "form.creating": "Creating…",
   "form.packwizMissing": "Packwiz was not found. Install it or set its path in settings.",

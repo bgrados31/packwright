@@ -1,5 +1,6 @@
 import { useI18n } from "../i18n";
 import { LOADERS, type CreatePackInput, type LoaderVersion, type McVersion } from "../lib/types";
+import Select from "./Select";
 
 type Props = {
   form: CreatePackInput;
@@ -44,22 +45,19 @@ export default function CreatePackForm({
         <div className="flex flex-col gap-1.5">
           <label htmlFor="pack-mc" className="text-xs font-medium text-muted">{t("form.minecraft")}</label>
           {mcVersions.length > 0 ? (
-            <select
+            <Select
               id="pack-mc"
-              className="field"
               value={form.minecraft_version}
-              onChange={(event) => patch({ minecraft_version: event.target.value, loaderVersion: null })}
-              required
-            >
-              {form.minecraft_version && !mcVersions.some((v) => v.id === form.minecraft_version) && (
-                <option value={form.minecraft_version}>{form.minecraft_version}</option>
-              )}
-              {mcVersions.map((version) => (
-                <option key={version.id} value={version.id}>
-                  {version.id}{version.latest ? ` (${t("form.latest")})` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => patch({ minecraft_version: value, loaderVersion: null })}
+              searchable
+              searchPlaceholder={t("form.search")}
+              emptyLabel={t("form.noResults")}
+              options={mcVersions.map((version) => ({
+                value: version.id,
+                label: version.id,
+                badge: version.latest ? t("form.latest") : undefined,
+              }))}
+            />
           ) : (
             <input
               id="pack-mc"
@@ -74,14 +72,12 @@ export default function CreatePackForm({
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="pack-loader" className="text-xs font-medium text-muted">{t("form.loader")}</label>
-          <select
+          <Select
             id="pack-loader"
-            className="field"
             value={form.loader}
-            onChange={(event) => patch({ loader: event.target.value, loaderVersion: null })}
-          >
-            {LOADERS.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
-          </select>
+            onChange={(value) => patch({ loader: value, loaderVersion: null })}
+            options={LOADERS.map((loader) => ({ value: loader, label: loader }))}
+          />
         </div>
       </div>
 
@@ -129,19 +125,22 @@ export default function CreatePackForm({
           <div className="flex flex-col gap-1.5">
             <label htmlFor="pack-lv" className="text-xs text-muted">{t("form.loaderVersion")}</label>
             {loaderVersions.length > 0 ? (
-              <select
+              <Select
                 id="pack-lv"
-                className="field"
                 value={form.loaderVersion ?? ""}
-                onChange={(event) => patch({ loaderVersion: event.target.value || null })}
-              >
-                <option value="">{t("form.loaderAuto")}</option>
-                {loaderVersions.map((version) => (
-                  <option key={version.id} value={version.id}>
-                    {version.id}{version.stable ? "" : ` · ${t("form.unstable")}`}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => patch({ loaderVersion: value || null })}
+                searchable
+                searchPlaceholder={t("form.search")}
+                emptyLabel={t("form.noResults")}
+                options={[
+                  { value: "", label: t("form.loaderAuto") },
+                  ...loaderVersions.map((version) => ({
+                    value: version.id,
+                    label: version.id,
+                    badge: version.stable ? undefined : t("form.unstable"),
+                  })),
+                ]}
+              />
             ) : (
               <input
                 id="pack-lv"
