@@ -235,29 +235,33 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
         )}
 
         <div className="modal-footer">
-          {phase === "error" ? (
-            <button className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>
-              <RotateCcw size={14} /> {t("settings.retry")}
-            </button>
-          ) : phase === "success" ? (
-            <>
+          <div className="flex min-w-0 items-center gap-2">
+            {phase === "error" ? (
+              <button className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>
+                <RotateCcw size={14} /> {t("settings.retry")}
+              </button>
+            ) : phase === "success" ? (
               <button className="btn btn-secondary" onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}>
                 <FolderOpen size={14} /> {t("export.viewFolder")}
               </button>
+            ) : phase === "select" || phase === "review" ? (
+              <button className="btn btn-primary" onClick={validate} disabled={busy}>
+                {phase === "review" ? t("export.exportAnyway") : t("export.start")}
+              </button>
+            ) : (
+              <span className="text-[11px] text-muted">{t("export.working")}</span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {phase === "success" && (
               <button className="btn btn-ghost" onClick={() => { setPhase("select"); setAttempt((value) => value + 1); }}>
                 {t("export.another")}
               </button>
-            </>
-          ) : phase === "select" || phase === "review" ? (
-            <button className="btn btn-primary" onClick={validate} disabled={busy}>
-              {phase === "review" ? t("export.exportAnyway") : t("export.start")}
+            )}
+            <button className={`btn ${phase === "success" ? "btn-primary" : "btn-secondary"}`} onClick={onClose} disabled={busy}>
+              {phase === "success" ? t("export.done") : t("common.close")}
             </button>
-          ) : (
-            <span className="text-[11px] text-muted">{t("export.working")}</span>
-          )}
-          <button className="btn btn-secondary" onClick={onClose} disabled={busy}>
-            {t("common.close")}
-          </button>
+          </div>
         </div>
       </div>
     </div>
