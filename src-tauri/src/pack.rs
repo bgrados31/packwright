@@ -24,6 +24,11 @@ pub fn config_get() -> Result<AppConfig> {
 }
 
 #[tauri::command]
+pub fn launcher_defaults() -> std::collections::HashMap<String, String> {
+    config::default_launcher_paths()
+}
+
+#[tauri::command]
 pub fn config_set(config: AppConfig) -> Result<AppConfig> {
     config::save(&config)?;
     config::ensure_workspace(&config)?;

@@ -1,126 +1,16 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-
-/** English is the source of truth for all UI strings. */
-const en = {
-  "app.name": "Packwright",
-  "nav.newPack": "New modpack",
-  "nav.toggleTheme": "Toggle theme",
-
-  "welcome.eyebrow": "MODPACK STUDIO",
-  "welcome.title": "Build the pack you want to play.",
-  "welcome.subtitle": "Packwright keeps your mods, metadata and workspace in one local app. Start with a name and a Minecraft version — we handle the rest.",
-  "welcome.feature1Title": "Real versions",
-  "welcome.feature1Body": "Minecraft and loader versions fetched automatically.",
-  "welcome.feature2Title": "Professional details",
-  "welcome.feature2Body": "Icon, summary, license and categories in one place.",
-  "welcome.feature3Title": "Export ready",
-  "welcome.feature3Body": "A .mrpack for ATLauncher, Prism and Modrinth.",
-  "welcome.cardTitle": "New modpack",
-  "welcome.cardSubtitle": "Just three fields to begin.",
-  "welcome.local": "Stored locally · no account required",
-  "workspace.label": "Workspace",
-  "workspace.ready": "Packwiz ready",
-  "workspace.notReady": "Packwiz not detected",
-
-  "form.name": "Name",
-  "form.namePlaceholder": "My modpack",
-  "form.author": "Author",
-  "form.authorPlaceholder": "Optional",
-  "form.minecraft": "Minecraft",
-  "form.loader": "Loader",
-  "form.version": "Version",
-  "form.loaderVersion": "Loader version",
-  "form.loaderAuto": "Automatic (recommended)",
-  "form.description": "Description",
-  "form.descriptionPlaceholder": "Optional",
-  "form.more": "More options",
-  "form.latest": "latest",
-  "form.unstable": "unstable",
-  "form.search": "Search versions…",
-  "form.noResults": "No matching versions",
-  "form.submit": "Create modpack",
-  "form.creating": "Creating…",
-  "form.packwizMissing": "Packwiz was not found. Install it or set its path in settings.",
-  "form.autoHint": "Version lists update automatically when you change the loader or Minecraft version.",
-
-  "packs.title": "Your modpacks",
-  "packs.count": "{count} packs",
-  "packs.countOne": "{count} pack",
-  "packs.emptyTitle": "Your workspace is empty",
-  "packs.emptySubtitle": "Create your first pack with the form on the left.",
-  "packs.open": "Open",
-  "packs.folder": "Open folder",
-  "packs.noDescription": "No description",
-  "packs.modCount": "{count} mods",
-
-  "editor.back": "All packs",
-  "editor.files": "Files",
-  "editor.details": "Details",
-  "editor.save": "Save",
-  "editor.history": "History",
-  "editor.saveDetails": "Save details",
-  "editor.unsaved": "Unsaved",
-  "editor.noErrors": "No errors",
-  "editor.errors": "{count} error(s)",
-  "editor.previousVersions": "Previous versions",
-  "editor.noPrevious": "No previous versions",
-  "editor.loading": "Loading editor…",
-
-  "details.title": "Pack details",
-  "details.subtitle": "This information appears when sharing or publishing the pack.",
-  "details.summary": "Summary",
-  "details.summaryPlaceholder": "A short sentence describing your pack",
-  "details.license": "License",
-  "details.categories": "Categories",
-  "details.categoriesPlaceholder": "Adventure, Performance",
-  "details.website": "Website",
-  "details.source": "Source code",
-  "details.useIcon": "Use Packwright icon",
-  "details.generateReadme": "Generate README",
-  "details.preview": "Preview",
-  "details.noSummary": "No summary yet",
-  "details.iconReady": "Icon: configured",
-  "details.iconMissing": "Icon: missing",
-
-  "output.title": "Packwiz output",
-  "output.clear": "Clear",
-  "output.empty": "Waiting for operations…",
-
-  "setup.title": "Welcome to Packwright",
-  "setup.subtitle": "A few settings before we start. You can change all of them later.",
-  "setup.workspaceTitle": "Where should packs live?",
-  "setup.workspaceBody": "Packwright stores every modpack in this folder. Each pack is a normal folder you can back up or move.",
-  "setup.browse": "Browse",
-  "setup.useDefault": "Use default",
-  "setup.launcherTitle": "Which launcher do you use?",
-  "setup.launcherBody": "We will tailor the export tips and the launcher helpers to your choice.",
-  "setup.launcherPath": "Launcher folder (optional)",
-  "setup.prefsTitle": "Preferences",
-  "setup.prefsBody": "These apply to every new modpack you create.",
-  "setup.defaultLoader": "Default loader",
-  "setup.language": "Language",
-  "setup.finish": "Finish setup",
-  "setup.save": "Save settings",
-  "setup.note": "You can revisit this from Settings at any time.",
-  "setup.settingsTitle": "Settings",
-
-  "launcher.atlauncher": "ATLauncher",
-  "launcher.prism": "Prism Launcher",
-  "launcher.modrinth": "Modrinth App",
-  "launcher.multimc": "MultiMC",
-  "launcher.none": "Other / none",
-
-  "common.close": "Close",
-  "common.error": "Error",
-} as const;
+import en from "./en.json";
+import es from "./es.json";
 
 export type TranslationKey = keyof typeof en;
 export type Locale = "en" | "es";
 
-/** Add Spanish translations here when needed; missing keys fall back to English. */
-const es: Partial<Record<TranslationKey, string>> = {};
+const dictionaries: Record<Locale, Record<TranslationKey, string>> = { en, es };
 
-const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = { en, es };
+export const LOCALES: Array<{ id: Locale; label: string; flag: string }> = [
+  { id: "en", label: "language.english", flag: "🇬🇧" },
+  { id: "es", label: "language.spanish", flag: "🇪🇸" },
+];
 
 type I18nValue = {
   locale: Locale;
@@ -150,7 +40,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         setLocale(next);
       },
       t(key, params) {
-        return interpolate(dictionary[key] ?? en[key], params);
+        return interpolate(dictionary[key] ?? en[key] ?? String(key), params);
       },
     };
   }, [locale]);

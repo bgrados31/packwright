@@ -38,6 +38,7 @@ pub fn run() {
             pack::pack_create,
             pack::pack_reveal,
             pack::pick_folder,
+            pack::launcher_defaults,
             files::pack_files,
             files::file_read,
             files::file_write,

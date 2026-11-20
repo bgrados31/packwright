@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useI18n, type Locale } from "../i18n";
+import { LOCALES, useI18n, type Locale, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig } from "../lib/types";
 import Select from "./Select";
 
@@ -12,35 +12,62 @@ type Props = {
   onLocaleChange: (locale: Locale) => void;
 };
 
-const LAUNCHERS = [
-  { value: "atlauncher", labelKey: "launcher.atlauncher" as const },
-  { value: "prism", labelKey: "launcher.prism" as const },
-  { value: "modrinth", labelKey: "launcher.modrinth" as const },
-  { value: "multimc", labelKey: "launcher.multimc" as const },
-  { value: "none", labelKey: "launcher.none" as const },
+const LAUNCHERS: Array<{ value: string; label: TranslationKey; glyph: string }> = [
+  { value: "atlauncher", label: "launcher.atlauncher", glyph: "A" },
+  { value: "prism", label: "launcher.prism", glyph: "P" },
+  { value: "modrinth", label: "launcher.modrinth", glyph: "M" },
+  { value: "multimc", label: "launcher.multimc", glyph: "Mc" },
 ];
 
+const STEPS = ["setup.workspaceTitle", "setup.launcherTitle", "setup.prefsTitle", "setup.reviewTitle"] as const;
+
 export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleChange }: Props) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<AppConfig>(config);
-  const [picking, setPicking] = useState<"workspace" | "launcher" | null>(null);
+  const [defaults, setDefaults] = useState<Record<string, string>>(config.launcher_paths ?? {});
+  const [picking, setPicking] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<Record<string, string>>("launcher_defaults")
+      .then((paths) => setDefaults((current) => ({ ...paths, ...current })))
+      .catch(() => undefined);
+  }, []);
 
   const patch = (values: Partial<AppConfig>) => setDraft((current) => ({ ...current, ...values }));
 
-  const pickFolder = async (target: "workspace" | "launcher") => {
-    setPicking(target);
+  const pickFolder = async (key: string) => {
+    setPicking(key);
     try {
       const path = await invoke<string | null>("pick_folder");
-      if (path) patch(target === "workspace" ? { workspace: path } : { atlauncher_path: path });
+      if (path) {
+        if (key === "workspace") patch({ workspace: path });
+        else patch({ launcher_paths: { ...draft.launcher_paths, [key]: path } });
+      }
     } finally {
       setPicking(null);
     }
+  };
+
+  const toggleLauncher = (value: string) => {
+    const active = draft.launchers.includes(value);
+    const launchers = active
+      ? draft.launchers.filter((item) => item !== value)
+      : [...draft.launchers, value];
+    const paths = { ...draft.launcher_paths };
+    if (!active && !paths[value] && defaults[value]) paths[value] = defaults[value];
+    patch({ launchers, launcher_paths: paths });
   };
 
   const changeLocale = (next: Locale) => {
     patch({ locale: next });
     onLocaleChange(next);
   };
+
+  const next = () => setStep((current) => Math.min(current + 1, STEPS.length - 1));
+  const back = () => setStep((current) => Math.max(current - 1, 0));
+
+  const canContinue = step === 0 ? Boolean(draft.workspace.trim()) : true;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -52,116 +79,176 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
         </p>
       </div>
 
-      <div className="mt-8 flex flex-col gap-4">
-        <section className="card view-enter p-6">
-          <div className="flex items-center gap-3">
-            <span className="grid h-6 w-6 place-items-center rounded bg-accent-soft font-mono text-[10px] text-accent">01</span>
-            <h2 className="text-sm font-semibold">{t("setup.workspaceTitle")}</h2>
+      <div className="mt-8 flex items-center gap-2">
+        {STEPS.map((_, index) => (
+          <div key={index} className="flex flex-1 flex-col gap-2">
+            <div className={`h-1 rounded-full transition-colors duration-300 ${index <= step ? "bg-accent" : "bg-line"}`} />
+            <span className={`font-mono text-[9px] uppercase tracking-wider ${index <= step ? "text-accent" : "text-muted"}`}>
+              {String(index + 1).padStart(2, "0")}
+            </span>
           </div>
-          <p className="mt-2 text-[13px] leading-5 text-muted">{t("setup.workspaceBody")}</p>
-          <div className="mt-4 flex gap-2">
-            <input
-              className="field font-mono text-xs"
-              value={draft.workspace}
-              onChange={(event) => patch({ workspace: event.target.value })}
-              spellCheck={false}
-            />
-            <button className="btn btn-secondary shrink-0" onClick={() => void pickFolder("workspace")} disabled={picking !== null}>
-              {picking === "workspace" ? "…" : t("setup.browse")}
-            </button>
-          </div>
-          {isSetup && (
-            <button className="mt-2 text-[11px] text-muted hover:text-ink" onClick={() => patch({ workspace: config.workspace })}>
-              {t("setup.useDefault")}
-            </button>
-          )}
-        </section>
+        ))}
+      </div>
 
-        <section className="card view-enter p-6" style={{ animationDelay: "70ms" }}>
-          <div className="flex items-center gap-3">
-            <span className="grid h-6 w-6 place-items-center rounded bg-accent-soft font-mono text-[10px] text-accent">02</span>
-            <h2 className="text-sm font-semibold">{t("setup.launcherTitle")}</h2>
-          </div>
-          <p className="mt-2 text-[13px] leading-5 text-muted">{t("setup.launcherBody")}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {LAUNCHERS.map((item) => {
-              const active = draft.launcher === item.value;
-              return (
-                <button
-                  key={item.value}
-                  className={`rounded-lg border px-3 py-2 text-xs transition-colors ${
-                    active
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-line bg-surface text-muted hover:text-ink"
-                  }`}
-                  onClick={() => patch({ launcher: item.value })}
-                >
-                  {t(item.labelKey)}
-                </button>
-              );
-            })}
-          </div>
-          {draft.launcher === "atlauncher" && (
-            <div className="mt-4">
-              <p className="mb-2 text-xs text-muted">{t("setup.launcherPath")}</p>
-              <div className="flex gap-2">
+      <div className="card view-enter relative mt-4 overflow-hidden" key={step}>
+        <div className="h-1 w-full bg-gradient-to-r from-accent via-accent to-transparent" />
+        <div className="pointer-events-none absolute -right-4 -top-6 font-mono text-[110px] font-bold leading-none text-accent/5">
+          {String(step + 1).padStart(2, "0")}
+        </div>
+
+        <div className="relative p-7">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+            {t("setup.step", { current: step + 1, total: STEPS.length })}
+          </p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight">{t(STEPS[step])}</h2>
+
+          {step === 0 && (
+            <div className="mt-5">
+              <p className="text-[13px] leading-6 text-muted">{t("setup.workspaceBody")}</p>
+              <div className="mt-5 flex gap-2">
                 <input
                   className="field font-mono text-xs"
-                  value={draft.atlauncher_path ?? ""}
-                  onChange={(event) => patch({ atlauncher_path: event.target.value })}
-                  placeholder="C:\\ATLauncher"
+                  value={draft.workspace}
+                  onChange={(event) => patch({ workspace: event.target.value })}
                   spellCheck={false}
                 />
-                <button className="btn btn-secondary shrink-0" onClick={() => void pickFolder("launcher")} disabled={picking !== null}>
-                  {picking === "launcher" ? "…" : t("setup.browse")}
+                <button className="btn btn-secondary shrink-0" onClick={() => void pickFolder("workspace")} disabled={picking !== null}>
+                  {picking === "workspace" ? "…" : t("setup.browse")}
                 </button>
+              </div>
+              <button className="mt-3 text-[11px] text-muted hover:text-ink" onClick={() => patch({ workspace: config.workspace })}>
+                {t("setup.useDefault")}
+              </button>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="mt-5">
+              <p className="text-[13px] leading-6 text-muted">{t("setup.launcherBody")}</p>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {LAUNCHERS.map((launcher) => {
+                  const active = draft.launchers.includes(launcher.value);
+                  return (
+                    <button
+                      key={launcher.value}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
+                        active
+                          ? "border-accent bg-accent-soft"
+                          : "border-line bg-surface hover:border-accent/40"
+                      }`}
+                      onClick={() => toggleLauncher(launcher.value)}
+                    >
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold ${active ? "bg-accent text-white" : "bg-subtle text-muted"}`}>
+                        {launcher.glyph}
+                      </span>
+                      <span className="text-sm font-medium">{t(launcher.label)}</span>
+                      <span className={`ml-auto h-2 w-2 rounded-full ${active ? "bg-accent" : "border border-line"}`} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {draft.launchers.length > 0 && (
+                <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5">
+                  {draft.launchers.map((value) => {
+                    const meta = LAUNCHERS.find((item) => item.value === value);
+                    return (
+                      <div key={value} className="flex flex-col gap-1.5">
+                        <span className="text-xs text-muted">
+                          {t("setup.launcherPath", { name: meta ? t(meta.label) : value })}
+                          {defaults[value] && <span className="ml-2 text-[10px] text-accent">· {t("setup.detected")}</span>}
+                        </span>
+                        <div className="flex gap-2">
+                          <input
+                            className="field font-mono text-xs"
+                            value={draft.launcher_paths[value] ?? ""}
+                            onChange={(event) => patch({ launcher_paths: { ...draft.launcher_paths, [value]: event.target.value } })}
+                            spellCheck={false}
+                          />
+                          <button className="btn btn-secondary shrink-0" onClick={() => void pickFolder(value)} disabled={picking !== null}>
+                            {picking === value ? "…" : t("setup.browse")}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="mt-5">
+              <p className="text-[13px] leading-6 text-muted">{t("setup.prefsBody")}</p>
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted">{t("setup.defaultLoader")}</span>
+                  <Select
+                    value={draft.default_loader || "neoforge"}
+                    onChange={(value) => patch({ default_loader: value })}
+                    options={LOADERS.map((loader) => ({ value: loader, label: loader }))}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted">{t("setup.language")}</span>
+                  <Select
+                    value={draft.locale || "en"}
+                    onChange={(value) => changeLocale(value as Locale)}
+                    options={LOCALES.map((item) => ({ value: item.id, label: `${item.flag}  ${t(item.label as TranslationKey)}` }))}
+                  />
+                </div>
               </div>
             </div>
           )}
-        </section>
 
-        <section className="card view-enter p-6" style={{ animationDelay: "140ms" }}>
-          <div className="flex items-center gap-3">
-            <span className="grid h-6 w-6 place-items-center rounded bg-accent-soft font-mono text-[10px] text-accent">03</span>
-            <h2 className="text-sm font-semibold">{t("setup.prefsTitle")}</h2>
-          </div>
-          <p className="mt-2 text-[13px] leading-5 text-muted">{t("setup.prefsBody")}</p>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">{t("setup.defaultLoader")}</span>
-              <Select
-                value={draft.default_loader || "neoforge"}
-                onChange={(value) => patch({ default_loader: value })}
-                options={LOADERS.map((loader) => ({ value: loader, label: loader }))}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">{t("setup.language")}</span>
-              <div className="flex gap-2">
-                {(["en", "es"] as const).map((option) => (
-                  <button
-                    key={option}
-                    className={`btn flex-1 ${locale === option ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => changeLocale(option)}
-                  >
-                    {option.toUpperCase()}
-                  </button>
+          {step === 3 && (
+            <div className="mt-5">
+              <p className="text-[13px] leading-6 text-muted">{t("setup.reviewBody")}</p>
+              <div className="mt-5 divide-y divide-line rounded-xl border border-line">
+                {[
+                  { label: t("setup.reviewWorkspace"), value: draft.workspace },
+                  {
+                    label: t("setup.reviewLaunchers"),
+                    value: draft.launchers.length
+                      ? draft.launchers.map((value) => {
+                          const meta = LAUNCHERS.find((item) => item.value === value);
+                          return meta ? t(meta.label) : value;
+                        }).join(" · ")
+                      : t("setup.noneSelected"),
+                  },
+                  { label: t("setup.reviewLoader"), value: draft.default_loader || "neoforge" },
+                  {
+                    label: t("setup.reviewLanguage"),
+                    value: LOCALES.find((item) => item.id === draft.locale)?.label ?? "language.english",
+                  },
+                ].map((row) => (
+                  <div key={row.label} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs text-muted">{row.label}</span>
+                    <span className="max-w-full truncate font-mono text-xs">{row.label === t("setup.reviewLanguage") ? t(row.value as TranslationKey) : row.value}</span>
+                  </div>
                 ))}
               </div>
             </div>
-          </div>
-        </section>
+          )}
+        </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-end gap-2">
-        {onCancel && <button className="btn btn-secondary" onClick={onCancel}>{t("common.close")}</button>}
-        <button
-          className="btn btn-primary px-6"
-          onClick={() => onSave({ ...draft, setup_complete: true })}
-          disabled={!draft.workspace.trim()}
-        >
-          {t(isSetup ? "setup.finish" : "setup.save")}
-        </button>
+      <div className="mt-6 flex items-center justify-between">
+        <div>
+          {step > 0 && <button className="btn btn-secondary" onClick={back}>← {t("setup.back")}</button>}
+        </div>
+        <div className="flex items-center gap-2">
+          {onCancel && <button className="btn btn-quiet" onClick={onCancel}>{t("common.close")}</button>}
+          {step < STEPS.length - 1 ? (
+            <button className="btn btn-primary px-6" onClick={next} disabled={!canContinue}>
+              {t("setup.next")}
+            </button>
+          ) : (
+            <button className="btn btn-primary px-6" onClick={() => onSave({ ...draft, setup_complete: true })}>
+              {t(isSetup ? "setup.finish" : "setup.save")}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

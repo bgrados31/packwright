@@ -20,7 +20,8 @@ export type AppConfig = {
   atlauncher_path: string | null;
   setup_complete: boolean;
   default_loader: string;
-  launcher: string | null;
+  launchers: string[];
+  launcher_paths: Record<string, string>;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };

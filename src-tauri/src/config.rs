@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -23,9 +24,26 @@ pub struct AppConfig {
     /// Loader preselected when creating a new pack.
     #[serde(default = "default_loader")]
     pub default_loader: String,
-    /// Launcher the user plans to use (atlauncher / prism / modrinth / multimc / none).
+    /// Launchers the user plans to use.
     #[serde(default)]
-    pub launcher: Option<String>,
+    pub launchers: Vec<String>,
+    /// Detected/custom folder for each launcher.
+    #[serde(default)]
+    pub launcher_paths: HashMap<String, String>,
+}
+
+/// Sensible default folders for each supported launcher.
+pub fn default_launcher_paths() -> HashMap<String, String> {
+    let data = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+    let mut paths = HashMap::new();
+    paths.insert("atlauncher".to_string(), data.join("ATLauncher").to_string_lossy().to_string());
+    paths.insert("prism".to_string(), data.join("PrismLauncher").to_string_lossy().to_string());
+    paths.insert("multimc".to_string(), data.join("MultiMC").to_string_lossy().to_string());
+    paths.insert(
+        "modrinth".to_string(),
+        data.join("com.modrinth.theseus").to_string_lossy().to_string(),
+    );
+    paths
 }
 
 fn default_loader() -> String {
@@ -46,7 +64,8 @@ impl Default for AppConfig {
             atlauncher_path: None,
             setup_complete: false,
             default_loader: default_loader(),
-            launcher: None,
+            launchers: Vec::new(),
+            launcher_paths: default_launcher_paths(),
         }
     }
 }
