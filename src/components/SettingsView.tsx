@@ -215,7 +215,9 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
           </div>
           {javaInfo && (
             <p className={`mt-2 text-[11px] ${javaInfo.found ? "text-muted" : "text-bad"}`}>
-              {javaInfo.found ? `${t("settings.javaDetected")}: ${javaInfo.path}` : t("servers.javaMissing")}
+              {javaInfo.found
+                ? `${t("settings.javaDetected")} Java ${javaInfo.major}: ${javaInfo.path}`
+                : t("servers.javaMissing")}
             </p>
           )}
         </Section>

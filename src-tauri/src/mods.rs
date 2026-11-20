@@ -142,11 +142,7 @@ fn pack_root(dir: &str) -> Result<PathBuf> {
 }
 
 fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent("Packwright/0.1")
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| AppError::Process(format!("Could not create HTTP client: {e}")))
+    crate::net::client()
 }
 
 fn strings(value: &Value, key: &str) -> Vec<String> {

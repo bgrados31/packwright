@@ -3,7 +3,7 @@ use std::process::Stdio;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, recommended_watcher};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::{Child, Command};
@@ -137,6 +137,32 @@ fn migrate_metadata(cfg: &config::AppConfig, dir: &str, pack: &Path, instance: &
     );
     let _ = std::fs::write(instance.join("instance.cfg"), instance_cfg);
     let _ = std::fs::write(instance.join("packwiz.url"), format!("{serve}\n"));
+
+    // Prism / Modrinth App: instancia nativa OneSix con componentes.
+    if cfg.launcher_paths.contains_key("prism") || cfg.launcher_paths.contains_key("modrinth") {
+        let mut components: Vec<Value> = Vec::new();
+        if let Some(minecraft) = info.as_ref().and_then(|value| value.minecraft_version.clone()) {
+            components.push(json!({ "uid": "net.minecraft", "version": minecraft }));
+        }
+        let loader_uid = info.as_ref().and_then(|value| value.loader.as_deref()).and_then(|loader| match loader {
+            "fabric" => Some("net.fabricmc.fabric-loader"),
+            "forge" => Some("net.minecraftforge"),
+            "neoforge" => Some("net.neoforged"),
+            "quilt" => Some("org.quiltmc.quilt-loader"),
+            _ => None,
+        });
+        if let (Some(uid), Some(version)) = (
+            loader_uid,
+            info.as_ref().and_then(|value| value.loader_version.clone()),
+        ) {
+            components.push(json!({ "uid": uid, "version": version }));
+        }
+        let pack = json!({ "formatVersion": 1, "components": components });
+        let _ = std::fs::write(
+            instance.join("mmc-pack.json"),
+            serde_json::to_string_pretty(&pack).unwrap_or_default(),
+        );
+    }
 }
 
 #[tauri::command]

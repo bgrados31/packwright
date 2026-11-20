@@ -272,14 +272,32 @@ pub fn command_on_path(name: &str) -> bool {
 pub struct JavaInfo {
     pub path: String,
     pub found: bool,
+    pub major: u32,
+}
+
+pub fn java_version(path: &Path) -> Option<u32> {
+    let output = std::process::Command::new(path).arg("-version").output().ok()?;
+    let text = String::from_utf8_lossy(&output.stderr);
+    let quoted = text.split('"').nth(1)?;
+    let version = quoted.split('.').next()?;
+    let major = if version == "1" {
+        quoted.split('.').nth(1)?.parse().ok()?
+    } else {
+        version.parse().ok()?
+    };
+    Some(major)
 }
 
 #[tauri::command]
 pub fn java_detect() -> JavaInfo {
     let cfg = load().unwrap_or_default();
     match resolve_java(&cfg) {
-        Ok(path) => JavaInfo { path: path.to_string_lossy().to_string(), found: true },
-        Err(_) => JavaInfo { path: String::new(), found: false },
+        Ok(path) => JavaInfo {
+            path: path.to_string_lossy().to_string(),
+            found: true,
+            major: java_version(&path).unwrap_or(0),
+        },
+        Err(_) => JavaInfo { path: String::new(), found: false, major: 0 },
     }
 }
 
@@ -303,6 +321,8 @@ mod tests {
     fn detects_java() {
         let java = resolve_java(&AppConfig::default()).unwrap();
         assert!(java.is_file(), "{} must be a file", java.display());
-        println!("Java detectado: {}", java.display());
+        let major = java_version(&java).unwrap();
+        assert!(major >= 8, "unknown Java version: {major}");
+        println!("Java detectado: {} (Java {major})", java.display());
     }
 }

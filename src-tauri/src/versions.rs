@@ -31,11 +31,7 @@ static LOADER_CACHE: std::sync::LazyLock<Mutex<HashMap<String, (Instant, Vec<Loa
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(12))
-        .user_agent("Packwright/0.1")
-        .build()
-        .map_err(|e| AppError::Process(format!("Could not create HTTP client: {e}")))
+    crate::net::client()
 }
 
 fn cache_dir() -> Option<PathBuf> {

@@ -105,7 +105,26 @@ export type McVersion = {
 
 export type LoaderVersion = { id: string; stable: boolean };
 export type ServerVersion = { id: string; stable: boolean };
-export type JavaInfo = { path: string; found: boolean };
+export type JavaInfo = { path: string; found: boolean; major: number };
+
+export type ServerPing = {
+  online: boolean;
+  motd: string;
+  version: string;
+  players_online: number;
+  players_max: number;
+  sample: string[];
+  latency_ms: number;
+};
+
+export type BackupInfo = { name: string; size: number };
+
+export type ModsCompare = {
+  server: string[];
+  pack: string[];
+  missing: string[];
+  extra: string[];
+};
 
 export type ModSearchHit = {
   project_id: string;

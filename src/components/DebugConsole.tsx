@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { GripHorizontal, Minimize2, Terminal, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { OpLine } from "../lib/types";
+import { useOpLine } from "../lib/useOpLine";
 
 export default function DebugConsole({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -15,14 +15,8 @@ export default function DebugConsole({ onClose }: { onClose: () => void }) {
   const drag = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    listen<OpLine>("operation://line", (event) => {
-      if (cancelled) return;
-      setLines((previous) => [...previous.slice(-199), event.payload]);
-    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
-    return () => { cancelled = true; unlisten?.(); };
+  useOpLine((line) => {
+    setLines((previous) => [...previous.slice(-199), line]);
   }, []);
 
   useEffect(() => {

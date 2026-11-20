@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, LazyLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -109,7 +109,7 @@ fn servers_root(cfg: &config::AppConfig) -> PathBuf {
     cfg.workspace.join("servers")
 }
 
-fn server_dir(cfg: &config::AppConfig, name: &str) -> Result<PathBuf> {
+pub fn server_dir(cfg: &config::AppConfig, name: &str) -> Result<PathBuf> {
     let root = servers_root(cfg).join(name);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Server does not exist: {name}")));
@@ -130,8 +130,7 @@ fn emit(app: &AppHandle, id: &str, line: &str, stream: &str) {
 }
 
 fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))
+    crate::net::client()
 }
 
 async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value> {
@@ -302,7 +301,7 @@ fn find_server_jar(dir: &Path, installer: &str) -> Result<String> {
 }
 
 async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, jar_url: Option<&str>) -> Result<(String, String)> {
-    let client = http_client()?;
+    let client = crate::net::download_client()?;
     let setup = match jar_url.filter(|value| !value.trim().is_empty()) {
         Some(custom) => {
             let url = custom.trim().to_string();
@@ -546,13 +545,28 @@ pub fn server_stats(state: tauri::State<'_, ServerState>, name: String) -> Resul
         .map(|value| value.contains("eula=true"))
         .unwrap_or(false);
     let jar_exists = dir.join(&info.jar).is_file();
-    let backups = std::fs::read_dir(dir.join("backups"))
-        .map(|entries| entries.filter_map(|entry| entry.ok()).count())
-        .unwrap_or(0);
-    let world_size = ["world", "world_nether", "world_the_end"]
-        .iter()
-        .map(|world| dir_size(&dir.join(world)))
-        .sum();
+
+    // El tamaño en disco es caro: se calcula como mucho cada 30 s.
+    static DISK_CACHE: LazyLock<Mutex<HashMap<String, (Instant, u64, u64, usize)>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    let (world_size, total_size, backups) = {
+        let mut cache = DISK_CACHE.blocking_lock();
+        match cache.get(&name).filter(|(time, ..)| time.elapsed() < Duration::from_secs(30)) {
+            Some((_, world, total, count)) => (*world, *total, *count),
+            None => {
+                let world: u64 = ["world", "world_nether", "world_the_end"]
+                    .iter()
+                    .map(|world| dir_size(&dir.join(world)))
+                    .sum();
+                let total = dir_size(&dir);
+                let count = std::fs::read_dir(dir.join("backups"))
+                    .map(|entries| entries.filter_map(|entry| entry.ok()).count())
+                    .unwrap_or(0);
+                cache.insert(name.clone(), (Instant::now(), world, total, count));
+                (world, total, count)
+            }
+        }
+    };
 
     let mut issues = Vec::new();
     if !jar_exists {
@@ -577,7 +591,7 @@ pub fn server_stats(state: tauri::State<'_, ServerState>, name: String) -> Resul
         jar_exists,
         eula,
         world_size,
-        total_size: dir_size(&dir),
+        total_size,
         issues,
     })
 }
@@ -762,12 +776,68 @@ pub async fn server_start(
     if let Some(stdin) = stdin {
         state.stdin.lock().await.insert(name.clone(), stdin);
     }
-    state.started.lock().await.insert(name, Instant::now());
+    state.started.lock().await.insert(name.clone(), Instant::now());
+
+    // Reaper: detecta caídas del proceso aunque nadie pulse "stop".
+    let watch_processes = state.processes.clone();
+    let watch_stdin = state.stdin.clone();
+    let watch_started = state.started.clone();
+    let watch_app = state.app.clone();
+    let watch_name = name.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let status = {
+                let mut processes = watch_processes.lock().await;
+                match processes.get_mut(&watch_name) {
+                    Some(child) => child.try_wait(),
+                    None => break,
+                }
+            };
+            match status {
+                Ok(Some(code)) => {
+                    emit(
+                        &watch_app,
+                        &format!("server-{watch_name}-exit"),
+                        &format!("Server exited (code {})", code.code().unwrap_or(-1)),
+                        "stderr",
+                    );
+                    watch_processes.lock().await.remove(&watch_name);
+                    watch_stdin.lock().await.remove(&watch_name);
+                    watch_started.lock().await.remove(&watch_name);
+                    break;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    emit(&watch_app, &format!("server-{watch_name}-exit"), &format!("Could not check server status: {error}"), "stderr");
+                    break;
+                }
+            }
+        }
+    });
     Ok(())
 }
 
 #[tauri::command]
 pub async fn server_stop(state: tauri::State<'_, ServerState>, name: String) -> Result<()> {
+    // Intenta un apagado limpio; si el servidor no sale a tiempo, se mata.
+    if state.stdin.lock().await.contains_key(&name) {
+        let _ = write_command(&state, &name, "stop").await;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let running = {
+                let mut processes = state.processes.lock().await;
+                match processes.get_mut(&name) {
+                    Some(child) => matches!(child.try_wait(), Ok(None)),
+                    None => false,
+                }
+            };
+            if !running || Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
     let mut processes = state.processes.lock().await;
     if let Some(child) = processes.get_mut(&name) {
         let _ = child.kill().await;
@@ -909,8 +979,29 @@ fn players_file(dir: &Path, list: &str) -> Result<PathBuf> {
     }
 }
 
+fn player_cache_dir() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|base| base.join("packwright").join("cache").join("players"))
+}
+
+fn read_name_cache() -> HashMap<String, Option<String>> {
+    let Some(dir) = player_cache_dir() else { return HashMap::new() };
+    std::fs::read_to_string(dir.join("names.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn save_name_cache(values: &HashMap<String, Option<String>>) {
+    if let Some(dir) = player_cache_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(text) = serde_json::to_string(values) {
+            let _ = std::fs::write(dir.join("names.json"), text);
+        }
+    }
+}
+
 static UUID_CACHE: LazyLock<Mutex<HashMap<String, Option<String>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    LazyLock::new(|| Mutex::new(read_name_cache()));
 static AVATAR_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -940,11 +1031,13 @@ async fn resolve_uuid(client: &reqwest::Client, player: &str) -> Option<String> 
             }
         }
     }
-    UUID_CACHE.lock().await.insert(safe, resolved.clone());
+    let mut cache = UUID_CACHE.lock().await;
+    cache.insert(safe, resolved.clone());
+    save_name_cache(&cache);
     resolved
 }
 
-/// Devuelve la cara del jugador como data URL (caché en memoria).
+/// Devuelve la cara del jugador como data URL (caché en memoria y en disco).
 #[tauri::command]
 pub async fn player_avatar(player: String) -> Result<String> {
     let client = http_client()?;
@@ -952,6 +1045,16 @@ pub async fn player_avatar(player: String) -> Result<String> {
         .ok_or_else(|| AppError::NotFound("Player UUID not found".into()))?;
     if let Some(cached) = AVATAR_CACHE.lock().await.get(&uuid) {
         return Ok(cached.clone());
+    }
+    if let Some(dir) = player_cache_dir() {
+        if let Ok(bytes) = std::fs::read(dir.join(format!("{uuid}.png"))) {
+            let data = format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&bytes)
+            );
+            AVATAR_CACHE.lock().await.insert(uuid, data.clone());
+            return Ok(data);
+        }
     }
     let mut bytes = None;
     for url in [
@@ -968,6 +1071,10 @@ pub async fn player_avatar(player: String) -> Result<String> {
         }
     }
     let bytes = bytes.ok_or_else(|| AppError::NotFound("Avatar not available".into()))?;
+    if let Some(dir) = player_cache_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join(format!("{uuid}.png")), &bytes);
+    }
     let data = format!(
         "data:image/png;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(&bytes)
@@ -1060,6 +1167,124 @@ pub fn server_backup(name: String) -> Result<ServerBackup> {
         name: stamp,
         size: std::fs::metadata(&file)?.len(),
     })
+}
+
+#[derive(Debug, Serialize)]
+pub struct BackupInfo {
+    pub name: String,
+    pub size: u64,
+}
+
+fn safe_relative_path(value: &str) -> Result<PathBuf> {
+    let path = Path::new(value);
+    for component in path.components() {
+        if matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)) {
+            return Err(AppError::Validation(format!("Unsafe path in backup: {value}")));
+        }
+    }
+    Ok(path.to_path_buf())
+}
+
+fn backup_file(dir: &Path, stamp: &str) -> Result<PathBuf> {
+    if stamp.is_empty() || stamp.contains(['/', '\\', ':', '.', '*', '?', '"', '<', '>', '|']) {
+        return Err(AppError::Validation("Invalid backup name".into()));
+    }
+    let path = dir.join("backups").join(format!("{stamp}.zip"));
+    if !path.is_file() {
+        return Err(AppError::NotFound("Backup not found".into()));
+    }
+    Ok(path)
+}
+
+#[tauri::command]
+pub fn server_backups(name: String) -> Result<Vec<BackupInfo>> {
+    let cfg = config::load()?;
+    let backups = server_dir(&cfg, &name)?.join("backups");
+    let mut result = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(backups) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) == Some("zip") {
+                result.push(BackupInfo {
+                    name: path.file_stem().unwrap_or_default().to_string_lossy().to_string(),
+                    size: entry.metadata().map(|meta| meta.len()).unwrap_or(0),
+                });
+            }
+        }
+    }
+    result.sort_by(|a, b| b.name.cmp(&a.name));
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn server_backup_delete(name: String, stamp: String) -> Result<()> {
+    let cfg = config::load()?;
+    let path = backup_file(&server_dir(&cfg, &name)?, &stamp)?;
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn server_backup_restore(name: String, stamp: String) -> Result<usize> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    let path = backup_file(&dir, &stamp)?;
+    let file = std::fs::File::open(path)?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| AppError::Parse(format!("Invalid backup archive: {e}")))?;
+    let mut restored = 0;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)
+            .map_err(|e| AppError::Parse(format!("Could not read backup entry: {e}")))?;
+        let file_name = entry.name().to_string();
+        if file_name.ends_with('/') || file_name.contains("..") || file_name.starts_with('/') || file_name == "server.toml" {
+            continue;
+        }
+        let target = dir.join(safe_relative_path(&file_name)?);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut buffer = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut buffer)?;
+        std::fs::write(target, buffer)?;
+        restored += 1;
+    }
+    Ok(restored)
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModsCompare {
+    pub server: Vec<String>,
+    pub pack: Vec<String>,
+    pub missing: Vec<String>,
+    pub extra: Vec<String>,
+}
+
+#[tauri::command]
+pub fn server_mods_compare(name: String, pack: String) -> Result<ModsCompare> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    let pack_root = cfg.workspace.join(&pack).canonicalize()
+        .map_err(|_| AppError::NotFound("Pack not found".into()))?;
+    let list = |root: &Path| -> Vec<String> {
+        std::fs::read_dir(root)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|entry| {
+                        entry.path().is_file()
+                            && entry.path().extension().and_then(|value| value.to_str()) == Some("jar")
+                    })
+                    .map(|entry| entry.file_name().to_string_lossy().to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let server = list(&dir.join("mods"));
+    let pack_mods = list(&pack_root.join("mods"));
+    let missing = pack_mods.iter().filter(|item| !server.contains(item)).cloned().collect();
+    let extra = server.iter().filter(|item| !pack_mods.contains(item)).cloned().collect();
+    Ok(ModsCompare { server, pack: pack_mods, missing, extra })
 }
 
 #[tauri::command]

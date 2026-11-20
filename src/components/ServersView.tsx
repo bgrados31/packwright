@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import PlayitModal from "./PlayitModal";
 import ConsolePanel from "./ConsolePanel";
@@ -25,6 +24,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerStats, ServerVersion } from "../lib/types";
+import { useOpLine } from "../lib/useOpLine";
 import Select from "./Select";
 import MinecraftScene from "./MinecraftScene";
 import ServerDetailView from "./ServerDetailView";
@@ -37,6 +37,19 @@ type Props = {
 const TEMPLATES = [
   "vanilla", "paper", "purpur", "fabric", "forge", "neoforge", "velocity",
 ];
+
+function requiredJava(version: string): number {
+  const parts = version.split(".").map(Number);
+  const major = parts[0] ?? 0;
+  const minor = parts[1] ?? 0;
+  const patch = parts[2] ?? 0;
+  if (major >= 26) return 25;
+  if (major === 1 && minor >= 21) return 21;
+  if (major === 1 && minor === 20 && patch >= 5) return 21;
+  if (major === 1 && minor >= 18) return 17;
+  if (major === 1 && minor === 17) return 16;
+  return 8;
+}
 
 function messageOf(error: unknown): string {
   if (typeof error === "object" && error !== null && "message" in error) {
@@ -58,6 +71,7 @@ export default function ServersView({ packs }: Props) {
   const [port, setPort] = useState(25565);
   const [java, setJava] = useState("java");
   const [detectedJava, setDetectedJava] = useState("");
+  const [detectedJavaMajor, setDetectedJavaMajor] = useState(0);
   const [memory, setMemory] = useState(2048);
   const [motd, setMotd] = useState("Packwright server");
   const [onlineMode, setOnlineMode] = useState(true);
@@ -89,20 +103,16 @@ export default function ServersView({ packs }: Props) {
       .then((info) => {
         if (info.found) {
           setDetectedJava(info.path);
+          setDetectedJavaMajor(info.major);
           setJava(info.path);
         }
       })
       .catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    listen<OpLine>("operation://line", (event) => {
-      if (cancelled) return;
-      setLines((previous) => [...previous.slice(-199), event.payload]);
-    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
-    return () => { cancelled = true; unlisten?.(); };
+  useOpLine((line) => {
+    if (!line.id.startsWith("server-")) return;
+    setLines((previous) => [...previous.slice(-199), line]);
   }, []);
 
   const run = async (action: () => Promise<unknown>): Promise<boolean> => {
@@ -201,6 +211,7 @@ export default function ServersView({ packs }: Props) {
       {detailServer ? (
         <ServerDetailView
           server={detailServer}
+          packs={packs}
           onBack={() => { setDetailServer(null); refresh(); }}
         />
       ) : (
@@ -346,6 +357,11 @@ export default function ServersView({ packs }: Props) {
                   <span className="text-xs text-muted">{t("servers.java")}</span>
                   <input className="field font-mono text-[11px]" value={java} onChange={(e) => setJava(e.target.value)} />
                   {!java.trim() && <span className="text-[10px] text-[var(--pw-bad)]">{t("servers.javaMissing")}</span>}
+                  {detectedJavaMajor > 0 && detectedJavaMajor < requiredJava(version) && (
+                    <span className="text-[10px] text-[var(--pw-bad)]">
+                      {t("servers.javaIncompatible", { need: requiredJava(version), have: detectedJavaMajor })}
+                    </span>
+                  )}
                 </label>
               </div>
               <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.motd")}</span><input className="field" value={motd} onChange={(e) => setMotd(e.target.value)} /></label>

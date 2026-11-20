@@ -195,11 +195,7 @@ async fn import_from_file(
 }
 
 fn http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .user_agent("Packwright/0.1")
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))
+    crate::net::client()
 }
 
 async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value> {
@@ -319,7 +315,7 @@ pub async fn modpack_import_source(
     }
     let local = source.strip_prefix("file://").unwrap_or(source);
     let (path, temporary) = if local.starts_with("http://") || local.starts_with("https://") {
-        let client = http_client()?;
+        let client = crate::net::download_client()?;
         let url = resolve_mrpack_url(&client, local).await?;
         let response = client.get(&url).send().await
             .map_err(|e| AppError::Process(format!("Modpack download failed: {e}")))?;

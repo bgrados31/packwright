@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { FolderOpen, Loader2, Play, RotateCcw, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { OpLine } from "../lib/types";
+import { useOpLine } from "../lib/useOpLine";
 
 type Props = {
   dir: string;
@@ -41,14 +41,12 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, onClos
 
   useEffect(() => {
     refresh();
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    listen<OpLine>("operation://line", (event) => {
-      const id = event.payload.id;
-      if (cancelled || !(id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-"))) return;
-      setLines((previous) => [...previous.slice(-39), event.payload]);
-    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
-    return () => { cancelled = true; unlisten?.(); };
+  }, []);
+
+  useOpLine((line) => {
+    const id = line.id;
+    if (!(id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-"))) return;
+    setLines((previous) => [...previous.slice(-39), line]);
   }, []);
 
   /** Un solo botón: serve + instancia + watcher + launcher. */

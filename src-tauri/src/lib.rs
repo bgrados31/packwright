@@ -7,8 +7,10 @@ mod import;
 mod files;
 mod meta;
 mod mods;
+mod net;
 mod model;
 mod pack;
+mod ping;
 mod playit;
 mod publish;
 mod serve;
@@ -80,6 +82,7 @@ pub fn run() {
             server::server_create,
             server::server_list,
             server::server_stats,
+            ping::server_ping,
             server::server_files,
             server::server_read_file,
             server::server_write_file,
@@ -99,6 +102,10 @@ pub fn run() {
             server::server_known_players,
             server::player_avatar,
             server::server_backup,
+            server::server_backups,
+            server::server_backup_delete,
+            server::server_backup_restore,
+            server::server_mods_compare,
             server::server_sync,
             server::server_install_geyser,
             server::server_open_folder,

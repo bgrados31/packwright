@@ -79,9 +79,13 @@
 - [x] Templates: Vanilla, Paper, Purpur, Forge, NeoForge, Fabric, Velocity
 - [x] Setup automático (jar oficial vía APIs: Fill v3 para Paper/Velocity, Mojang, Fabric, Forge, NeoForge y Purpur; eula, properties, Java; JVM args fijos `-Xmx2G`)
 - [x] start/stop/restart + consola en vivo con stdin interactivo, autocompletado e historial de comandos
+- [x] Apagado graceful (`stop` por stdin con timeout) y reaper de procesos caídos
+- [x] Ping real al protocolo MC (jugadores online, MOTD, latencia) con test UDP simulado
 - [x] Sync cliente ↔ servidor (mods)
 - [x] Bedrock + GeyserMC (instalador del plugin)
-- [x] Backups, jugadores (ops/whitelist/bans) con avatar, roles y acciones rápidas (op/deop, whitelist, kick/ban/pardon)
+- [x] Backups (crear, listar, restaurar, borrar), jugadores (ops/whitelist/bans) con avatar, roles y acciones rápidas (op/deop, whitelist, kick/ban/pardon)
+- [x] Comparativa de mods servidor ↔ pack con sincronización
+- [x] Aviso de compatibilidad Java ↔ versión de Minecraft
 - [x] Consola con autocompletado de comandos y jugadores conocidos (usercache, listas y logs)
 - [x] Túnel playit.gg: agente `playitd` instalable, secret persistido, start/stop y consola en vivo
 - [ ] Agente remoto opcional (SSH) — fuera del alcance actual
@@ -91,3 +95,4 @@
 - Hosting 24/7 en la nube (la app es local-first)
 - Hot-replace de `.jar` en Minecraft en ejecución (limitación de la JVM)
 - Móvil como objetivo principal
+- Import CurseForge `.zip`: requiere `x-api-key` de CurseForge para resolver los archivos del manifest (no implementado)

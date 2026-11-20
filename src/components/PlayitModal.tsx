@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { ExternalLink, KeyRound, Loader2, Play, Save, Square, Wifi, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useI18n } from "../i18n";
 import type { OpLine } from "../lib/types";
+import { useOpLine } from "../lib/useOpLine";
 
 type PlayitStatus = {
   installed: boolean;
@@ -35,13 +35,11 @@ export default function PlayitModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     refresh();
     invoke<string>("playit_get_secret").then(setSecret).catch(() => undefined);
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    listen<OpLine>("operation://line", (event) => {
-      if (cancelled || !event.payload.id.startsWith("playit")) return;
-      setLines((previous) => [...previous.slice(-99), event.payload]);
-    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
-    return () => { cancelled = true; unlisten?.(); };
+  }, []);
+
+  useOpLine((line) => {
+    if (!line.id.startsWith("playit")) return;
+    setLines((previous) => [...previous.slice(-99), line]);
   }, []);
 
   const run = async (action: () => Promise<unknown>) => {

@@ -104,6 +104,18 @@ Build de producción:
 bun run tauri build      # instaladores .msi / .deb / .dmg
 ```
 
+Tests:
+
+```bash
+cd src-tauri
+cargo test                         # pruebas puras (sin red)
+cargo test -- --ignored            # pruebas que consultan APIs reales
+```
+
+Las pruebas `#[ignore]` verifican resolución de jars, detección de Java,
+avatares y el protocolo de status; requieren conexión o una instalación local.
+El ping de servidores se prueba con un socket UDP simulado (sin red externa).
+
 ## Relación con `packui-next`
 
 `packui-next` fue el prototipo web que validó la idea de gestionar packs con UI. Packwright es su evolución: misma idea de catálogo y gestión, pero como aplicación de escritorio real y con gestión de servidores. El código se reutilizará donde tenga sentido.
