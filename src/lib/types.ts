@@ -183,6 +183,23 @@ export type ModAnalysis = {
   checked: number;
 };
 
+export type ServerInfo = {
+  name: string;
+  template: string;
+  version: string;
+  port: number;
+  jar: string;
+  java: string;
+  path: string;
+  running: boolean;
+};
+
+export type ServerPlayers = {
+  ops: string[];
+  whitelist: string[];
+  banned: string[];
+};
+
 export type ModHistoryItem = {
   id: string;
   name: string;

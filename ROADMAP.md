@@ -70,16 +70,16 @@
 - [x] i18n ES / EN
 - [x] Command palette (Ctrl/Cmd+K) y atajos
 
-## Fase 3 — Servidores (el plan original)
-- [ ] Workspace con packs y servidores
-- [ ] Templates: Vanilla, Paper, Purpur, Forge, NeoForge, Fabric, Velocity
-- [ ] Setup automático (jar, eula, properties, JVM args, Java)
-- [ ] start/stop/restart + consola en vivo
-- [ ] Sync cliente ↔ servidor
-- [ ] Túnel sin port forwarding (playit.gg)
-- [ ] Bedrock + GeyserMC
-- [ ] Backups, jugadores (ops/whitelist/bans)
-- [ ] Agente remoto opcional (SSH)
+## Fase 3 — Servidores ✅ (núcleo)
+- [x] Workspace con packs y servidores
+- [x] Templates: Vanilla, Paper, Purpur, Forge, NeoForge, Fabric, Velocity
+- [x] Setup automático (jar, eula, properties, Java; JVM args fijos `-Xmx2G`)
+- [x] start/stop/restart + consola en vivo
+- [x] Sync cliente ↔ servidor (mods)
+- [x] Bedrock + GeyserMC (instalador del plugin)
+- [x] Backups, jugadores (ops/whitelist/bans)
+- [~] Túnel playit.gg: acceso rápido al servicio (sin agente integrado)
+- [ ] Agente remoto opcional (SSH) — fuera del alcance actual
 
 ## Fuera de alcance
 - Hosting 24/7 en la nube (la app es local-first)

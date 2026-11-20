@@ -23,7 +23,7 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt", "macros"] }
-toml_edit = "0.23"
+toml_edit = { version = "0.23", features = ["serde"] }
 dirs = "6"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 tauri-plugin-dialog = "2"

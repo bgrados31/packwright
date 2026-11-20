@@ -11,6 +11,7 @@ import {
   Moon,
   PackageOpen,
   Plus,
+  Server,
   Settings2,
   Sun,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import Sidebar, { type SidebarView } from "./components/Sidebar";
 import PacksView from "./components/PacksView";
 import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
+import ServersView from "./components/ServersView";
 import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
 import DebugConsole from "./components/DebugConsole";
@@ -723,6 +725,7 @@ export default function App() {
   const paletteActions: PaletteAction[] = [
     { id: "home", label: t("nav.home"), group: t("palette.groupNavigate"), icon: <House size={14} />, run: () => setView("home") },
     { id: "packs", label: t("nav.modpacks"), group: t("palette.groupNavigate"), icon: <LayoutGrid size={14} />, run: () => setView("packs") },
+    { id: "servers", label: t("nav.servers"), group: t("palette.groupNavigate"), icon: <Server size={14} />, run: () => setView("servers") },
     { id: "settings", label: t("setup.settingsTitle"), group: t("palette.groupNavigate"), icon: <Settings2 size={14} />, run: () => setView("settings") },
     { id: "new", label: t("nav.newPack"), group: t("palette.groupCreate"), icon: <Plus size={14} />, run: () => setView("create") },
     { id: "profile", label: t("profiles.start"), group: t("palette.groupCreate"), icon: <Layers size={14} />, run: () => setProfileOpen(true) },
@@ -768,6 +771,7 @@ export default function App() {
           active={activeView}
           onHome={() => { setSelectedPack(null); setView("home"); }}
           onPacks={() => { setSelectedPack(null); setView("packs"); }}
+          onServers={() => { setSelectedPack(null); setView("servers"); }}
           onSettings={() => { setSelectedPack(null); setView("settings"); }}
           packsCount={packs.length}
         />
@@ -790,6 +794,8 @@ export default function App() {
             onSave={(next) => void saveConfig(next)}
             onLocaleChange={setLocale}
           />
+        ) : view === "servers" ? (
+          <ServersView packs={packs} />
         ) : view === "settings" ? (
           <div className="view-enter">
             <SettingsView

@@ -11,6 +11,7 @@ mod model;
 mod pack;
 mod publish;
 mod serve;
+mod server;
 mod process;
 mod versions;
 
@@ -36,6 +37,7 @@ pub fn run() {
             });
             app.manage(serve::ServeState::new(app.handle().clone()));
             app.manage(dev::DevState::new(app.handle().clone()));
+            app.manage(server::ServerState::new(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -69,6 +71,21 @@ pub fn run() {
             git::git_tag,
             git::git_changelog,
             publish::modrinth_publish,
+            server::server_create,
+            server::server_list,
+            server::server_start,
+            server::server_stop,
+            server::server_send,
+            server::server_properties,
+            server::server_properties_set,
+            server::server_eula,
+            server::server_eula_set,
+            server::server_players,
+            server::server_player_add,
+            server::server_backup,
+            server::server_sync,
+            server::server_install_geyser,
+            server::server_open_folder,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,

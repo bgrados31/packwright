@@ -21,6 +21,7 @@ type Props = {
   onHome: () => void;
   onPacks: () => void;
   onSettings: () => void;
+  onServers: () => void;
   packsCount: number;
 };
 
@@ -89,9 +90,9 @@ export default function Sidebar(props: Props) {
         <NavItem
           icon={Server}
           label={t("nav.servers")}
+          active={props.active === "servers"}
           collapsed={props.collapsed}
-          disabled
-          badge={props.collapsed ? undefined : t("nav.soon")}
+          onClick={props.onServers}
         />
         <NavItem
           icon={Boxes}
