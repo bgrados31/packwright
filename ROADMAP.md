@@ -27,7 +27,9 @@
 - [x] Validación TOML/JSON en vivo con `toml_edit` / `serde_json` y marcadores en Monaco
 - [x] Guardado atómico (.tmp + rename) + historial con restore
 - [x] Sandbox de rutas (path traversal) y Ctrl+S
-- [x] UI rediseñada con Tailwind 4: estética blueprint/forge, sin look genérico
+- [x] UI minimalista con Tailwind 4: temas claro/oscuro y primera apertura limpia
+- [x] Paleta naranja/navy del isotipo + icono de ventana/taskbar corregido
+- [x] Versiones reales de MC (Mojang) y loader (Fabric/Forge/NeoForge/Purpur) con caché offline
 
 ### 1.3 Metadatos profesionales ✅
 - [x] Campos extendidos en `.packwright/meta.toml` con guardado atómico

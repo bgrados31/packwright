@@ -260,12 +260,21 @@ pub async fn versions_loader(loader: String, mc_version: String) -> Result<Vec<L
     let http = client()?;
     let versions = match fetch_loader(&http, &loader, &mc_version).await {
         Ok(v) if !v.is_empty() => {
+            eprintln!("[versions] {loader}@{mc_version}: {} versiones", v.len());
             disk_write(&format!("loader-{}.json", key.replace('@', "_")), &v);
             LOADER_CACHE.lock().unwrap().insert(key, (Instant::now(), v.clone()));
             v
         }
-        _ => disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
-            .ok_or_else(|| AppError::NotFound(format!("No hay versiones de {loader} para {mc_version}")))?,
+        Ok(_v) => {
+            eprintln!("[versions] {loader}@{mc_version}: respuesta vacía");
+            disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
+                .ok_or_else(|| AppError::NotFound(format!("No hay versiones de {loader} para {mc_version}")))?
+        }
+        Err(e) => {
+            eprintln!("[versions] {loader}@{mc_version}: error {e}");
+            disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
+                .ok_or_else(|| AppError::NotFound(format!("No hay versiones de {loader} para {mc_version}: {e}")))?
+        }
     };
 
     Ok(versions)
