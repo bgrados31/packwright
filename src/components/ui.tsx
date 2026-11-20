@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { LayoutGrid, List, Search, X } from "lucide-react";
+import { Check, LayoutGrid, List, Search, X } from "lucide-react";
 
 /** Campo de búsqueda con icono, botón limpiar y sugerencia de atajo. */
 export function SearchField({
@@ -41,6 +41,37 @@ export function SearchField({
         </kbd>
       )}
     </div>
+  );
+}
+
+/** Checkbox con apariencia propia, accesible y reutilizable. */
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+  size = "md",
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+  size?: "sm" | "md";
+}) {
+  return (
+    <label className={`ui-checkbox ${size === "sm" ? "sm" : ""} ${disabled ? "disabled" : ""}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
+        aria-label={label}
+      />
+      <span className="ui-checkbox-box">
+        <Check size={size === "sm" ? 11 : 12} strokeWidth={3} />
+      </span>
+      {label && <span className="ui-checkbox-label">{label}</span>}
+    </label>
   );
 }
 

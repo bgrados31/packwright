@@ -40,7 +40,7 @@ import type {
 import { cachedModIcon, loadModIcons } from "../lib/modIcons";
 import { mdLite } from "../lib/markdown";
 import Select from "./Select";
-import { FilterChips, SearchField, Tag, ViewToggle } from "./ui";
+import { Checkbox, FilterChips, SearchField, Tag, ViewToggle } from "./ui";
 
 type Props = {
   dir: string;
@@ -762,18 +762,19 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                 {filteredCategories.map((item) => {
                   const active = selectedCategories.includes(item.name);
                   return (
-                    <button
+                    <div
                       key={item.name}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] transition ${
-                        active ? "bg-accent-soft text-accent" : "text-muted hover:bg-subtle hover:text-ink"
+                      className={`flex items-center rounded-lg px-2.5 py-2 transition ${
+                        active ? "bg-accent-soft" : "hover:bg-subtle"
                       }`}
-                      onClick={() => toggleCategory(item.name)}
                     >
-                      <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded border ${active ? "border-accent bg-accent text-white" : "border-line"}`}>
-                        {active && <Check size={10} strokeWidth={3} />}
-                      </span>
-                      <span className="truncate">{prettyCategory(item.name)}</span>
-                    </button>
+                      <Checkbox
+                        size="sm"
+                        checked={active}
+                        onChange={() => toggleCategory(item.name)}
+                        label={prettyCategory(item.name)}
+                      />
+                    </div>
                   );
                 })}
                 {filteredCategories.length === 0 && (
@@ -945,15 +946,11 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
           </div>
 
           <div className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5 ${selected.length ? "border-accent/40 bg-accent-soft" : "border-line bg-surface"}`}>
-            <label className="flex cursor-pointer items-center gap-2 text-[12px]">
-              <input
-                type="checkbox"
-                className="accent-accent"
-                checked={allSelected}
-                onChange={() => setSelected(allSelected ? [] : visibleInstalled.map((mod) => mod.id))}
-              />
-              <span>{t("mods.selectAll")}</span>
-            </label>
+            <Checkbox
+              checked={allSelected}
+              onChange={(checked) => setSelected(checked ? visibleInstalled.map((mod) => mod.id) : [])}
+              label={t("mods.selectAll")}
+            />
             {selected.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 border-l border-line pl-3">
                 <button className="btn btn-ghost" onClick={() => bulk("update")}><RefreshCw size={13} /> {t("mods.action.update")}</button>
@@ -991,7 +988,12 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
             <div className="card mt-5 divide-y divide-line overflow-hidden">
               {visibleInstalled.map((mod) => (
                 <div key={mod.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle">
-                  <input type="checkbox" className="accent-accent" checked={selected.includes(mod.id)} onChange={() => toggle(mod.id)} aria-label={t("mods.selectAll")} />
+                  <Checkbox
+                    size="sm"
+                    checked={selected.includes(mod.id)}
+                    onChange={() => toggle(mod.id)}
+                    label={t("mods.selectAll")}
+                  />
                   <InstalledIcon mod={mod} />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 truncate text-[13px] font-medium">
@@ -1017,7 +1019,11 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
               {visibleInstalled.map((mod) => (
                 <article key={mod.id} className="card mod-installed-card stagger">
                   <div className="flex items-start gap-3 p-4">
-                    <input type="checkbox" className="mt-1 accent-accent" checked={selected.includes(mod.id)} onChange={() => toggle(mod.id)} aria-label={t("mods.selectAll")} />
+                    <Checkbox
+                      checked={selected.includes(mod.id)}
+                      onChange={() => toggle(mod.id)}
+                      label={t("mods.selectAll")}
+                    />
                     <InstalledIcon mod={mod} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
