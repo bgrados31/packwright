@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -440,4 +440,110 @@ fn neoforge_game_version(version: &str) -> Option<String> {
         return Some(format!("{major}.{minor}"));
     }
     Some(format!("1.{major}.{minor}"))
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ServerVersion {
+    pub id: String,
+    pub stable: bool,
+}
+
+static SERVER_VERSIONS_CACHE: LazyLock<Mutex<HashMap<String, (Instant, Vec<ServerVersion>)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Deserialize)]
+struct FillVersions {
+    versions: Vec<FillVersionEntry>,
+}
+
+#[derive(Deserialize)]
+struct FillVersionEntry {
+    version: FillVersion,
+}
+
+#[derive(Deserialize)]
+struct FillVersion {
+    id: String,
+    support: Option<FillSupport>,
+}
+
+#[derive(Deserialize)]
+struct FillSupport {
+    status: Option<String>,
+}
+
+/// Versiones ofrecidas por el proveedor de cada plantilla, estables primero.
+#[tauri::command]
+pub async fn server_versions(template: String) -> Result<Vec<ServerVersion>> {
+    {
+        let guard = SERVER_VERSIONS_CACHE.lock().unwrap();
+        if let Some((time, versions)) = guard.get(&template) {
+            if time.elapsed() < TTL {
+                return Ok(versions.clone());
+            }
+        }
+    }
+
+    let http = client()?;
+    let mut versions: Vec<ServerVersion> = match template.as_str() {
+        "paper" | "velocity" => {
+            let url = format!("https://fill.papermc.io/v3/projects/{template}/versions");
+            let response = http.get(&url).send().await
+                .map_err(|e| AppError::Process(format!("Failed to query PaperMC: {e}")))?;
+            if !response.status().is_success() {
+                return Err(AppError::Process(format!("PaperMC returned HTTP {}", response.status())));
+            }
+            let parsed: FillVersions = response.json().await
+                .map_err(|e| AppError::Parse(format!("Invalid PaperMC versions: {e}")))?;
+            parsed.versions.into_iter().map(|entry| {
+                let supported = entry.version.support.as_ref()
+                    .and_then(|support| support.status.as_deref()) == Some("SUPPORTED");
+                ServerVersion {
+                    stable: supported && !entry.version.id.contains("SNAPSHOT"),
+                    id: entry.version.id,
+                }
+            }).collect()
+        }
+        "vanilla" => versions_minecraft(None).await?.into_iter()
+            .map(|version| ServerVersion { id: version.id, stable: version.kind == "release" })
+            .collect(),
+        _ => {
+            let catalog = versions_catalog().await?;
+            let supported: Vec<ServerVersion> = catalog.into_iter()
+                .filter(|version| version.loaders.iter().any(|loader| loader == &template))
+                .map(|version| ServerVersion { id: version.id, stable: version.kind == "release" })
+                .collect();
+            if supported.is_empty() {
+                versions_minecraft(None).await?.into_iter()
+                    .map(|version| ServerVersion { id: version.id, stable: true })
+                    .collect()
+            } else {
+                supported
+            }
+        }
+    };
+
+    versions.sort_by(|a, b| b.stable.cmp(&a.stable));
+    if versions.is_empty() {
+        return Err(AppError::NotFound(format!("No versions available for {template}")));
+    }
+    SERVER_VERSIONS_CACHE.lock().unwrap().insert(template, (Instant::now(), versions.clone()));
+    Ok(versions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires network access to upstream APIs"]
+    async fn server_versions_start_with_stable() {
+        for template in ["vanilla", "paper", "purpur", "fabric", "forge", "neoforge", "velocity"] {
+            let list = server_versions(template.to_string()).await
+                .unwrap_or_else(|error| panic!("{template}: {error:?}"));
+            assert!(!list.is_empty(), "{template}: empty version list");
+            assert!(list[0].stable, "{template}: first version is not stable");
+            println!("{template}: {} ({} stable)", list[0].id, list.iter().filter(|v| v.stable).count());
+        }
+    }
 }

@@ -12,6 +12,7 @@ import {
   Loader2,
   Play,
   Plus,
+  RefreshCw,
   Save,
   Server,
   Square,
@@ -21,7 +22,9 @@ import {
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { OpLine, PackInfo, ServerInfo, ServerPlayers } from "../lib/types";
+import type { OpLine, PackInfo, ServerInfo, ServerPlayers, ServerVersion } from "../lib/types";
+import Select from "./Select";
+import { Checkbox } from "./ui";
 
 type Props = {
   packs: PackInfo[];
@@ -45,10 +48,16 @@ export default function ServersView({ packs }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [template, setTemplate] = useState("paper");
-  const [version, setVersion] = useState("1.21.1");
+  const [version, setVersion] = useState("");
+  const [versions, setVersions] = useState<ServerVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
   const [port, setPort] = useState(25565);
   const [java, setJava] = useState("java");
+  const [memory, setMemory] = useState(2048);
+  const [motd, setMotd] = useState("Packwright server");
+  const [onlineMode, setOnlineMode] = useState(true);
   const [jarUrl, setJarUrl] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consoleServer, setConsoleServer] = useState<ServerInfo | null>(null);
@@ -80,21 +89,73 @@ export default function ServersView({ packs }: Props) {
     return () => { unlisten?.(); };
   }, []);
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (action: () => Promise<unknown>): Promise<boolean> => {
     setBusy(true);
     setError(null);
     try {
       await action();
       refresh();
+      return true;
     } catch (cause) {
       setError(messageOf(cause));
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
+  const loadVersions = (provider: string) => {
+    let cancelled = false;
+    setVersionsLoading(true);
+    invoke<ServerVersion[]>("server_versions", { template: provider })
+      .then((list) => {
+        if (cancelled) return;
+        setVersions(list);
+        setVersion(list.find((item) => item.stable)?.id ?? list[0]?.id ?? "1.21.1");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setVersions([]);
+        setVersion("1.21.1");
+      })
+      .finally(() => { if (!cancelled) setVersionsLoading(false); });
+    return () => { cancelled = true; };
+  };
+
+  useEffect(() => {
+    if (!createOpen) return;
+    return loadVersions(template);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createOpen, template]);
+
+  const openNew = () => {
+    setError(null);
+    setName("");
+    setTemplate("paper");
+    setVersion("");
+    setPort(25565);
+    setJava("java");
+    setMemory(2048);
+    setMotd("Packwright server");
+    setOnlineMode(true);
+    setJarUrl("");
+    setShowAdvanced(false);
+    setCreateOpen(true);
+  };
+
   const create = async () => {
-    await run(() => invoke("server_create", { name, template, version, port, java, jarUrl: jarUrl.trim() || null }));
+    const created = await run(() => invoke("server_create", {
+      name,
+      template,
+      version,
+      port,
+      java,
+      jarUrl: jarUrl.trim() || null,
+      memory,
+      motd: motd.trim() || null,
+      onlineMode,
+    }));
+    if (!created) return;
     setCreateOpen(false);
     setName("");
   };
@@ -126,7 +187,7 @@ export default function ServersView({ packs }: Props) {
           <h1 className="mt-2 text-[28px] font-semibold tracking-tight">{t("servers.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("servers.subtitle", { count: servers.length })}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+        <button className="btn btn-primary" onClick={openNew}>
           <Plus size={15} /> {t("servers.new")}
         </button>
       </div>
@@ -188,39 +249,80 @@ export default function ServersView({ packs }: Props) {
 
       {createOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.new")}>
-          <div className="modal-card" style={{ maxWidth: 480 }}>
+          <div className="modal-card" style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <span className="modal-icon running"><Plus size={18} /></span>
               <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{t("servers.new")}</h2><p className="text-[11px] text-muted">{t("servers.newHint")}</p></div>
               <button className="icon-btn" onClick={() => setCreateOpen(false)}><X size={16} /></button>
             </div>
-            <div className="grid gap-3 p-4">
-              <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("form.name")}</span><input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="My server" /></label>
+            <div className="grid gap-3.5 p-4">
               <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("form.name")}</span><input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="My server" /></label>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs text-muted">{t("servers.template")}</span>
-                  <select className="field" value={template} onChange={(e) => setTemplate(e.target.value)}>
-                    {TEMPLATES.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
+                  <Select
+                    id="server-template"
+                    value={template}
+                    onChange={setTemplate}
+                    options={TEMPLATES.map((item) => ({ value: item, label: item.charAt(0).toUpperCase() + item.slice(1) }))}
+                  />
                 </label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("form.minecraft")}</span><input className="field" value={version} onChange={(e) => setVersion(e.target.value)} /></label>
+              </div>
+              <div className="grid grid-cols-[1fr_112px] gap-3">
+                <label className="flex flex-col gap-1.5">
+                  <span className="flex items-center justify-between text-xs text-muted">
+                    <span>{template === "velocity" ? t("servers.version") : t("form.minecraft")}</span>
+                    <button type="button" className="icon-btn !h-5 !w-5" onClick={() => void loadVersions(template)} title={t("servers.refreshVersions")}>
+                      <RefreshCw size={12} className={versionsLoading ? "spin" : ""} />
+                    </button>
+                  </span>
+                  {versions.length > 0 ? (
+                    <Select
+                      id="server-version"
+                      value={version}
+                      onChange={setVersion}
+                      searchable
+                      searchPlaceholder={t("form.search")}
+                      emptyLabel={t("form.noResults")}
+                      options={versions.map((item) => ({
+                        value: item.id,
+                        label: item.id,
+                        badge: item.stable && item.id === versions.find((candidate) => candidate.stable)?.id ? t("servers.latest") : undefined,
+                      }))}
+                    />
+                  ) : (
+                    <input className="field" value={version} onChange={(e) => setVersion(e.target.value)} placeholder={versionsLoading ? t("servers.versionsLoading") : "1.21.1"} />
+                  )}
+                </label>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.port")}</span><input className="field" type="number" min={1} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} /></label>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.port")}</span><input className="field" type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} /></label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.java")}</span><input className="field" value={java} onChange={(e) => setJava(e.target.value)} /></label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted">{t("servers.memory")} (MB)</span>
+                  <input className="field" type="number" min={512} max={16384} step={512} value={memory} onChange={(e) => setMemory(Number(e.target.value))} />
+                </label>
+                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.java")}</span><input className="field font-mono text-[11px]" value={java} onChange={(e) => setJava(e.target.value)} /></label>
               </div>
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-muted">{t("servers.jarUrl")}</span>
-                <input className="field font-mono text-[11px]" value={jarUrl} onChange={(e) => setJarUrl(e.target.value)} placeholder="https://…/server.jar" spellCheck={false} />
-              </label>
-              <button className="btn btn-ghost text-[11px]" onClick={() => void openUrl(`https://papermc.io/downloads/${template}`)}>
-                <Download size={12} /> {t("servers.getJar")}
-              </button>
+              <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.motd")}</span><input className="field" value={motd} onChange={(e) => setMotd(e.target.value)} /></label>
+              <Checkbox checked={onlineMode} onChange={setOnlineMode} label={t("servers.online")} size="sm" />
+              <p className="-mt-1 text-[11px] leading-4 text-muted">{t("servers.versionHint", { provider: template })}</p>
+              <details className="group text-sm" open={showAdvanced} onToggle={(event) => setShowAdvanced(event.currentTarget.open)}>
+                <summary className="flex cursor-pointer items-center gap-1.5 py-1 text-xs text-muted transition-colors hover:text-ink">{t("servers.advanced")}</summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted">{t("servers.jarUrl")}</span>
+                    <input className="field font-mono text-[11px]" value={jarUrl} onChange={(e) => setJarUrl(e.target.value)} placeholder="https://…/server.jar" spellCheck={false} />
+                  </label>
+                  <button className="btn btn-ghost text-[11px]" onClick={() => void openUrl(`https://papermc.io/downloads/${template}`)}>
+                    <Download size={12} /> {t("servers.getJar")}
+                  </button>
+                </div>
+              </details>
               {error && <div className="modal-message error">{error}</div>}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setCreateOpen(false)}>{t("common.close")}</button>
-              <button className="btn btn-primary" onClick={() => void create()} disabled={busy || !name.trim()}>
+              <button className="btn btn-primary" onClick={() => void create()} disabled={busy || !name.trim() || !version.trim()}>
                 {busy ? <Loader2 size={14} className="spin" /> : <Plus size={14} />}{t("servers.create")}
               </button>
             </div>

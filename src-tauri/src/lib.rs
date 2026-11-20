@@ -127,6 +127,7 @@ pub fn run() {
             meta::pack_image_remove,
             versions::versions_minecraft,
             versions::versions_loader,
+            versions::server_versions,
             versions::versions_catalog,
         ])
         .run(tauri::generate_context!())

@@ -94,6 +94,7 @@ export type McVersion = {
 };
 
 export type LoaderVersion = { id: string; stable: boolean };
+export type ServerVersion = { id: string; stable: boolean };
 
 export type ModSearchHit = {
   project_id: string;
@@ -190,6 +191,7 @@ export type ServerInfo = {
   port: number;
   jar: string;
   java: string;
+  memory?: number;
   path: string;
   running: boolean;
 };

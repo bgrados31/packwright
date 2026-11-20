@@ -21,8 +21,14 @@ pub struct ServerInfo {
     pub port: u16,
     pub jar: String,
     pub java: String,
+    #[serde(default = "default_memory")]
+    pub memory: u32,
     pub path: String,
     pub running: bool,
+}
+
+fn default_memory() -> u32 {
+    2048
 }
 
 #[derive(Debug, Serialize)]
@@ -292,15 +298,56 @@ async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, j
     Ok((setup.version, jar_name))
 }
 
+/// Una carpeta huérfana de un intento fallido solo contiene artefactos de setup.
+/// Nunca borramos mundos ni datos de usuario.
+fn is_stale_setup_dir(dir: &Path) -> std::io::Result<bool> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        let known = name.ends_with(".jar") || matches!(name.as_str(),
+            "eula.txt" | "server.properties" | "server.toml" | "server.toml.tmp" | "plugins" | "mods"
+            | "backups" | "logs" | "libraries" | "versions" | "config" | "cache"
+        );
+        if !known {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 #[tauri::command]
-pub async fn server_create(name: String, template: String, version: String, port: u16, java: String, jar_url: Option<String>) -> Result<ServerInfo> {
+pub async fn server_create(
+    name: String,
+    template: String,
+    version: String,
+    port: u16,
+    java: String,
+    jar_url: Option<String>,
+    memory: Option<u32>,
+    motd: Option<String>,
+    online_mode: Option<bool>,
+) -> Result<ServerInfo> {
     let cfg = config::load()?;
     let name = safe_name(&name)?;
     let root = servers_root(&cfg);
     std::fs::create_dir_all(&root)?;
     let dir = root.join(&name);
+    let info_file = dir.join("server.toml");
+    if info_file.is_file() {
+        let text = std::fs::read_to_string(&info_file).unwrap_or_default();
+        if toml_edit::de::from_str::<ServerInfo>(&text).is_ok() {
+            return Err(AppError::Validation("A server with that name already exists".into()));
+        }
+        // metadata inválida: es un resto, no un servidor real.
+    }
     if dir.exists() {
-        return Err(AppError::Validation("A server with that name already exists".into()));
+        if !is_stale_setup_dir(&dir)? {
+            return Err(AppError::Validation(
+                "A folder with that name already exists but is not a valid server. Remove it or choose another name.".into(),
+            ));
+        }
+        // Resto de un intento anterior (jar a medias, eula, properties): lo limpiamos.
+        std::fs::remove_dir_all(&dir)?;
     }
     std::fs::create_dir_all(&dir)?;
 
@@ -313,8 +360,14 @@ pub async fn server_create(name: String, template: String, version: String, port
         }
     };
 
+    let motd = motd.unwrap_or_else(|| "Packwright server".into())
+        .replace(['\r', '\n'], " ");
+    let online = online_mode.unwrap_or(true);
     std::fs::write(dir.join("eula.txt"), "eula=true\n")?;
-    std::fs::write(dir.join("server.properties"), format!("server-port={port}\nmotd=Packwright server\nonline-mode=true\n"))?;
+    std::fs::write(
+        dir.join("server.properties"),
+        format!("server-port={port}\nmotd={motd}\nonline-mode={online}\n"),
+    )?;
     std::fs::create_dir_all(dir.join("plugins"))?;
 
     let info = ServerInfo {
@@ -324,6 +377,7 @@ pub async fn server_create(name: String, template: String, version: String, port
         port,
         jar: jar_name,
         java: if java.trim().is_empty() { "java".to_string() } else { java },
+        memory: memory.unwrap_or(default_memory()).clamp(512, 16384),
         path: dir.to_string_lossy().to_string(),
         running: false,
     };
@@ -387,7 +441,7 @@ pub async fn server_start(
     processes.remove(&name);
 
     let mut child = Command::new(&info.java)
-        .arg("-Xmx2G")
+        .arg(format!("-Xmx{}M", info.memory))
         .arg("-jar")
         .arg(&info.jar)
         .current_dir(&dir)
@@ -607,6 +661,20 @@ fn safe_component(name: &std::ffi::OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_setup_dir_detection() {
+        let base = std::env::temp_dir().join(format!("packwright-stale-{}", std::process::id()));
+        let dir = base.join("server");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("eula.txt"), "eula=true").unwrap();
+        std::fs::write(dir.join("paper-1.21.1.jar"), b"jar").unwrap();
+        std::fs::write(dir.join("server.toml"), "").unwrap();
+        assert!(is_stale_setup_dir(&dir).unwrap());
+        std::fs::create_dir_all(dir.join("world")).unwrap();
+        assert!(!is_stale_setup_dir(&dir).unwrap());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 
     #[tokio::test]
     #[ignore = "requires network access to upstream APIs"]
