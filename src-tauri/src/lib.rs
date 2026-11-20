@@ -44,6 +44,7 @@ pub fn run() {
             pack::launcher_defaults,
             pack::open_path,
             export::pack_export,
+            export::export_validate,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,

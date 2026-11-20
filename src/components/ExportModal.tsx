@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { CheckCircle2, FileArchive, FolderOpen, Loader2, RotateCcw, Terminal, X, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  FileArchive,
+  FolderOpen,
+  Loader2,
+  RotateCcw,
+  Terminal,
+  TriangleAlert,
+  X,
+  XCircle,
+} from "lucide-react";
 import { useI18n, type TranslationKey } from "../i18n";
-import type { ExportResult, OpLine } from "../lib/types";
+import type { ExportResult, ExportValidation, OpLine } from "../lib/types";
 
 type Props = {
   dir: string;
@@ -11,7 +21,8 @@ type Props = {
   onClose: () => void;
 };
 
-type RunState = "running" | "success" | "error";
+type Phase = "checking" | "review" | "running" | "success" | "error";
+type Format = "modrinth" | "curseforge";
 
 const BLOCKS = 12;
 
@@ -29,20 +40,45 @@ function messageOf(error: unknown): string {
 
 export default function ExportModal({ dir, packName, onClose }: Props) {
   const { t } = useI18n();
+  const [phase, setPhase] = useState<Phase>("checking");
+  const [format, setFormat] = useState<Format>("modrinth");
+  const [side, setSide] = useState<"client" | "server">("client");
+  const [validation, setValidation] = useState<ExportValidation | null>(null);
   const [lines, setLines] = useState<OpLine[]>([]);
-  const [state, setState] = useState<RunState>("running");
   const [result, setResult] = useState<ExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [override, setOverride] = useState(false);
   const consoleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setPhase("checking");
+    setValidation(null);
+    setResult(null);
+    setError(null);
+    setOverride(false);
+    invoke<ExportValidation>("export_validate", { dir })
+      .then((value) => {
+        if (cancelled) return;
+        setValidation(value);
+        setPhase(value.ok || override ? "running" : "review");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setValidation({ ok: true, issues: [] });
+        setPhase("running");
+      });
+    return () => { cancelled = true; };
+  }, [dir, attempt]);
+
+  useEffect(() => {
+    if (phase !== "running") return;
     const id = `export-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     let disposed = false;
     const unlisteners: Array<() => void> = [];
 
     setLines([]);
-    setState("running");
     setResult(null);
     setError(null);
 
@@ -52,25 +88,24 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
       }
     }).then((unlisten) => unlisteners.push(unlisten));
 
-    invoke<ExportResult>("pack_export", { dir, id })
+    invoke<ExportResult>("pack_export", { dir, id, format, side })
       .then((exported) => {
         if (disposed) return;
         setResult(exported);
-        setState("success");
+        setPhase("success");
       })
       .catch((cause) => {
         if (disposed) return;
-        const text = messageOf(cause);
-        setError(text);
-        setState("error");
-        setLines((previous) => [...previous, { id, stream: "stderr", line: text }]);
+        setError(messageOf(cause));
+        setPhase("error");
+        setLines((previous) => [...previous, { id, stream: "stderr", line: messageOf(cause) }]);
       });
 
     return () => {
       disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [dir, attempt]);
+  }, [phase, dir, format, side, attempt]);
 
   useEffect(() => {
     const element = consoleRef.current;
@@ -79,7 +114,7 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
 
   const joined = lines.map((line) => line.line).join(" ").toLowerCase();
   const stage: TranslationKey =
-    state === "success"
+    phase === "success"
       ? "export.done"
       : joined.includes("exported")
         ? "export.stagePacking"
@@ -91,19 +126,24 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
               ? "export.stageLoading"
               : "export.stagePreparing";
 
-  const progress = state === "success"
+  const progress = phase === "success"
     ? BLOCKS
     : Math.max(lines.length > 0 ? 1 : 0, Math.min(BLOCKS - 1, Math.ceil(lines.length / 2)));
+
+  const busy = phase === "checking" || phase === "running";
+  const canPickFormat = phase === "review" || phase === "success" || phase === "error";
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("export.title")}>
       <div className="modal-card export-modal">
         <div className="modal-header">
-          <span className={`modal-icon ${state}`}>
-            {state === "running" ? (
+          <span className={`modal-icon ${phase === "success" ? "success" : phase === "error" || phase === "review" ? "error" : "running"}`}>
+            {busy ? (
               <Loader2 size={18} className="spin" />
-            ) : state === "success" ? (
+            ) : phase === "success" ? (
               <CheckCircle2 size={18} />
+            ) : phase === "review" ? (
+              <TriangleAlert size={18} />
             ) : (
               <XCircle size={18} />
             )}
@@ -117,75 +157,140 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
           </button>
         </div>
 
-        <div className="export-progress">
-          <div className="export-blocks">
-            {Array.from({ length: BLOCKS }, (_, index) => (
-              <span
-                key={index}
-                className={`export-block ${index < progress ? "on" : ""} ${state === "running" && index === progress ? "next" : ""}`}
-                style={{ animationDelay: `${index * 45}ms` }}
-              />
-            ))}
-          </div>
-          <div className={`export-status ${state}`}>
-            <span>{t(stage)}</span>
-            <span className="font-mono text-[10px] opacity-70">{Math.round((progress / BLOCKS) * 100)}%</span>
-          </div>
-        </div>
-
-        <div className="export-console-wrap">
-          <div className="export-console-head">
-            <span className="flex items-center gap-1.5"><Terminal size={12} /> {t("export.consoleTitle")}</span>
-            <span className="font-mono text-[9px] opacity-60">{lines.length}</span>
-          </div>
-          <div className="console-box export-console" ref={consoleRef}>
-            {lines.length === 0 ? (
-              <div className="console-placeholder">
-                <Terminal size={13} /> {t("output.empty")}
-              </div>
-            ) : (
-              lines.map((line, index) => (
-                <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>
-                  {line.line}
-                </div>
-              ))
-            )}
-            {state === "running" && <div className="console-line cursor">▍</div>}
-          </div>
-        </div>
-
-        {result && (
-          <div className="export-result">
-            <FileArchive size={18} className="shrink-0 text-accent" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-medium">{result.name}</p>
-              <p className="font-mono text-[10px] text-muted">{formatSize(result.size)} · .mrpack</p>
+        <div className="export-format">
+          {([
+            ["modrinth", t("export.formatModrinth")],
+            ["curseforge", t("export.formatCurseforge")],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              className={`export-format-option ${format === id ? "active" : ""}`}
+              disabled={!canPickFormat}
+              onClick={() => setFormat(id)}
+            >
+              {label}
+            </button>
+          ))}
+          {format === "curseforge" && (
+            <div className="ml-auto flex items-center gap-1.5">
+              {(["client", "server"] as const).map((value) => (
+                <button
+                  key={value}
+                  className={`filter-chip ${side === value ? "active" : ""}`}
+                  disabled={!canPickFormat}
+                  onClick={() => setSide(value)}
+                >
+                  {value === "client" ? t("mods.envClient") : t("mods.envServer")}
+                </button>
+              ))}
             </div>
-            <CheckCircle2 size={15} className="shrink-0 text-ok" />
+          )}
+        </div>
+
+        {phase === "checking" && (
+          <div className="mod-analysis analyzing" style={{ margin: "12px 18px" }}>
+            <Loader2 size={14} className="spin" /> {t("export.validating")}
           </div>
         )}
 
-        {error && <div className="modal-message error">{error}</div>}
+        {phase === "review" && validation && (
+          <div className="mod-analysis warn" style={{ margin: "12px 18px" }}>
+            <div className="flex w-full items-start gap-2">
+              <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{t("export.issuesTitle", { count: validation.issues.length })}</p>
+                <ul className="mt-1 list-disc pl-4 text-[11px] opacity-90">
+                  {validation.issues.map((issue, index) => <li key={index}>{issue}</li>)}
+                </ul>
+                <div className="mt-2 flex gap-2">
+                  <button className="btn btn-primary" onClick={() => setPhase("running")}>
+                    {t("export.exportAnyway")}
+                  </button>
+                  <button className="btn btn-secondary" onClick={onClose}>
+                    {t("common.close")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-        <div className="modal-footer">
-          {state === "error" ? (
-            <button className="btn btn-secondary" onClick={() => setAttempt((current) => current + 1)}>
-              <RotateCcw size={14} /> {t("settings.retry")}
+        {(phase === "running" || phase === "success" || phase === "error") && (
+          <>
+            <div className="export-progress">
+              <div className="export-blocks">
+                {Array.from({ length: BLOCKS }, (_, index) => (
+                  <span
+                    key={index}
+                    className={`export-block ${index < progress ? "on" : ""} ${phase === "running" && index === progress ? "next" : ""}`}
+                    style={{ animationDelay: `${index * 45}ms` }}
+                  />
+                ))}
+              </div>
+              <div className={`export-status ${phase === "success" ? "success" : phase === "error" ? "error" : ""}`}>
+                <span>{t(stage)}</span>
+                <span className="font-mono text-[10px] opacity-70">{Math.round((progress / BLOCKS) * 100)}%</span>
+              </div>
+            </div>
+
+            <div className="export-console-wrap">
+              <div className="export-console-head">
+                <span className="flex items-center gap-1.5"><Terminal size={12} /> {t("export.consoleTitle")}</span>
+                <span className="font-mono text-[9px] opacity-60">{lines.length}</span>
+              </div>
+              <div className="console-box export-console" ref={consoleRef}>
+                {lines.length === 0 ? (
+                  <div className="console-placeholder"><Terminal size={13} /> {t("output.empty")}</div>
+                ) : (
+                  lines.map((line, index) => (
+                    <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
+                  ))
+                )}
+                {phase === "running" && <div className="console-line cursor">▍</div>}
+              </div>
+            </div>
+
+            {result && (
+              <div className="export-result">
+                <FileArchive size={18} className="shrink-0 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium">{result.name}</p>
+                  <p className="font-mono text-[10px] text-muted">{formatSize(result.size)} · {format === "curseforge" ? "zip" : "mrpack"}</p>
+                </div>
+                <CheckCircle2 size={15} className="shrink-0 text-ok" />
+              </div>
+            )}
+
+            {error && <div className="modal-message error">{error}</div>}
+          </>
+        )}
+
+        {phase !== "review" && phase !== "checking" && (
+          <div className="modal-footer">
+            {phase === "error" ? (
+              <button className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>
+                <RotateCcw size={14} /> {t("settings.retry")}
+              </button>
+            ) : phase === "success" ? (
+              <>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}
+                >
+                  <FolderOpen size={14} /> {t("export.viewFolder")}
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setPhase("checking"); setAttempt((value) => value + 1); }}>
+                  {t("export.another")}
+                </button>
+              </>
+            ) : (
+              <span className="text-[11px] text-muted">{t("export.working")}</span>
+            )}
+            <button className="btn btn-primary" onClick={onClose} disabled={busy}>
+              {phase === "success" ? t("export.done") : t("common.close")}
             </button>
-          ) : state === "success" ? (
-            <button
-              className="btn btn-secondary"
-              onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}
-            >
-              <FolderOpen size={14} /> {t("export.viewFolder")}
-            </button>
-          ) : (
-            <span className="text-[11px] text-muted">{t("export.working")}</span>
-          )}
-          <button className="btn btn-primary" onClick={onClose}>
-            {state === "success" ? t("export.done") : t("common.close")}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

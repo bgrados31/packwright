@@ -23,12 +23,15 @@
 - [x] UI inicial: formulario, tarjetas de pack y consola en vivo
 
 ### 1.2 Editor de archivos ✅
-- [x] Árbol de archivos del pack + Monaco local con tokenizador TOML y tema propio
+- [x] Monaco local con tokenizador TOML, temas propios y lenguajes TOML/JSON/YAML/MD/XML
 - [x] Validación TOML/JSON en vivo con `toml_edit` / `serde_json` y marcadores en Monaco
 - [x] Guardado atómico (.tmp + rename) + historial con restore
 - [x] Sandbox de rutas (path traversal) y Ctrl+S
-- [x] UI minimalista con Tailwind 4: temas claro/oscuro y primera apertura limpia
-- [x] Paleta naranja/navy del isotipo + icono de ventana/taskbar corregido
+- [x] Árbol multi-root configurable (Pack / Packwiz / Packwright) con carpetas, filtro y context menu
+- [x] Pestañas reordenables por drag & drop, menú contextual y cierres (others/right/all)
+- [x] Renombrar / crear / eliminar archivos, con protección de los archivos gestionados por packwiz
+- [x] Ajustes de editor persistentes: fuente, tabulación, minimapa y word wrap
+- [x] Temas claro y obsidiana (negro azulado), paleta del isotipo e icono de ventana corregido
 - [x] Versiones reales de MC (Mojang) y loader (Fabric/Forge/NeoForge/Purpur) con caché offline
 
 ### 1.3 Metadatos profesionales ✅
@@ -41,17 +44,18 @@
 - [x] Icono, banner y galería de imágenes subibles, visibles en las cards del pack
 
 ### 1.4 Catálogo e instalación de mods ✅
-- [x] Cliente Modrinth (búsqueda, filtros, versiones compatibles)
-- [x] `modrinth add` / `remove` / `update` / `pin` / `unpin` / `refresh`
-- [x] Health checks (duplicados, mods sin fuente de actualización)
-- [x] Pestaña Mods en el editor con modal de operaciones y consola en vivo
+- [x] Cliente Modrinth: paginación real, multi-filtro por categoría, tipos (mod/resourcepack/datapack/shader), entorno y orden
+- [x] `modrinth add` / `remove` / `update` / `pin` / `unpin` / `refresh` (individual y en lote)
+- [x] Preview con descripción Markdown sanitizada, galería, versiones agrupadas y validación de dependencias/conflictos
+- [x] Install rápido, toasts con estados y horario de operaciones
+- [x] Historial por pack con mods, dependencias y salida de cada operación
+- [x] Iconos de mods cacheados, tags con color y health checks (duplicados / sin fuente)
 
 ### 1.5 Export / import (en curso)
-- [x] Export `.mrpack` (Modrinth) con modal animado
-- [ ] Export `.zip` (CurseForge, client y server)
+- [x] Export `.mrpack` (Modrinth) y `.zip` (CurseForge client/server) con modal animado
+- [x] Selector de formato y validación previa (metadata, índice, icono, duplicados) con opción de exportar de todos modos
 - [ ] Import `.mrpack` existente
 - [ ] `packwiz serve` + README de instalación por launcher
-- [ ] Validación previa al export
 
 ### 1.6 Dev Instance
 - [ ] Instancia de prueba con junction/symlink del `mods/`

@@ -33,6 +33,11 @@ export type AppConfig = {
 
 export type PackwizStatus = { found: boolean; path: string | null };
 
+export type ExportValidation = {
+  ok: boolean;
+  issues: string[];
+};
+
 export type ExportResult = {
   path: string;
   name: string;
