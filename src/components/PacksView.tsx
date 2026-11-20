@@ -6,6 +6,8 @@ import {
   FolderOpen,
   LayoutGrid,
   List,
+  Loader2,
+  PackageOpen,
   Plus,
   Search,
   SlidersHorizontal,
@@ -22,6 +24,8 @@ type Props = {
   workspace: string;
   onOpen: (dir: string) => void;
   onReveal: (dir: string) => void;
+  onExport: (dir: string) => void;
+  exporting: string | null;
   onNew: () => void;
 };
 
@@ -36,7 +40,7 @@ const LOADER_TONES: Record<string, string> = {
   purpur: "tone-purpur",
 };
 
-export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }: Props) {
+export default function PacksView({ packs, workspace, onOpen, onReveal, onExport, exporting, onNew }: Props) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortMode>("name");
@@ -264,6 +268,14 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
                   </button>
                   <button
                     className="btn btn-secondary px-3"
+                    onClick={() => onExport(pack.dir)}
+                    disabled={exporting === pack.dir}
+                    title={t("export.button")}
+                  >
+                    {exporting === pack.dir ? <Loader2 size={15} className="spin" /> : <PackageOpen size={15} />}
+                  </button>
+                  <button
+                    className="btn btn-secondary px-3"
                     onClick={() => onReveal(pack.dir)}
                     title={t("packs.folder")}
                   >
@@ -297,6 +309,14 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
                 {pack.loader ?? "—"}
               </span>
               <span className="w-16 text-right font-mono text-[11px] text-muted">{pack.mod_count} mods</span>
+              <button
+                className="btn btn-secondary px-3"
+                onClick={() => onExport(pack.dir)}
+                disabled={exporting === pack.dir}
+                title={t("export.button")}
+              >
+                {exporting === pack.dir ? <Loader2 size={14} className="spin" /> : <PackageOpen size={14} />}
+              </button>
               <button
                 className="btn btn-secondary px-3"
                 onClick={() => onReveal(pack.dir)}

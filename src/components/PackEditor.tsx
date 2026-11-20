@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { Loader2, PackageOpen } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { Diagnostic, FileEntry, HistoryEntry, PackMeta } from "../lib/types";
 
@@ -30,6 +31,8 @@ type Props = {
   onSaveMeta: () => void;
   onUseIcon: () => void;
   onGenerateReadme: () => void;
+  onExport: () => void;
+  exporting: boolean;
 };
 
 export default function PackEditor(props: Props) {
@@ -52,6 +55,15 @@ export default function PackEditor(props: Props) {
           <p className="mt-1 font-mono text-xs text-muted">{props.dir}</p>
         </div>
         <div className="flex gap-2">
+          <button
+            className="btn btn-secondary"
+            onClick={props.onExport}
+            disabled={props.exporting}
+            title={t("export.button")}
+          >
+            {props.exporting ? <Loader2 size={14} className="spin" /> : <PackageOpen size={14} />}
+            {props.exporting ? t("export.exporting") : t("export.button")}
+          </button>
           {tab === "files" ? (
             <>
               <button className="btn btn-secondary" onClick={props.onHistory}>{t("editor.history")}</button>

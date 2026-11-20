@@ -1,5 +1,6 @@
 mod config;
 mod error;
+mod export;
 mod files;
 mod meta;
 mod model;
@@ -41,6 +42,7 @@ pub fn run() {
             pack::pick_folder,
             pack::launcher_defaults,
             pack::open_path,
+            export::pack_export,
             files::pack_files,
             files::file_read,
             files::file_write,

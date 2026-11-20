@@ -18,6 +18,7 @@ import {
   type CreatePackInput,
   type Diagnostic,
   type ErrorInfo,
+  type ExportResult,
   type FileEntry,
   type HistoryEntry,
   type LoaderVersion,
@@ -56,6 +57,9 @@ export default function App() {
   const [form, setForm] = useState<CreatePackInput>(emptyForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
   const [logs, setLogs] = useState<OpLine[]>([]);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -341,6 +345,22 @@ export default function App() {
     }
   };
 
+  const exportPack = async (dir: string) => {
+    setExporting(dir);
+    setError(null);
+    setNotice(null);
+    setLogs([]);
+    try {
+      const result = await invoke<ExportResult>("pack_export", { dir });
+      setExportResult(result);
+      setNotice(t("export.success", { name: result.name }));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const activePack = packs.find((pack) => pack.dir === selectedPack);
   const availableLoaders = mcVersions.find((version) => version.id === form.minecraft_version)?.loaders ?? [];
 
@@ -368,6 +388,28 @@ export default function App() {
             <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setError(null)}>
               {t("common.close")}
             </button>
+          </div>
+        )}
+
+        {notice && (
+          <div className="mb-6 flex items-center justify-between rounded-lg border border-ok/30 bg-ok/5 px-4 py-2.5 text-sm text-ok">
+            <span>{notice}</span>
+            <div className="flex items-center gap-3">
+              {exportResult && (
+                <button
+                  className="text-xs underline underline-offset-2 hover:opacity-80"
+                  onClick={() => void invoke("open_path", { path: exportResult.output_dir })}
+                >
+                  {t("export.viewFolder")}
+                </button>
+              )}
+              <button
+                className="text-xs opacity-70 hover:opacity-100"
+                onClick={() => { setNotice(null); setExportResult(null); }}
+              >
+                {t("common.close")}
+              </button>
+            </div>
           </div>
         )}
 
@@ -449,6 +491,8 @@ export default function App() {
               onSaveMeta={() => void saveDetails()}
               onUseIcon={() => void useDefaultIcon()}
               onGenerateReadme={() => void generateReadme()}
+              onExport={() => void exportPack(selectedPack ?? "")}
+              exporting={exporting === selectedPack}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (
@@ -469,6 +513,8 @@ export default function App() {
             workspace={config?.workspace ?? "—"}
             onOpen={(dir) => void openPack(dir)}
             onReveal={(dir) => void reveal(dir)}
+            onExport={(dir) => void exportPack(dir)}
+            exporting={exporting}
             onNew={() => setView("create")}
           />
         )}

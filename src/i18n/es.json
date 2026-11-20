@@ -83,6 +83,11 @@
   "output.clear": "Limpiar",
   "output.empty": "Esperando operaciones…",
 
+  "export.button": "Exportar .mrpack",
+  "export.exporting": "Exportando…",
+  "export.success": "{name} exportado correctamente.",
+  "export.viewFolder": "Abrir carpeta de exports",
+
   "setup.title": "Bienvenido a Packwright",
   "setup.subtitle": "Unos ajustes antes de empezar. Podrás cambiarlos todos después.",
   "setup.settingsTitle": "Ajustes",

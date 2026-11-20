@@ -26,6 +26,13 @@ export type AppConfig = {
 
 export type PackwizStatus = { found: boolean; path: string | null };
 
+export type ExportResult = {
+  path: string;
+  name: string;
+  size: number;
+  output_dir: string;
+};
+
 export type OpLine = {
   id: string;
   stream: "stdout" | "stderr";
