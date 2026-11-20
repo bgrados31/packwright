@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { OpLine, PackInfo, ServerInfo, ServerVersion } from "../lib/types";
+import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerVersion } from "../lib/types";
 import Select from "./Select";
 import MinecraftScene from "./MinecraftScene";
 import ServerDetailView from "./ServerDetailView";
@@ -56,6 +56,7 @@ export default function ServersView({ packs }: Props) {
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [port, setPort] = useState(25565);
   const [java, setJava] = useState("java");
+  const [detectedJava, setDetectedJava] = useState("");
   const [memory, setMemory] = useState(2048);
   const [motd, setMotd] = useState("Packwright server");
   const [onlineMode, setOnlineMode] = useState(true);
@@ -80,6 +81,17 @@ export default function ServersView({ packs }: Props) {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => {
+    invoke<JavaInfo>("java_detect")
+      .then((info) => {
+        if (info.found) {
+          setDetectedJava(info.path);
+          setJava(info.path);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -134,7 +146,7 @@ export default function ServersView({ packs }: Props) {
     setTemplate("paper");
     setVersion("");
     setPort(25565);
-    setJava("java");
+    setJava(detectedJava || "java");
     setMemory(2048);
     setMotd("Packwright server");
     setOnlineMode(true);
@@ -315,7 +327,11 @@ export default function ServersView({ packs }: Props) {
                   <span className="text-xs text-muted">{t("servers.memory")} (MB)</span>
                   <input className="field" type="number" min={512} max={16384} step={512} value={memory} onChange={(e) => setMemory(Number(e.target.value))} />
                 </label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.java")}</span><input className="field font-mono text-[11px]" value={java} onChange={(e) => setJava(e.target.value)} /></label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted">{t("servers.java")}</span>
+                  <input className="field font-mono text-[11px]" value={java} onChange={(e) => setJava(e.target.value)} />
+                  {!java.trim() && <span className="text-[10px] text-[var(--pw-bad)]">{t("servers.javaMissing")}</span>}
+                </label>
               </div>
               <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.motd")}</span><input className="field" value={motd} onChange={(e) => setMotd(e.target.value)} /></label>
               <Checkbox checked={onlineMode} onChange={setOnlineMode} label={t("servers.online")} size="sm" />

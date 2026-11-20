@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::State;
 
 use crate::config;
@@ -71,7 +72,16 @@ pub async fn pack_import(
     name: Option<String>,
     id: Option<String>,
 ) -> Result<model::PackInfo> {
-    let source_path = PathBuf::from(&source);
+    import_from_file(state, &source, name, id).await
+}
+
+async fn import_from_file(
+    state: State<'_, AppState>,
+    source: &str,
+    name: Option<String>,
+    id: Option<String>,
+) -> Result<model::PackInfo> {
+    let source_path = PathBuf::from(source);
     if !source_path.is_file() {
         return Err(AppError::NotFound(format!("Modpack not found: {source}")));
     }
@@ -182,4 +192,157 @@ pub async fn pack_import(
     }
 
     model::read_pack_info(&target)
+}
+
+fn http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("Packwright/0.1")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))
+}
+
+async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value> {
+    let response = client.get(url).send().await
+        .map_err(|e| AppError::Process(format!("Request failed ({url}): {e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::Process(format!("Request returned HTTP {} ({url})", response.status())));
+    }
+    response.json().await
+        .map_err(|e| AppError::Parse(format!("Invalid JSON ({url}): {e}")))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModpackHit {
+    pub id: String,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub icon_url: String,
+    pub downloads: u64,
+}
+
+/// Busca modpacks en Modrinth para importarlos sin salir de la app.
+#[tauri::command]
+pub async fn modpack_search(query: String, limit: Option<u32>) -> Result<Vec<ModpackHit>> {
+    let client = http_client()?;
+    let count = limit.unwrap_or(12).clamp(1, 24);
+    let facets = json_facets(&[("project_type", "modpack")]);
+    let body: Value = client
+        .get("https://api.modrinth.com/v2/search")
+        .query(&[
+            ("query", query.trim()),
+            ("index", "downloads"),
+            ("limit", &count.to_string()),
+            ("facets", &facets),
+        ])
+        .send().await
+        .map_err(|e| AppError::Process(format!("Modrinth search failed: {e}")))?
+        .json().await
+        .map_err(|e| AppError::Parse(format!("Invalid Modrinth response: {e}")))?;
+
+    let hits = body["hits"].as_array()
+        .ok_or_else(|| AppError::Parse("Modrinth search has no hits".into()))?;
+    Ok(hits.iter().map(|hit| ModpackHit {
+        id: hit["project_id"].as_str().unwrap_or_default().to_string(),
+        slug: hit["slug"].as_str().unwrap_or_default().to_string(),
+        title: hit["title"].as_str().unwrap_or_default().to_string(),
+        description: hit["description"].as_str().unwrap_or_default().to_string(),
+        icon_url: hit["icon_url"].as_str().unwrap_or_default().to_string(),
+        downloads: hit["downloads"].as_u64().unwrap_or(0),
+    }).collect())
+}
+
+fn json_facets(pairs: &[(&str, &str)]) -> String {
+    let groups: Vec<Vec<String>> = pairs.iter()
+        .map(|(key, value)| vec![format!("{key}:{value}")])
+        .collect();
+    serde_json::to_string(&groups).unwrap_or_else(|_| "[]".into())
+}
+
+/// Resuelve la URL del `.mrpack` desde un enlace de Modrinth o una URL directa.
+async fn resolve_mrpack_url(client: &reqwest::Client, source: &str) -> Result<String> {
+    let clean = source.split('?').next().unwrap_or(source).trim_end_matches('/');
+    if clean.to_lowercase().ends_with(".mrpack") {
+        return Ok(source.to_string());
+    }
+    let slug = if let Some(position) = clean.find("/modpack/") {
+        clean[position + "/modpack/".len()..].split('/').next().unwrap_or("")
+    } else {
+        clean.rsplit('/').next().unwrap_or("")
+    };
+    if slug.is_empty() {
+        return Err(AppError::Validation("Could not detect a Modrinth modpack in that link".into()));
+    }
+    let project: Value = get_json(client, &format!("https://api.modrinth.com/v2/project/{slug}")).await?;
+    let project_id = project["id"].as_str()
+        .ok_or_else(|| AppError::NotFound("Modrinth project not found".into()))?;
+    let versions: Value = get_json(client, &format!("https://api.modrinth.com/v2/project/{project_id}/version")).await?;
+    let entries = versions.as_array()
+        .ok_or_else(|| AppError::Parse("Invalid Modrinth versions response".into()))?;
+    for version in entries.iter().filter(|entry| entry["version_type"].as_str() != Some("beta") && entry["version_type"].as_str() != Some("alpha")) {
+        if let Some(url) = mrpack_file_url(version) {
+            return Ok(url);
+        }
+    }
+    for version in entries {
+        if let Some(url) = mrpack_file_url(version) {
+            return Ok(url);
+        }
+    }
+    Err(AppError::NotFound("That modpack has no .mrpack file to import".into()))
+}
+
+fn mrpack_file_url(version: &Value) -> Option<String> {
+    let files = version["files"].as_array()?;
+    let primary = files.iter().find(|file| {
+        file["primary"].as_bool() == Some(true)
+            && file["filename"].as_str().is_some_and(|name| name.to_lowercase().ends_with(".mrpack"))
+    });
+    let file = primary.or_else(|| files.iter().find(|file| {
+        file["filename"].as_str().is_some_and(|name| name.to_lowercase().ends_with(".mrpack"))
+    }))?;
+    file["url"].as_str().map(str::to_string)
+}
+
+/// Importa desde un archivo local, una URL directa a `.mrpack` o un enlace de Modrinth.
+#[tauri::command]
+pub async fn modpack_import_source(
+    state: State<'_, AppState>,
+    source: String,
+    name: Option<String>,
+    id: Option<String>,
+) -> Result<model::PackInfo> {
+    let source = source.trim();
+    if source.is_empty() {
+        return Err(AppError::Validation("Source cannot be empty".into()));
+    }
+    let local = source.strip_prefix("file://").unwrap_or(source);
+    let (path, temporary) = if local.starts_with("http://") || local.starts_with("https://") {
+        let client = http_client()?;
+        let url = resolve_mrpack_url(&client, local).await?;
+        let response = client.get(&url).send().await
+            .map_err(|e| AppError::Process(format!("Modpack download failed: {e}")))?;
+        if !response.status().is_success() {
+            return Err(AppError::Process(format!("Modpack download returned HTTP {}", response.status())));
+        }
+        let bytes = response.bytes().await
+            .map_err(|e| AppError::Process(format!("Modpack read failed: {e}")))?;
+        let folder = std::env::temp_dir().join(format!(
+            "packwright-import-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+        ));
+        std::fs::create_dir_all(&folder)?;
+        let file = folder.join("modpack.mrpack");
+        std::fs::write(&file, &bytes)?;
+        (file, Some(folder))
+    } else {
+        (PathBuf::from(local), None)
+    };
+
+    let result = import_from_file(state, &path.to_string_lossy(), name, id).await;
+    if let Some(folder) = temporary {
+        let _ = std::fs::remove_dir_all(folder);
+    }
+    result
 }

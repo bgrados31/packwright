@@ -20,6 +20,7 @@ export type AppConfig = {
   serve_port: number;
   locale: string;
   atlauncher_path: string | null;
+  java_path: string | null;
   setup_complete: boolean;
   default_loader: string;
   launchers: string[];
@@ -35,6 +36,15 @@ export type AppConfig = {
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };
+
+export type ModpackHit = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  icon_url: string;
+  downloads: number;
+};
 
 export type ExportValidation = {
   ok: boolean;
@@ -95,6 +105,7 @@ export type McVersion = {
 
 export type LoaderVersion = { id: string; stable: boolean };
 export type ServerVersion = { id: string; stable: boolean };
+export type JavaInfo = { path: string; found: boolean };
 
 export type ModSearchHit = {
   project_id: string;

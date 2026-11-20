@@ -45,6 +45,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             pack::config_get,
             pack::config_set,
+            config::java_detect,
+            config::java_set_path,
             pack::workspace_set,
             pack::packwiz_status,
             pack::packwiz_reinstall,
@@ -58,6 +60,8 @@ pub fn run() {
             export::pack_export,
             export::export_validate,
             import::pack_import,
+            import::modpack_search,
+            import::modpack_import_source,
             serve::serve_start,
             serve::serve_stop,
             serve::serve_status,

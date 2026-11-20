@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::config;
 use crate::error::{AppError, Result};
+use crate::{meta, model};
 
 #[derive(Debug, Serialize)]
 pub struct DevInstance {
@@ -82,6 +83,62 @@ fn link_or_copy(source: &Path, target: &Path) -> Result<bool> {
     Ok(false)
 }
 
+/// Copia toda la metadata posible del pack dentro de la instancia del launcher.
+fn migrate_metadata(cfg: &config::AppConfig, dir: &str, pack: &Path, instance: &Path) {
+    let info = model::read_pack_info(pack).ok();
+    let details = meta::meta_get(dir.to_string()).ok();
+    let java = config::resolve_java(cfg)
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let serve = format!("http://localhost:{}", cfg.serve_port);
+    let data = json!({
+        "name": info.as_ref().map(|value| value.name.clone()).unwrap_or_else(|| dir.to_string()),
+        "author": info.as_ref().and_then(|value| value.author.clone()),
+        "description": info.as_ref().and_then(|value| value.description.clone()),
+        "version": info.as_ref().and_then(|value| value.version.clone()),
+        "minecraft": info.as_ref().and_then(|value| value.minecraft_version.clone()),
+        "loader": info.as_ref().and_then(|value| value.loader.clone()),
+        "loader_version": info.as_ref().and_then(|value| value.loader_version.clone()),
+        "summary": details.as_ref().map(|value| value.summary.clone()),
+        "license": details.as_ref().map(|value| value.license.clone()),
+        "homepage": details.as_ref().map(|value| value.homepage.clone()),
+        "source": details.as_ref().map(|value| value.source.clone()),
+        "categories": details.as_ref().map(|value| value.categories.clone()),
+        "serve": serve,
+        "java": java,
+    });
+    let _ = std::fs::write(instance.join("packwright.json"), serde_json::to_string_pretty(&data).unwrap_or_default());
+
+    let icon = details.as_ref()
+        .filter(|value| !value.icon.is_empty())
+        .map(|value| pack.join(&value.icon))
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| pack.join(".packwright/assets/icon.png"));
+    if icon.is_file() {
+        let _ = std::fs::copy(icon, instance.join("icon.png"));
+    } else {
+        let _ = std::fs::write(instance.join("icon.png"), meta::DEFAULT_ICON);
+    }
+    if let Some(banner) = details.as_ref().filter(|value| !value.banner.is_empty()).map(|value| pack.join(&value.banner)).filter(|path| path.is_file()) {
+        let _ = std::fs::copy(banner, instance.join("banner.png"));
+    }
+
+    let name = info.as_ref().map(|value| value.name.as_str()).unwrap_or(dir);
+    let description = info.as_ref().and_then(|value| value.description.as_deref()).unwrap_or("");
+    let author = info.as_ref().and_then(|value| value.author.as_deref()).unwrap_or("Packwright");
+    let readme = format!(
+        "# {name}\n\n{description}\n\n- Author: {author}\n- Minecraft: {}\n- Loader: {}\n- Live packwiz: {serve}\n\nEdit the pack in Packwright and launch this instance again to sync the changes.\n",
+        info.as_ref().and_then(|value| value.minecraft_version.as_deref()).unwrap_or("—"),
+        info.as_ref().and_then(|value| value.loader.as_deref()).unwrap_or("—"),
+    );
+    let _ = std::fs::write(instance.join("README.md"), readme);
+    let instance_cfg = format!(
+        "InstanceType=OneSix\nname={name}\nnotes={description}\niconKey=packwright\nXmx=2048\nJavaPath={java}\nJvmArgs=-XX:+UseG1GC -XX:+AlwaysPreTouch\n",
+    );
+    let _ = std::fs::write(instance.join("instance.cfg"), instance_cfg);
+    let _ = std::fs::write(instance.join("packwiz.url"), format!("{serve}\n"));
+}
+
 #[tauri::command]
 pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
     let cfg = config::load()?;
@@ -90,6 +147,7 @@ pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
     std::fs::create_dir_all(&instance)?;
     let mods_linked = link_or_copy(&pack.join("mods"), &instance.join("mods"))?;
     let overrides = copy_dir_all(&pack.join("overrides"), &instance)?;
+    migrate_metadata(&cfg, &dir, &pack, &instance);
     Ok(DevInstance {
         path: instance.to_string_lossy().to_string(),
         mods_linked,
@@ -143,6 +201,43 @@ pub fn dev_watch_stop(state: tauri::State<'_, DevState>) -> Result<()> {
     Ok(())
 }
 
+fn launcher_executable(cfg: &config::AppConfig) -> Option<String> {
+    const CANDIDATES: &[(&str, &[&str])] = &[
+        ("prism", &["PrismLauncher.exe", "PrismLauncher"]),
+        ("modrinth", &["Modrinth.exe", "theseus.exe", "Modrinth"]),
+        ("atlauncher", &["ATLauncher.exe", "ATLauncher"]),
+    ];
+    for (key, names) in CANDIDATES {
+        let configured = cfg.launcher_paths.get(*key);
+        let mut roots: Vec<PathBuf> = Vec::new();
+        if let Some(value) = configured {
+            let path = PathBuf::from(value);
+            if path.is_file() {
+                return Some(path.to_string_lossy().to_string());
+            }
+            if path.is_dir() {
+                roots.push(path);
+            }
+        }
+        if let Some(base) = dirs::config_dir() {
+            roots.push(base.join(match *key {
+                "prism" => "PrismLauncher",
+                "modrinth" => "com.modrinth.theseus",
+                _ => "ATLauncher",
+            }));
+        }
+        for root in roots {
+            for name in *names {
+                let candidate = root.join(name);
+                if candidate.is_file() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn is_error_line(line: &str) -> bool {
     let lower = line.to_lowercase();
     ["missing dependency", "crash", "fatal", "exception", "error"].iter().any(|needle| lower.contains(needle))
@@ -159,8 +254,7 @@ pub async fn dev_launch(
     let instance = instance_path(&cfg, &dir)?;
     let program = executable
         .filter(|value| !value.is_empty())
-        .or_else(|| cfg.launcher_paths.get("prism").cloned())
-        .or_else(|| cfg.launcher_paths.get("modrinth").cloned())
+        .or_else(|| launcher_executable(&cfg))
         .ok_or_else(|| AppError::Validation("No launcher executable configured".into()))?;
     if !Path::new(&program).exists() {
         return Err(AppError::NotFound(format!("Launcher not found: {program}")));

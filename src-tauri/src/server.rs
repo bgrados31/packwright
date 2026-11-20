@@ -319,8 +319,13 @@ async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, j
     let jar_name = match setup.kind {
         JarKind::Direct => setup.name,
         JarKind::Installer => {
-            let java = if java.trim().is_empty() { "java" } else { java.trim() };
-            let output = Command::new(java)
+            let cfg = config::load()?;
+            let java = if java.trim().is_empty() || !Path::new(java.trim()).is_file() {
+                config::resolve_java(&cfg)?.to_string_lossy().to_string()
+            } else {
+                java.trim().to_string()
+            };
+            let output = Command::new(&java)
                 .arg("-jar")
                 .arg(&target)
                 .arg("--installServer")
@@ -392,6 +397,13 @@ pub async fn server_create(
     }
     std::fs::create_dir_all(&dir)?;
 
+    let java = if java.trim().is_empty() || (java.trim() == "java" && !config::command_on_path("java")) {
+        config::resolve_java(&cfg)
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|_| java.trim().to_string())
+    } else {
+        java.trim().to_string()
+    };
     let prepared = prepare_server(&dir, &template, &version, &java, jar_url.as_deref()).await;
     let (resolved_version, jar_name) = match prepared {
         Ok(value) => value,
@@ -417,7 +429,7 @@ pub async fn server_create(
         version: resolved_version,
         port,
         jar: jar_name,
-        java: if java.trim().is_empty() { "java".to_string() } else { java },
+        java: if java.is_empty() { "java".to_string() } else { java },
         memory: memory.unwrap_or(default_memory()).clamp(512, 16384),
         path: dir.to_string_lossy().to_string(),
         running: false,
@@ -685,7 +697,18 @@ pub async fn server_start(
     }
     processes.remove(&name);
 
-    let mut child = Command::new(&info.java)
+    let java = if info.java.contains(['/', '\\']) {
+        if Path::new(&info.java).is_file() {
+            info.java.clone()
+        } else {
+            config::resolve_java(&cfg)?.to_string_lossy().to_string()
+        }
+    } else if config::command_on_path(&info.java) {
+        info.java.clone()
+    } else {
+        config::resolve_java(&cfg)?.to_string_lossy().to_string()
+    };
+    let mut child = Command::new(&java)
         .arg(format!("-Xmx{}M", info.memory))
         .arg("-jar")
         .arg(&info.jar)

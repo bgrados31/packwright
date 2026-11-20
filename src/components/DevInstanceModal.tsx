@@ -8,6 +8,7 @@ import type { OpLine } from "../lib/types";
 type Props = {
   dir: string;
   launcherPaths: Record<string, string>;
+  servePort: number;
   onClose: () => void;
 };
 
@@ -21,64 +22,48 @@ function messageOf(error: unknown): string {
   return String(error);
 }
 
-export default function DevInstanceModal({ dir, launcherPaths, onClose }: Props) {
+export default function DevInstanceModal({ dir, launcherPaths, servePort, onClose }: Props) {
   const { t } = useI18n();
   const [instance, setInstance] = useState<Instance | null>(null);
   const [status, setStatus] = useState<Status>({ running: false, watching: false });
-  const [executable, setExecutable] = useState(launcherPaths.prism ?? launcherPaths.modrinth ?? "");
+  const [serving, setServing] = useState(false);
+  const [executable, setExecutable] = useState(
+    launcherPaths.prism ?? launcherPaths.modrinth ?? launcherPaths.atlauncher ?? "",
+  );
   const [lines, setLines] = useState<OpLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => {
     invoke<Status>("dev_status").then(setStatus).catch(() => undefined);
+    invoke<boolean>("serve_status").then(setServing).catch(() => undefined);
   };
 
   useEffect(() => {
     refresh();
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
-      if (event.payload.id === "dev-watch" || event.payload.id.startsWith("dev-")) {
-        setLines((previous) => [...previous.slice(-29), event.payload]);
+      const id = event.payload.id;
+      if (id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-")) {
+        setLines((previous) => [...previous.slice(-39), event.payload]);
       }
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
   }, []);
 
-  const prepare = async () => {
+  /** Un solo botón: serve + instancia + watcher + launcher. */
+  const play = async (restart = false) => {
     setBusy(true);
     setError(null);
     try {
-      setInstance(await invoke<Instance>("dev_instance_prepare", { dir }));
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggleWatch = async () => {
-    setBusy(true);
-    try {
-      if (status.watching) await invoke("dev_watch_stop");
-      else await invoke("dev_watch_start", { dir });
-      refresh();
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const launch = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await invoke("dev_launch", {
-        dir,
-        executable: executable || null,
-        id: `dev-${Date.now()}`,
-      });
+      if (restart) await invoke("dev_stop");
+      if (!serving || restart) {
+        await invoke("serve_start", { dir, port: servePort, id: `serve-${Date.now()}` });
+      }
+      const prepared = await invoke<Instance>("dev_instance_prepare", { dir });
+      setInstance(prepared);
+      await invoke("dev_watch_start", { dir });
+      await invoke("dev_launch", { dir, executable: executable || null, id: `dev-${Date.now()}` });
       refresh();
     } catch (cause) {
       setError(messageOf(cause));
@@ -91,6 +76,8 @@ export default function DevInstanceModal({ dir, launcherPaths, onClose }: Props)
     setBusy(true);
     try {
       await invoke("dev_stop");
+      await invoke("dev_watch_stop");
+      await invoke("serve_stop");
       refresh();
     } catch (cause) {
       setError(messageOf(cause));
@@ -106,68 +93,64 @@ export default function DevInstanceModal({ dir, launcherPaths, onClose }: Props)
           <span className="modal-icon running"><Play size={18} /></span>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold">{t("dev.title")}</h2>
-            <p className="text-[11px] text-muted">{t("dev.subtitle")}</p>
+            <p className="text-[11px] text-muted">{t("dev.autoHint")}</p>
           </div>
           <button className="icon-btn" onClick={onClose} title={t("common.close")}><X size={16} /></button>
         </div>
 
         <div style={{ padding: "16px 18px 0" }}>
-          <div className="flex items-center gap-2">
-            <span className={`chip ${status.running ? "chip-accent" : ""}`}>
-              {status.running ? t("dev.running") : t("dev.stopped")}
-            </span>
-            <span className={`chip ${status.watching ? "chip-accent" : ""}`}>
-              {status.watching ? t("dev.watching") : t("dev.notWatching")}
-            </span>
+          <div className="flex flex-wrap gap-1.5">
+            <span className={`chip ${serving ? "chip-accent" : ""}`}>{serving ? t("dev.serving") : t("dev.notServing")}</span>
+            <span className={`chip ${status.watching ? "chip-accent" : ""}`}>{status.watching ? t("dev.watching") : t("dev.notWatching")}</span>
+            <span className={`chip ${status.running ? "chip-accent" : ""}`}>{status.running ? t("dev.running") : t("dev.stopped")}</span>
           </div>
 
-          <button className="btn btn-secondary mt-3 w-full" onClick={() => void prepare()} disabled={busy}>
-            <FolderOpen size={14} /> {t("dev.prepare")}
-          </button>
-          {instance && (
-            <div className="mt-2 rounded-lg border border-line bg-subtle p-3 text-[11px]">
-              <p className="truncate font-mono text-muted">{instance.path}</p>
-              <p className="mt-1 text-muted">
-                {t("dev.modsLinked")}: {instance.mods_linked ? t("dev.yes") : t("dev.no")} · {t("dev.overrides")}: {instance.overrides}
-              </p>
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-subtle p-3">
+            <FolderOpen size={15} className="mt-0.5 shrink-0 text-accent" />
+            <div className="min-w-0 text-[11px] text-muted">
+              <p className="truncate font-mono">{instance?.path ?? t("dev.pathHint")}</p>
+              {instance && (
+                <p className="mt-1">{t("dev.modsLinked")}: {instance.mods_linked ? t("dev.yes") : t("dev.no")} · {t("dev.overrides")}: {instance.overrides}</p>
+              )}
+              <p className="mt-1">{t("dev.metadataHint")}</p>
             </div>
-          )}
-
-          <label className="mt-4 flex flex-col gap-1.5">
-            <span className="text-xs text-muted">{t("dev.executable")}</span>
-            <input
-              className="field font-mono text-[11px]"
-              value={executable}
-              onChange={(event) => setExecutable(event.target.value)}
-              placeholder="C:\\Launchers\\PrismLauncher\\PrismLauncher.exe"
-              spellCheck={false}
-            />
-          </label>
+          </div>
 
           {lines.length > 0 && (
             <div className="mt-4 max-h-32 overflow-auto rounded-lg bg-subtle p-2">
-              {lines.slice(-8).map((line, index) => (
+              {lines.slice(-10).map((line, index) => (
                 <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
               ))}
             </div>
           )}
           {error && <div className="modal-message error" style={{ margin: "12px 0 0" }}>{error}</div>}
+
+          <details className="group mt-4 text-sm">
+            <summary className="cursor-pointer py-1 text-xs text-muted hover:text-ink">{t("dev.advanced")}</summary>
+            <label className="mt-2 flex flex-col gap-1.5">
+              <span className="text-xs text-muted">{t("dev.executable")}</span>
+              <input
+                className="field font-mono text-[11px]"
+                value={executable}
+                onChange={(event) => setExecutable(event.target.value)}
+                placeholder="C:\\Launchers\\PrismLauncher\\PrismLauncher.exe"
+                spellCheck={false}
+              />
+            </label>
+          </details>
         </div>
 
         <div className="modal-footer">
           <div className="flex items-center gap-2">
-            <button className="btn btn-ghost" onClick={() => void toggleWatch()} disabled={busy || !instance}>
-              {status.watching ? t("dev.watchStop") : t("dev.watchStart")}
-            </button>
             {status.running && (
               <button className="btn btn-secondary" onClick={() => void stop()} disabled={busy}>
                 <Square size={13} /> {t("dev.stop")}
               </button>
             )}
           </div>
-          <button className="btn btn-primary" onClick={() => void launch()} disabled={busy}>
+          <button className="btn btn-primary" onClick={() => void play(status.running)} disabled={busy}>
             {busy ? <Loader2 size={14} className="spin" /> : status.running ? <RotateCcw size={14} /> : <Play size={14} />}
-            {status.running ? t("dev.restart") : t("dev.launch")}
+            {status.running ? t("dev.restart") : t("dev.play")}
           </button>
         </div>
       </div>

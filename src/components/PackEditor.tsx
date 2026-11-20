@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Radio, Rocket, Settings2, Trash2, X } from "lucide-react";
+import { Copy, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Rocket, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -17,7 +17,6 @@ import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
 import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
-import ServeModal from "./ServeModal";
 import DevInstanceModal from "./DevInstanceModal";
 import GitPanel from "./GitPanel";
 import PublishModal from "./PublishModal";
@@ -83,7 +82,6 @@ export default function PackEditor(props: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [serveOpen, setServeOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
   const [gitOpen, setGitOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -157,11 +155,8 @@ export default function PackEditor(props: Props) {
           <button className="btn btn-ghost" onClick={() => setGitOpen(true)} title={t("git.title")}>
             <GitBranch size={14} /> {t("git.title")}
           </button>
-          <button className="btn btn-ghost" onClick={() => setDevOpen(true)} title={t("dev.title")}>
-            <Play size={14} /> {t("dev.title")}
-          </button>
-          <button className="btn btn-ghost" onClick={() => setServeOpen(true)} title={t("serve.title")}>
-            <Radio size={14} /> {t("serve.title")}
+          <button className="btn btn-secondary" onClick={() => setDevOpen(true)} title={t("dev.auto")}>
+            <Play size={14} /> {t("dev.play")}
           </button>
           <button
             className="btn btn-secondary"
@@ -642,17 +637,8 @@ export default function PackEditor(props: Props) {
           <DevInstanceModal
             dir={props.dir}
             launcherPaths={props.config.launcher_paths ?? {}}
+            servePort={props.config.serve_port || 8080}
             onClose={() => setDevOpen(false)}
-          />,
-          document.body,
-        )}
-
-      {serveOpen &&
-        createPortal(
-          <ServeModal
-            dir={props.dir}
-            port={props.config.serve_port || 8080}
-            onClose={() => setServeOpen(false)}
           />,
           document.body,
         )}

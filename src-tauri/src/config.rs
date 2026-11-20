@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,9 @@ pub struct AppConfig {
     pub locale: String,
     /// Ruta a la instalación de ATLauncher (opcional, para la Fase 3).
     pub atlauncher_path: Option<PathBuf>,
+    /// Ruta manual al ejecutable de Java. Si es None se autodetecta.
+    #[serde(default)]
+    pub java_path: Option<PathBuf>,
     /// Whether the first-run setup has been completed.
     #[serde(default)]
     pub setup_complete: bool,
@@ -88,6 +91,7 @@ impl Default for AppConfig {
             serve_port: 8080,
             locale: "en".to_string(),
             atlauncher_path: None,
+            java_path: None,
             setup_complete: false,
             default_loader: default_loader(),
             launchers: Vec::new(),
@@ -175,4 +179,130 @@ pub fn resolve_packwiz(cfg: &AppConfig) -> Result<PathBuf> {
     Err(AppError::NotFound(
         "Packwiz was not found. Install it or set its path in settings.".into(),
     ))
+}
+
+fn java_exe_name() -> &'static str {
+    if cfg!(windows) { "java.exe" } else { "java" }
+}
+
+fn find_java_in(root: &Path, depth: u8, found: &mut Vec<PathBuf>) {
+    if depth == 0 || found.len() >= 24 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut folders = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if path.file_name().and_then(|value| value.to_str()) == Some(java_exe_name()) {
+                found.push(path);
+            }
+        } else if path.is_dir() {
+            folders.push(path);
+        }
+    }
+    for folder in folders {
+        find_java_in(&folder, depth - 1, found);
+    }
+}
+
+/// Resuelve Java: config → JAVA_HOME → PATH → instalaciones y runtimes de launchers.
+pub fn resolve_java(cfg: &AppConfig) -> Result<PathBuf> {
+    let exe = java_exe_name();
+    if let Some(path) = &cfg.java_path {
+        if path.is_file() {
+            return Ok(path.clone());
+        }
+    }
+    if let Ok(home) = std::env::var("JAVA_HOME") {
+        let candidate = PathBuf::from(home).join("bin").join(exe);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&paths) {
+            let candidate = directory.join(exe);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for variable in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(root) = std::env::var_os(variable) {
+            let root = PathBuf::from(root);
+            for folder in ["Java", "Eclipse Adoptium", "Microsoft", "BellSoft", "Zulu"] {
+                find_java_in(&root.join(folder), 4, &mut candidates);
+            }
+        }
+    }
+    for base in [dirs::data_local_dir(), dirs::config_dir()] {
+        if let Some(base) = base {
+            for launcher in ["ATLauncher", "PrismLauncher", "MultiMC", "com.modrinth.theseus"] {
+                find_java_in(&base.join(launcher), 9, &mut candidates);
+            }
+        }
+    }
+    candidates.sort_by_key(|path| {
+        let text = path.to_string_lossy().to_lowercase();
+        let rank = if text.contains("java-runtime") { 0 } else if text.contains("jre") { 1 } else { 2 };
+        (rank, text.len())
+    });
+    candidates.into_iter().next().ok_or_else(|| AppError::NotFound(
+        "Java was not found. Install Java 17+ or set its path in Settings.".into(),
+    ))
+}
+
+pub fn command_on_path(name: &str) -> bool {
+    if let Some(paths) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&paths) {
+            if directory.join(name).is_file() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[derive(Debug, Serialize)]
+pub struct JavaInfo {
+    pub path: String,
+    pub found: bool,
+}
+
+#[tauri::command]
+pub fn java_detect() -> JavaInfo {
+    let cfg = load().unwrap_or_default();
+    match resolve_java(&cfg) {
+        Ok(path) => JavaInfo { path: path.to_string_lossy().to_string(), found: true },
+        Err(_) => JavaInfo { path: String::new(), found: false },
+    }
+}
+
+#[tauri::command]
+pub fn java_set_path(path: String) -> Result<()> {
+    let mut cfg = load()?;
+    cfg.java_path = if path.trim().is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(path.trim()))
+    };
+    save(&cfg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "depends on a local Java installation"]
+    fn detects_java() {
+        let java = resolve_java(&AppConfig::default()).unwrap();
+        assert!(java.is_file(), "{} must be a file", java.display());
+        println!("Java detectado: {}", java.display());
+    }
 }

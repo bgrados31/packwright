@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { createPortal } from "react-dom";
-import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert } from "lucide-react";
+import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert, WandSparkles } from "lucide-react";
 import { LOCALES, useI18n, type TranslationKey } from "../i18n";
-import { LOADERS, type AppConfig, type PackwizStatus } from "../lib/types";
+import { LOADERS, type AppConfig, type JavaInfo, type PackwizStatus } from "../lib/types";
 import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
 import PackwizReinstallModal from "./PackwizReinstallModal";
@@ -45,6 +45,7 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
   const [defaults, setDefaults] = useState<Record<string, string>>(config.launcher_paths ?? {});
   const [picking, setPicking] = useState<string | null>(null);
   const [showReinstall, setShowReinstall] = useState(false);
+  const [javaInfo, setJavaInfo] = useState<JavaInfo | null>(null);
 
   useEffect(() => {
     setDraft(config);
@@ -71,6 +72,20 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
     } finally {
       setPicking(null);
     }
+  };
+
+  const detectJava = () => {
+    invoke<JavaInfo>("java_detect")
+      .then((info) => {
+        setJavaInfo(info);
+        if (info.found) patch({ java_path: info.path });
+      })
+      .catch(() => undefined);
+  };
+
+  const pickJava = async () => {
+    const path = await invoke<string | null>("pick_file");
+    if (path) patch({ java_path: path });
   };
 
   const changeLocale = (value: string) => {
@@ -183,6 +198,26 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
               </button>
             </div>
           </div>
+        </Section>
+
+        <Section index="J" title={t("settings.java")}>
+          <p className="mb-3 text-[13px] leading-5 text-muted">{t("settings.javaHint")}</p>
+          <div className="flex gap-2">
+            <input
+              className="field font-mono text-xs"
+              value={draft.java_path ?? ""}
+              onChange={(event) => patch({ java_path: event.target.value || null })}
+              placeholder="Auto"
+              spellCheck={false}
+            />
+            <button className="btn btn-secondary shrink-0" onClick={() => void pickJava()}>{t("setup.browse")}</button>
+            <button className="btn btn-secondary shrink-0 px-3" onClick={detectJava} title={t("settings.javaAuto")}><WandSparkles size={14} /></button>
+          </div>
+          {javaInfo && (
+            <p className={`mt-2 text-[11px] ${javaInfo.found ? "text-muted" : "text-bad"}`}>
+              {javaInfo.found ? `${t("settings.javaDetected")}: ${javaInfo.path}` : t("servers.javaMissing")}
+            </p>
+          )}
         </Section>
 
         <Section index="04" title={t("settings.launchers")}>

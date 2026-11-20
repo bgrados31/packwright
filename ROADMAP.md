@@ -55,6 +55,7 @@
 - [x] Export `.mrpack` (Modrinth) y `.zip` (CurseForge client/server) con modal simple y validación previa
 - [x] Consola flotante opcional (modo debug) para toda la salida de packwiz
 - [x] Import `.mrpack` existente (mods, overrides, metadata y packwiz refresh)
+- [x] Import desde Modrinth (búsqueda, enlace de proyecto o URL directa al `.mrpack`, detección automática)
 - [x] `packwiz serve` con start/stop y URL para launchers
 
 ### 1.6 Dev Instance ✅
@@ -62,6 +63,9 @@
 - [x] File watcher (`notify`) y sync automático de `overrides/`
 - [x] Logs en vivo con detección de errores (marcados como stderr)
 - [x] Launch / restart & rejoin / stop desde la app
+- [x] Botón único "Play": serve + instancia + watcher + launcher en un paso
+- [x] Migración de metadata del pack a la instancia (nombre, autor, descripción, icono, banner, Java)
+- [x] Autodetección de Java (PATH, JAVA_HOME, runtimes de launchers) y ruta configurable en Settings
 
 ## Fase 2 — Calidad y publicación ✅
 - [x] Git: init/status/commit/tag + changelog
