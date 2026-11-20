@@ -119,7 +119,8 @@ function InstalledCard({
   onAction: (kind: "pin" | "unpin" | "update" | "remove", mod: InstalledMod) => void;
 }) {
   const { t } = useI18n();
-  const hint = mod.pinned
+  const icon = cachedModIcon(mod.project_id);
+  const status = mod.pinned
     ? t("mods.pinnedHint")
     : mod.source === "manual"
       ? t("mods.manualHint")
@@ -131,10 +132,10 @@ function InstalledCard({
         <div className="flex items-start gap-3">
           <Checkbox checked={selected} onChange={onToggle} label={t("mods.selectAll")} />
           <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-subtle text-muted">
-            <Box size={18} />
-            {cachedModIcon(mod.project_id) && (
+            <Box size={18} className="opacity-60" />
+            {icon && (
               <img
-                src={cachedModIcon(mod.project_id)}
+                src={icon}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
                 onError={(event) => { event.currentTarget.style.display = "none"; }}
@@ -142,52 +143,50 @@ function InstalledCard({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-[14px] font-semibold tracking-tight">{mod.name}</h3>
+            <h3 className="truncate text-[14px] font-semibold tracking-tight" title={mod.name}>
+              {mod.name}
+            </h3>
+            <p className="mt-0.5 truncate font-mono text-[10px] text-muted" title={`${mod.filename || mod.id}${mod.version_id ? ` · ${mod.version_id}` : ""}`}>
+              {mod.filename || mod.id}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Tag seed={mod.side}>{mod.side}</Tag>
+              <Tag seed={mod.source}>{mod.source}</Tag>
+              {mod.optional && <Tag seed="optional">{t("mods.optional")}</Tag>}
               {mod.pinned && (
                 <span className="ui-tag tag-4">
                   <Pin size={10} className="mr-1" /> {t("mods.pinned")}
                 </span>
               )}
             </div>
-            <p className="mt-1 truncate font-mono text-[10px] text-muted">{mod.filename || mod.id}</p>
-            <p className="mt-0.5 text-[10px] text-muted">
-              {t("mods.version")} · {mod.version_id ? mod.version_id.slice(0, 8) : t("mods.noVersion")}
-            </p>
           </div>
         </div>
+      </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <Tag seed={mod.side}>{mod.side}</Tag>
-          <Tag seed={mod.source}>{mod.source}</Tag>
-          {mod.optional && <Tag seed="optional">{t("mods.optional")}</Tag>}
-        </div>
-
-        <div className="mt-3 flex items-center gap-1.5 border-t border-line pt-3">
-          <span className="mr-auto truncate text-[10px] text-muted">{hint}</span>
+      <div className="mod-card-actions" title={status}>
+        <button
+          className="btn btn-ghost px-2"
+          onClick={() => onAction(mod.pinned ? "unpin" : "pin", mod)}
+          title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}
+        >
+          {mod.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+        </button>
+        <button className="btn btn-ghost px-2" onClick={() => onAction("update", mod)} title={t("mods.action.update")}>
+          <RefreshCw size={14} />
+        </button>
+        {mod.project_id && (
           <button
             className="btn btn-ghost px-2"
-            onClick={() => onAction(mod.pinned ? "unpin" : "pin", mod)}
-            title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}
+            onClick={() => void openUrl(`https://modrinth.com/mod/${mod.project_id}`)}
+            title={t("mods.openModrinth")}
           >
-            {mod.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+            <ExternalLink size={14} />
           </button>
-          <button className="btn btn-ghost px-2" onClick={() => onAction("update", mod)} title={t("mods.action.update")}>
-            <RefreshCw size={14} />
-          </button>
-          {mod.project_id && (
-            <button
-              className="btn btn-ghost px-2"
-              onClick={() => void openUrl(`https://modrinth.com/mod/${mod.project_id}`)}
-              title={t("mods.openModrinth")}
-            >
-              <ExternalLink size={14} />
-            </button>
-          )}
-          <button className="btn btn-ghost btn-danger px-2" onClick={() => onAction("remove", mod)} title={t("mods.action.remove")}>
-            <Trash2 size={14} />
-          </button>
-        </div>
+        )}
+        <span className="ml-auto truncate pl-2 text-[10px] text-muted">{status}</span>
+        <button className="btn btn-ghost btn-danger px-2" onClick={() => onAction("remove", mod)} title={t("mods.action.remove")}>
+          <Trash2 size={14} />
+        </button>
       </div>
     </article>
   );

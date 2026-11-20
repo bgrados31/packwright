@@ -4,10 +4,10 @@
 
 /* Paleta extraída del isotipo: naranja #C74A2E, navy #232C3A, hueso #F0F1F5 */
 :root {
-  --pw-bg: #faf8f6;
-  --pw-surface: #ffffff;
-  --pw-subtle: #f4f0ed;
-  --pw-line: #e8e1db;
+  --pw-bg: #f1ede8;
+  --pw-surface: #fbf9f7;
+  --pw-subtle: #ebe5de;
+  --pw-line: #ded5cb;
   --pw-ink: #232c3a;
   --pw-muted: #7c766f;
   --pw-accent: #c74a2e;
@@ -50,10 +50,10 @@
 }
 
 .dark {
-  --pw-bg: #161c26;
-  --pw-surface: #232c3a;
-  --pw-subtle: #2b3544;
-  --pw-line: #3a4656;
+  --pw-bg: #121822;
+  --pw-surface: #1d2632;
+  --pw-subtle: #26313e;
+  --pw-line: #36424f;
   --pw-ink: #f0f1f5;
   --pw-muted: #a6adba;
   --pw-accent: #e8704a;
@@ -903,8 +903,17 @@ details summary::-webkit-details-marker { display: none; }
   box-shadow: 0 8px 20px -8px rgba(0,0,0,.4);
 }
 .mod-hit-icon img { width: 100%; height: 100%; object-fit: cover; }
-.mod-installed-card { transition: border-color 160ms ease; }
-.mod-installed-card:hover { border-color: color-mix(in srgb, var(--pw-accent) 35%, var(--pw-line)); }
+.mod-installed-card { display: flex; flex-direction: column; overflow: hidden; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.mod-installed-card:hover { border-color: color-mix(in srgb, var(--pw-accent) 35%, var(--pw-line)); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.28); }
+.mod-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--pw-line);
+  background: color-mix(in srgb, var(--pw-subtle) 55%, transparent);
+}
 
 /* --- Mods: detalle --- */
 .mod-detail { display: flex; flex-direction: column; max-width: 720px; max-height: 88vh; overflow: hidden; }
