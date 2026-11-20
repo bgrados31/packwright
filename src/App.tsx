@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Editor from "@monaco-editor/react";
-import { monaco } from "./lib/monaco";
 import "./App.css";
+
+const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
 type PackInfo = {
   dir: string;
@@ -32,13 +32,13 @@ type OpLine = { id: string; stream: "stdout" | "stderr"; line: string };
 type ErrorInfo = { message: string; kind: string };
 type FileEntry = { path: string; name: string; size: number };
 type Diagnostic = { line: number; column: number; message: string; severity: string };
+
 type HistoryEntry = { id: string; path: string };
 
 const LOADERS = ["neoforge", "forge", "fabric", "quilt", "purpur"];
-
 const emptyForm = {
   name: "",
-  author: "Bryan Grados",
+  author: "",
   minecraft_version: "1.21.1",
   loader: "neoforge",
   loader_version: "",
@@ -46,19 +46,32 @@ const emptyForm = {
   description: "",
 };
 
-function languageFor(path: string): string {
-  if (path.endsWith(".json") || path.endsWith(".json5")) return "json";
-  if (path.endsWith(".md")) return "markdown";
-  if (path.endsWith(".yml") || path.endsWith(".yaml")) return "yaml";
-  return "toml";
-}
-
 function errorText(e: unknown): string {
   if (typeof e === "object" && e !== null && "message" in e) return (e as ErrorInfo).message;
   return String(e);
 }
 
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  );
+}
+
 function App() {
+  const [theme, setTheme] = useState<"light" | "dark">(
+    () => (localStorage.getItem("packwright-theme") as "light" | "dark") || "light",
+  );
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [packwiz, setPackwiz] = useState<PackwizStatus | null>(null);
   const [packs, setPacks] = useState<PackInfo[]>([]);
@@ -66,6 +79,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<OpLine[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
 
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -76,7 +90,10 @@ function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem("packwright-theme", theme);
+  }, [theme]);
 
   const loadAll = useCallback(async () => {
     try {
@@ -98,7 +115,7 @@ function App() {
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     listen<OpLine>("operation://line", (event) => {
-      if (!disposed) setLogs((prev) => [...prev.slice(-299), event.payload]);
+      if (!disposed) setLogs((prev) => [...prev.slice(-199), event.payload]);
     }).then((fn) => unlisteners.push(fn));
     return () => {
       disposed = true;
@@ -162,7 +179,6 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [saveFile]);
 
-  // Validación diferida del archivo activo.
   useEffect(() => {
     if (!selectedPack || !activeFile) return;
     const timer = setTimeout(async () => {
@@ -173,23 +189,8 @@ function App() {
           content,
         });
         setDiagnostics(found);
-        const model = editorRef.current?.getModel();
-        if (model) {
-          monaco.editor.setModelMarkers(
-            model,
-            "packwright",
-            found.map((d) => ({
-              startLineNumber: d.line,
-              startColumn: d.column,
-              endLineNumber: d.line,
-              endColumn: d.column + 1,
-              message: d.message,
-              severity: monaco.MarkerSeverity.Error,
-            })),
-          );
-        }
       } catch {
-        // Un archivo recién escrito puede no existir aún en el índice; se ignora.
+        // archivo todavía no indexado, se ignora
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -224,9 +225,11 @@ function App() {
     try {
       await invoke<PackInfo>("pack_create", {
         ...form,
+        author: form.author || "Packwright",
         loader_version: form.loader_version.trim() || null,
       });
-      setForm({ ...emptyForm, author: form.author, minecraft_version: form.minecraft_version });
+      setForm(emptyForm);
+      setShowCreate(false);
       await loadAll();
     } catch (err) {
       setError(errorText(err));
@@ -243,252 +246,282 @@ function App() {
     }
   };
 
+  const renderForm = (compact: boolean) => (
+    <form onSubmit={createPack} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="pack-name" className="text-xs font-medium text-muted">Nombre del pack</label>
+        <input
+          id="pack-name"
+          className="field"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Mi modpack"
+          required
+          autoFocus={compact}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pack-mc" className="text-xs font-medium text-muted">Minecraft</label>
+          <input
+            id="pack-mc"
+            className="field"
+            value={form.minecraft_version}
+            onChange={(e) => setForm({ ...form, minecraft_version: e.target.value })}
+            required
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pack-loader" className="text-xs font-medium text-muted">Loader</label>
+          <select
+            id="pack-loader"
+            className="field"
+            value={form.loader}
+            onChange={(e) => setForm({ ...form, loader: e.target.value })}
+          >
+            {LOADERS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <details className="group text-sm">
+        <summary className="flex items-center gap-1.5 py-1 text-xs text-muted transition-colors hover:text-ink">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-90">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+          Más opciones
+        </summary>
+        <div className="mt-3 flex flex-col gap-4 rounded-lg border border-line bg-subtle p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted" htmlFor="pack-author">Autor</label>
+              <input id="pack-author" className="field" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Opcional" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted" htmlFor="pack-version">Versión</label>
+              <input id="pack-version" className="field" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted" htmlFor="pack-lv">Versión del loader</label>
+            <input id="pack-lv" className="field" value={form.loader_version} onChange={(e) => setForm({ ...form, loader_version: e.target.value })} placeholder="Automática" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted" htmlFor="pack-desc">Descripción</label>
+            <textarea id="pack-desc" className="field resize-y" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Opcional" />
+          </div>
+        </div>
+      </details>
+
+      <button className="btn btn-primary mt-1" type="submit" disabled={busy || !packwiz?.found}>
+        {busy ? "Creando…" : "Crear modpack"}
+      </button>
+      {!packwiz?.found && (
+        <p className="text-center text-xs text-bad">No se detectó packwiz. Instálalo o indícalo en la configuración.</p>
+      )}
+    </form>
+  );
+
   return (
-    <main className="blueprint min-h-screen">
-      <div className="mx-auto max-w-[1500px] px-8 py-6">
-        <header className="flex items-end justify-between border-b border-line pb-5">
-          <div className="flex items-center gap-4">
-            <div className="grid h-11 w-11 place-items-center border border-violet/50 bg-panel">
-              <span className="brand-glyph text-lg">PW</span>
+    <div className="min-h-screen bg-bg text-ink">
+      <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[12px] font-semibold text-white">P</div>
+            <span className="text-[15px] font-semibold tracking-tight">Packwright</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {packs.length > 0 && !showCreate && !selectedPack && (
+              <button className="btn btn-secondary" onClick={() => setShowCreate(true)}>Nuevo modpack</button>
+            )}
+            <button
+              className="btn btn-quiet px-2.5"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              title={theme === "light" ? "Modo oscuro" : "Modo claro"}
+              aria-label="Cambiar tema"
+            >
+              {theme === "light" ? <MoonIcon /> : <SunIcon />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {error && (
+        <div className="mx-auto mt-4 max-w-5xl px-6">
+          <div className="flex items-center justify-between rounded-lg border border-bad/30 bg-bad/5 px-4 py-2.5 text-sm text-bad">
+            <span>{error}</span>
+            <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setError(null)}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        {/* Primera apertura: pantalla limpia y centrada */}
+        {!showCreate && !selectedPack && packs.length === 0 ? (
+          <div className="mx-auto max-w-lg py-8">
+            <div className="text-center">
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent text-lg font-semibold text-white">P</div>
+              <h1 className="mt-6 text-[26px] font-semibold tracking-tight">Crea tu primer modpack</h1>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
+                Organiza tus mods, elige la versión de Minecraft y exporta un pack listo para instalar en tu launcher.
+              </p>
             </div>
-            <div>
-              <h1 className="text-[19px] font-semibold tracking-[-0.03em]">PACKWRIGHT</h1>
-              <p className="eyebrow mt-0.5">Modpack studio — build 0.1</p>
+            <div className="card mt-8 p-6">{renderForm(false)}</div>
+            <p className="mt-5 text-center text-xs text-muted">
+              Todo se guarda en local · <span className="font-mono">{config?.workspace ?? "…"}</span>
+            </p>
+          </div>
+        ) : showCreate ? (
+          <div className="mx-auto max-w-lg">
+            <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setShowCreate(false)}>← Volver</button>
+            <h1 className="text-2xl font-semibold tracking-tight">Nuevo modpack</h1>
+            <p className="mt-1 text-sm text-muted">Configura lo esencial. Puedes ajustar el resto después.</p>
+            <div className="card mt-6 p-6">{renderForm(true)}</div>
+          </div>
+        ) : selectedPack ? (
+          <div>
+            <button className="text-sm text-muted hover:text-ink" onClick={() => { setSelectedPack(null); setActiveFile(null); }}>
+              ← Todos los packs
+            </button>
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {packs.find((p) => p.dir === selectedPack)?.name ?? selectedPack}
+                </h1>
+                <p className="mt-1 font-mono text-xs text-muted">{selectedPack}</p>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn btn-secondary" onClick={loadHistory}>Historial</button>
+                <button className="btn btn-primary" onClick={saveFile} disabled={!dirty}>Guardar</button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`status-tag ${packwiz?.found ? "text-lime" : "text-[#f08c96]"}`}>
-              {packwiz?.found ? "[ PACKWIZ OK ]" : "[ PACKWIZ MISSING ]"}
-            </span>
-            <span className="status-tag text-dim">[{String(packs.length).padStart(2, "0")} PACKS]</span>
-          </div>
-        </header>
 
-        {error && (
-          <div className="mt-4 border border-[#7f2d39] bg-[#2a1119] px-4 py-3 text-xs text-[#f3a9b2]">
-            <span className="font-mono">ERR / </span>{error}
-            <button className="float-right font-mono text-dim hover:text-white" onClick={() => setError(null)}>✕</button>
-          </div>
-        )}
+            <div className="card mt-6 overflow-hidden">
+              <div className="grid grid-cols-[210px_1fr]">
+                <aside className="max-h-[600px] overflow-auto border-r border-line p-2">
+                  <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">Archivos</div>
+                  {files.map((f) => (
+                    <button
+                      key={f.path}
+                      className={`file-row ${f.path === activeFile ? "active" : ""}`}
+                      onClick={() => openFile(f.path)}
+                      title={f.path}
+                    >
+                      {f.path}
+                    </button>
+                  ))}
+                </aside>
 
-        <div className="mt-6 grid grid-cols-[330px_1fr] gap-6">
-          <aside>
-            <section className="panel p-4">
-              <div className="eyebrow flex items-center gap-2">
-                <span className="text-violet">01</span> / WORKSPACE
-              </div>
-              <div className="accent-rule my-3" />
-              <code className="block break-all font-mono text-[11px] leading-5 text-[#9aa5c8]">
-                {config?.workspace ?? "—"}
-              </code>
-            </section>
-
-            <section className="panel mt-4 p-4">
-              <div className="eyebrow flex items-center gap-2">
-                <span className="text-violet">02</span> / NEW PACK
-              </div>
-              <div className="accent-rule my-3" />
-              <form onSubmit={createPack} className="flex flex-col gap-3">
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Nombre</span>
-                  <input className="field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Mi Gran Pack" required />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Autor</span>
-                  <input className="field" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow">Minecraft</span>
-                    <input className="field" value={form.minecraft_version} onChange={(e) => setForm({ ...form, minecraft_version: e.target.value })} required />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="eyebrow">Versión</span>
-                    <input className="field" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} />
-                  </label>
-                </div>
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Loader</span>
-                  <select className="field" value={form.loader} onChange={(e) => setForm({ ...form, loader: e.target.value })}>
-                    {LOADERS.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Loader version <em className="normal-case not-italic text-[#4d5778]">/ latest</em></span>
-                  <input className="field" value={form.loader_version} onChange={(e) => setForm({ ...form, loader_version: e.target.value })} placeholder="auto" />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Descripción</span>
-                  <textarea className="field resize-y" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Una línea sobre el pack" />
-                </label>
-                <button className="btn-primary mt-1" type="submit" disabled={busy || !packwiz?.found}>
-                  {busy ? "FORJANDO…" : "FORJAR PACK →"}
-                </button>
-              </form>
-            </section>
-          </aside>
-
-          <section>
-            {selectedPack ? (
-              <div className="panel">
-                <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                  <div>
-                    <div className="eyebrow flex items-center gap-2"><span className="text-cyan">04</span> / FILE EDITOR</div>
-                    <h2 className="mt-1 font-mono text-sm text-[#e6ebff]">{selectedPack}</h2>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="btn-ghost" onClick={() => { setSelectedPack(null); setActiveFile(null); }}>← PACKS</button>
-                    <button className="btn-ghost" onClick={loadHistory}>HISTORY</button>
-                    <button className="btn-primary" onClick={saveFile} disabled={!dirty}>GUARDAR ⌃S</button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[230px_1fr]">
-                  <div className="max-h-[600px] overflow-auto border-r border-line py-2">
-                    <div className="eyebrow px-3 pb-2">FILES / {String(files.length).padStart(2, "0")}</div>
-                    {files.map((f) => (
-                      <div
-                        key={f.path}
-                        className={`file-row ${f.path === activeFile ? "active" : ""}`}
-                        onClick={() => openFile(f.path)}
-                        title={f.path}
-                      >
-                        {f.path}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex h-8 items-center gap-3 border-b border-line px-3 font-mono text-[10px]">
-                      <span className="text-cyan">{activeFile ?? "—"}</span>
-                      {dirty && <span className="text-[#f0b86e]">● MODIFICADO</span>}
+                <div className="min-w-0">
+                  <div className="flex h-10 items-center justify-between border-b border-line px-4 text-xs">
+                    <span className="font-mono text-muted">{activeFile ?? "—"}</span>
+                    <div className="flex items-center gap-3">
+                      {dirty && <span className="text-muted">Sin guardar</span>}
                       {diagnostics.length > 0 ? (
-                        <span className="text-[#f08c96]">{diagnostics.length} ERROR(ES)</span>
+                        <span className="text-bad">{diagnostics.length} error(es)</span>
                       ) : (
-                        <span className="text-dim">SIN ERRORES</span>
+                        <span className="text-ok">Sin errores</span>
                       )}
                     </div>
+                  </div>
 
-                    {showHistory && (
-                      <div className="border-b border-line bg-panel-2 px-3 py-2">
-                        <div className="eyebrow mb-2">HISTORIAL DE {activeFile}</div>
-                        <div className="flex flex-wrap gap-2">
-                          {history.length === 0 && <span className="font-mono text-[11px] text-dim">Sin versiones guardadas</span>}
-                          {history.map((h) => (
-                            <button key={h.id} className="btn-ghost" onClick={() => restoreVersion(h.id)}>
-                              {new Date(Number(h.id) * 1000).toLocaleString()}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {diagnostics.length > 0 && (
-                      <div className="border-b border-[#5a2a35] bg-[#21121a] px-3 py-2">
-                        {diagnostics.slice(0, 3).map((d, i) => (
-                          <div key={i} className="console-line err">
-                            {d.line}:{d.column} — {d.message.split("\n")[0]}
-                          </div>
+                  {showHistory && (
+                    <div className="border-b border-line bg-subtle px-4 py-3">
+                      <div className="mb-2 text-xs font-medium text-muted">Versiones anteriores</div>
+                      <div className="flex flex-wrap gap-2">
+                        {history.length === 0 && <span className="text-xs text-muted">Sin versiones guardadas</span>}
+                        {history.map((h) => (
+                          <button key={h.id} className="btn btn-secondary text-xs" onClick={() => restoreVersion(h.id)}>
+                            {new Date(Number(h.id) * 1000).toLocaleString()}
+                          </button>
                         ))}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    <Editor
-                      height="520px"
-                      theme="packwright"
-                      language={activeFile ? languageFor(activeFile) : "toml"}
+                  {diagnostics.length > 0 && (
+                    <div className="border-b border-bad/30 bg-bad/5 px-4 py-2">
+                      {diagnostics.slice(0, 3).map((d, i) => (
+                        <div key={i} className="output-line err">
+                          {d.line}:{d.column} — {d.message.split("\n")[0]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Suspense
+                    fallback={
+                      <div className="grid h-[520px] place-items-center text-sm text-muted">
+                        Cargando editor…
+                      </div>
+                    }
+                  >
+                    <CodeEditor
+                      theme={theme}
+                      path={activeFile ?? "pack.toml"}
                       value={content}
-                      onMount={(editor) => { editorRef.current = editor; }}
-                      onChange={(value) => { setContent(value ?? ""); setDirty(true); }}
-                      options={{
-                        fontFamily: "Cascadia Code, Consolas, monospace",
-                        fontSize: 12,
-                        lineHeight: 20,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        smoothScrolling: true,
-                        padding: { top: 12 },
-                        renderLineHighlight: "line",
-                        tabSize: 2,
-                      }}
+                      diagnostics={diagnostics}
+                      onChange={(value) => { setContent(value); setDirty(true); }}
                     />
-                  </div>
+                  </Suspense>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="eyebrow flex items-center gap-2"><span className="text-cyan">03</span> / PACKS</div>
-                    <h2 className="mt-1 text-lg font-medium tracking-tight">Tus modpacks</h2>
-                  </div>
-                  <span className="eyebrow">selecciona uno para editar sus archivos</span>
-                </div>
-
-                {packs.length === 0 ? (
-                  <div className="panel mt-4 grid place-items-center py-20">
-                    <div className="text-center">
-                      <div className="font-mono text-4xl text-violet/40">[ + ]</div>
-                      <p className="mt-4 font-mono text-xs text-dim">EL WORKSPACE ESTÁ VACÍO</p>
-                      <p className="mt-1 text-xs text-[#4d5778]">Forja tu primer pack desde el panel izquierdo.</p>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-baseline justify-between">
+              <h1 className="text-2xl font-semibold tracking-tight">Tus modpacks</h1>
+              <span className="text-sm text-muted">{packs.length} {packs.length === 1 ? "pack" : "packs"}</span>
+            </div>
+            <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+              {packs.map((pack) => (
+                <article key={pack.dir} className="card p-5 transition-transform hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between">
+                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-sm font-semibold text-accent">
+                      {pack.name.charAt(0).toUpperCase()}
                     </div>
+                    <span className="text-xs text-muted">v{pack.version ?? "—"}</span>
                   </div>
-                ) : (
-                  <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
-                    {packs.map((pack) => (
-                      <article key={pack.dir} className="pack-card">
-                        <div className="flex items-start justify-between">
-                          <div className="grid h-9 w-9 place-items-center border border-violet/30 bg-violet/5 font-mono text-xs text-violet">
-                            ▦
-                          </div>
-                          <span className="status-tag text-dim">v{pack.version ?? "?"}</span>
-                        </div>
-                        <h3 className="mt-4 text-sm font-semibold tracking-tight">{pack.name}</h3>
-                        <p className="mt-1 text-[11px] leading-5 text-dim line-clamp-2">
-                          {pack.description || "Sin descripción"}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-1.5">
-                          <span className="chip">MC {pack.minecraft_version ?? "?"}</span>
-                          <span className="chip">{pack.loader ?? "—"}</span>
-                          <span className="chip">{pack.mod_count} MODS</span>
-                        </div>
-                        {pack.issues.length > 0 && (
-                          <ul className="mt-3 space-y-1 font-mono text-[10px] text-[#f0b86e]">
-                            {pack.issues.map((i) => <li key={i}>! {i}</li>)}
-                          </ul>
-                        )}
-                        <div className="mt-5 flex gap-4">
-                          <button className="btn-ghost" onClick={() => openPack(pack.dir)}>EDITAR →</button>
-                          <button className="btn-ghost" onClick={() => reveal(pack.dir)}>CARPETA ↗</button>
-                        </div>
-                      </article>
-                    ))}
+                  <h2 className="mt-4 font-medium">{pack.name}</h2>
+                  <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted">
+                    {pack.description || "Sin descripción"}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    <span className="chip">MC {pack.minecraft_version ?? "—"}</span>
+                    <span className="chip">{pack.loader ?? "—"}</span>
+                    <span className="chip">{pack.mod_count} mods</span>
                   </div>
-                )}
-              </>
-            )}
-          </section>
-        </div>
+                  <div className="mt-5 flex items-center gap-2">
+                    <button className="btn btn-primary flex-1" onClick={() => openPack(pack.dir)}>Abrir</button>
+                    <button className="btn btn-secondary" onClick={() => reveal(pack.dir)} title="Abrir carpeta">↗</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
 
-        <footer className="mt-6">
-          <div className="flex items-center justify-between border-b border-line pb-2">
-            <span className="eyebrow">PACKWIZ / OUTPUT</span>
-            <span className="font-mono text-[10px] text-[#3f4969]">stdout · stderr</span>
-          </div>
-          <div className="console mt-2 h-32 overflow-auto p-3">
-            {logs.length === 0 ? (
-              <div className="console-line text-[#3f4969]">$ esperando operaciones…</div>
-            ) : (
-              logs.map((log, i) => (
-                <div key={i} className={`console-line ${log.stream === "stderr" ? "err" : ""}`}>
-                  {log.stream === "stderr" ? "!" : "›"} {log.line}
+      {logs.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface shadow-lg">
+          <div className="mx-auto max-w-5xl px-6 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted">Salida de packwiz</span>
+              <button className="text-xs text-muted hover:text-ink" onClick={() => setLogs([])}>Limpiar</button>
+            </div>
+            <div className="max-h-28 overflow-auto">
+              {logs.map((log, i) => (
+                <div key={i} className={`output-line ${log.stream === "stderr" ? "err" : ""}`}>
+                  {log.line}
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-        </footer>
-      </div>
-    </main>
+        </div>
+      )}
+    </div>
   );
 }
 
