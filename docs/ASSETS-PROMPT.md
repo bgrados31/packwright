@@ -22,11 +22,15 @@ Por qué funciona:
 **Paleta (la misma de la app):**
 | Uso | Hex |
 | --- | --- |
-| Fondo oscuro / superficie | `#0F1116` |
-| Placa / marca | `#F2F3F7` |
-| Violeta (acento principal) | `#5B4BE0` |
-| Cian (acento secundario) | `#3DDAD7` |
+| Fondo oscuro / superficie | `#232C3A` |
+| Placa / marca | `#F0F1F5` |
+| Naranja (acento principal) | `#C74A2E` |
+| Ámbar (acento secundario) | `#D98A3F` |
 | Gris neutro (píxel dado) | `#9AA4B8` |
+
+> **Paleta aceptada (nov 2026):** el isotipo aprobado usa naranja `#C74A2E`,
+> navy `#232C3A` y hueso `#F0F1F5`. La UI de Packwright se ajustó a esos colores.
+> Los valores de ámbar `#D98A3F` son una sugerencia para futuras regeneraciones.
 
 ---
 
@@ -48,15 +52,15 @@ Design a flat vector mark made of exactly these elements:
    reading is the core of the mark.
 3. One single diagonal stroke running from bottom-left to upper-right across
    the plate, like a craftsman's finishing pass. Only this stroke carries a
-   subtle gradient from violet #5B4BE0 to cyan #3DDAD7. No other gradients.
+   subtle gradient from orange #C74A2E to amber #D98A3F. No other gradients.
 4. Where the stroke exits the plate, three small perfect squares detach in
-   sequence: one violet #5B4BE0, one cyan #3DDAD7, one muted grey #9AA4B8.
+   sequence: one orange #C74A2E, one amber #D98A3F, one muted grey #9AA4B8.
    Leave an empty outlined square slot after them, suggesting room for one
    more mod. The three squares are intentionally NOT evenly spaced.
 
 Style: flat vector, geometric, crisp edges, optical centering, consistent
 2px stroke weight, premium indie developer-tool aesthetic, calm and precise,
-not playful, not childish. Off-white mark #F2F3F7 on transparent background.
+not playful, not childish. Off-white mark #F0F1F5 on transparent background.
 
 The full mark must stay legible at 32x32 pixels: at small size the anvil-P
 still reads; the three squares may merge into a single accent detail.
@@ -72,9 +76,9 @@ NO watermark, NO signature. Square 1:1 composition, transparent background.
 
 ```
 Flat vector app icon: a beveled square plate containing a negative-space
-anvil that doubles as the letter "P". One diagonal violet-to-cyan stroke
+anvil that doubles as the letter "P". One diagonal orange-to-amber stroke
 crosses it; three small square pixels detach and one empty slot remains.
-Off-white #F2F3F7 mark, accents #5B4BE0 and #3DDAD7, transparent background,
+Off-white #F0F1F5 mark, accents #C74A2E and #D98A3F, transparent background,
 crisp 2px strokes, legible at 32px. No text, no 3D, no glow, no game logos,
 no hexagon, no generic AI look. Square 1:1.
 ```
@@ -105,9 +109,9 @@ into one small solid square. Crisp, high contrast, perfectly centered.
 
 ### 4.2 Icono de app con fondo (para tauri icon)
 ```
-The Wright's Seal mark centered on a solid #0F1116 square background with
+The Wright's Seal mark centered on a solid #232C3A square background with
 16% padding on all sides. Flat vector, no text, no border, no rounded corners
-on the background. The off-white mark with violet and cyan accents must read
+on the background. The off-white mark with orange and amber accents must read
 clearly at 32px. Square 1:1, high contrast, crisp edges.
 ```
 
@@ -115,9 +119,9 @@ clearly at 32px. Square 1:1, high contrast, crisp edges.
 ```
 Wide 1920x640 banner for a developer tool. Background #F7F8FA (light) with
 an extremely subtle 32px grid in #E4E7EC, almost invisible. On the left third,
-the Wright's Seal mark in off-white on a #0F1116 rounded rectangle, medium
+the Wright's Seal mark in off-white on a #232C3A rounded rectangle, medium
 size. On the right two thirds: completely empty clean space with a faint
-#5B4BE0 hairline starting from the mark. No text, no letters, no mockup.
+#C74A2E hairline starting from the mark. No text, no letters, no mockup.
 Editorial, minimal, generous whitespace, professional, calm. No gradients
 except the hairline. No shadows beyond a very soft one under the mark tile.
 ```
@@ -126,14 +130,14 @@ except the hairline. No shadows beyond a very soft one under the mark tile.
 ```
 1200x630 social preview image. Light #F7F8FA background, minimal editorial
 layout. The Wright's Seal mark centered slightly left, about 180px tall.
-A thin #5B4BE0 vertical rule next to it. Large empty area on the right for a
+A thin #C74A2E vertical rule next to it. Large empty area on the right for a
 title added later. Flat, clean, high contrast, no text, no photos, no 3D.
 ```
 
 ### 4.5 Textura sutil (fondo de app — solo si se usa)
 ```
 Nearly invisible seamless pattern on #F7F8FA: a 32px grid of 1px lines in
-#E4E7EC with a single tiny #5B4BE0 dot every 8th cell. Extremely low contrast,
+#E4E7EC with a single tiny #C74A2E dot every 8th cell. Extremely low contrast,
 Fully tileable, no text, no characters, no icons, no bright elements.
 ```
 
@@ -141,8 +145,8 @@ Fully tileable, no text, no characters, no icons, no bright elements.
 ```
 A tiny blocky craftsman character: a small off-white square body with the
 Wright's Seal P on its chest, two short arms, one holding an oversized flat
-hammer. Minimal 2px strokes, two dot eyes, violet #5B4BE0 scarf, one cyan
-#3DDAD7 pixel floating above. Friendly but neutral, not childish, flat vector,
+hammer. Minimal 2px strokes, two dot eyes, orange #C74A2E scarf, one amber
+#D98A3F pixel floating above. Friendly but neutral, not childish, flat vector,
 transparent background, no text, no copyrighted character resemblance.
 ```
 
@@ -152,7 +156,7 @@ Clean desktop app UI screenshot, 1440x900, minimalist light theme #F7F8FA.
 Top bar 56px tall with a small beveled-square "P" logo, the wordmark on the
 left and a theme toggle icon on the right. Centered content: a single white
 card with 12px radius and a very soft shadow containing a short form with
-three fields and one violet button. Generous whitespace, system sans-serif
+three fields and one orange button. Generous whitespace, system sans-serif
 typography, thin #E4E7EC borders, no gradients, no dark panels, no emoji,
 no console, no decorative graphics. Use placeholder lines instead of readable
 text. Modern editorial SaaS aesthetic, calm and professional, no watermark.

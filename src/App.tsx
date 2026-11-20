@@ -328,7 +328,7 @@ function App() {
       <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
-            <div className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[12px] font-semibold text-white">P</div>
+            <img src="/packwright-mark.png" alt="Packwright" className="h-8 w-8" />
             <span className="text-[15px] font-semibold tracking-tight">Packwright</span>
           </div>
           <div className="flex items-center gap-2">
@@ -361,7 +361,7 @@ function App() {
         {!showCreate && !selectedPack && packs.length === 0 ? (
           <div className="mx-auto max-w-lg py-8">
             <div className="text-center">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent text-lg font-semibold text-white">P</div>
+              <img src="/packwright-mark.png" alt="" className="mx-auto h-14 w-14" />
               <h1 className="mt-6 text-[26px] font-semibold tracking-tight">Crea tu primer modpack</h1>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
                 Organiza tus mods, elige la versión de Minecraft y exporta un pack listo para instalar en tu launcher.
