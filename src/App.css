@@ -1,71 +1,231 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #080b14;
+  --color-panel: #0c1120;
+  --color-panel-2: #101629;
+  --color-line: #1b2236;
+  --color-dim: #7b86a6;
+  --color-violet: #7c5cff;
+  --color-cyan: #3ddad7;
+  --color-lime: #b8e986;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
+}
+
 :root {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #e7e9f3;
-  background: #0b1020;
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  color: #dce3ff;
+  background: var(--color-ink);
 }
 
 * { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
 
-body { margin: 0; min-width: 900px; background: radial-gradient(1200px 600px at 80% -10%, #1d1740 0%, #0b1020 55%); }
-
-.app { max-width: 1180px; margin: 0 auto; padding: 28px 32px 60px; }
-
-.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.brand { display: flex; align-items: center; gap: 14px; }
-.brand-mark {
-  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #7c5cff, #3ddad7); color: #0b1020; font-weight: 800; font-size: 18px;
+/* Fondo de plano técnico: rejilla fina + resplandor contenido arriba a la derecha. */
+.blueprint {
+  background-color: var(--color-ink);
+  background-image:
+    radial-gradient(900px 420px at 92% -8%, rgba(124, 92, 255, 0.13), transparent 70%),
+    radial-gradient(700px 380px at 4% 100%, rgba(61, 218, 215, 0.06), transparent 70%),
+    linear-gradient(rgba(120, 140, 190, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 140, 190, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
 }
-.brand h1 { margin: 0; font-size: 22px; letter-spacing: -0.4px; }
-.brand p { margin: 2px 0 0; color: #8e94b8; font-size: 12px; }
-.status-group { display: flex; gap: 8px; }
-.pill { padding: 7px 12px; border-radius: 999px; background: #19203a; border: 1px solid #2b3357; font-size: 12px; color: #b9bfd9; }
-.pill.ok { color: #6ee7b7; border-color: #1c6b53; background: #102d27; }
-.pill.bad { color: #fca5a5; border-color: #7f2d2d; background: #301616; }
 
-.banner { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
-.banner.error { background: #34161a; border: 1px solid #8b2f39; color: #fecaca; }
-
-.workspace-bar { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: #121830; border: 1px solid #242c4d; border-radius: 10px; font-size: 12px; color: #8e94b8; margin-bottom: 20px; }
-.workspace-bar code { color: #c9d2ff; word-break: break-all; }
-
-.layout { display: grid; grid-template-columns: 390px 1fr; gap: 22px; align-items: start; }
-.card { background: #121830; border: 1px solid #242c4d; border-radius: 16px; padding: 20px; }
-.card h2, .packs h2 { margin: 0 0 16px; font-size: 16px; }
-
-form { display: flex; flex-direction: column; gap: 12px; }
-label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #aab1d0; }
-label small { color: #6f7699; }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-input, select, textarea {
-  width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid #2d3559;
-  background: #0d1328; color: #eef0ff; font-size: 13px; font-family: inherit; outline: none;
+/* Panel con esquinas recortadas y corchetes de referencia. */
+.panel {
+  position: relative;
+  background: linear-gradient(180deg, rgba(16, 22, 41, 0.92), rgba(10, 14, 26, 0.92));
+  border: 1px solid var(--color-line);
+  border-radius: 2px;
 }
-input:focus, select:focus, textarea:focus { border-color: #7c5cff; box-shadow: 0 0 0 3px #7c5cff22; }
-textarea { resize: vertical; }
-button {
-  border: none; border-radius: 8px; padding: 11px 14px; cursor: pointer;
-  background: linear-gradient(135deg, #7c5cff, #6248e8); color: white; font-weight: 600; font-size: 13px;
+.panel::before,
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
 }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.panel::before {
+  top: -1px; left: -1px;
+  border-top: 1px solid var(--color-violet);
+  border-left: 1px solid var(--color-violet);
+}
+.panel::after {
+  bottom: -1px; right: -1px;
+  border-bottom: 1px solid var(--color-cyan);
+  border-right: 1px solid var(--color-cyan);
+}
 
-.console { margin-top: 20px; border-top: 1px solid #242c4d; padding-top: 14px; }
-.console-head { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7e86ab; margin-bottom: 8px; }
-.console-body { height: 160px; overflow: auto; background: #080d1c; border: 1px solid #1e2543; border-radius: 8px; padding: 10px; font: 11px/1.5 "Cascadia Code", Consolas, monospace; }
-.log { white-space: pre-wrap; word-break: break-all; color: #b6c0e6; }
-.log.stderr { color: #fca5a5; }
-.muted { color: #5d6588; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
 
-.empty { padding: 40px; text-align: center; border: 1px dashed #2d3559; border-radius: 14px; color: #7e86ab; }
-.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.pack-card { display: flex; gap: 14px; padding: 16px; background: #141b35; border: 1px solid #283159; border-radius: 14px; }
-.pack-icon { flex: 0 0 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #24306b, #3b2c78); display: grid; place-items: center; font-size: 20px; }
-.pack-main { min-width: 0; flex: 1; }
-.pack-main h3 { margin: 0 0 4px; font-size: 15px; }
-.desc { margin: 0 0 10px; font-size: 12px; color: #9aa2c4; line-height: 1.4; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.tags span { font-size: 10px; padding: 4px 8px; border-radius: 6px; background: #202947; color: #b9c1e4; }
-.issues { margin: 8px 0; padding-left: 16px; color: #fbbf24; font-size: 11px; }
-.link { background: none; padding: 0; color: #9d8cff; font-size: 12px; font-weight: 500; }
-.link:hover { text-decoration: underline; }
+.accent-rule {
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-violet), var(--color-cyan), transparent);
+}
+
+.brand-glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: -0.12em;
+  background: linear-gradient(135deg, var(--color-violet), var(--color-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.status-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  border: 1px solid currentColor;
+  padding: 3px 8px;
+  border-radius: 1px;
+}
+
+.field {
+  width: 100%;
+  background: #080d1a;
+  border: 1px solid var(--color-line);
+  border-radius: 2px;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: #e6ebff;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.field:focus {
+  border-color: var(--color-violet);
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.16);
+}
+.field::placeholder { color: #424c6b; }
+
+.btn-primary {
+  position: relative;
+  background: #171c39;
+  border: 1px solid #3b3480;
+  color: #eae6ff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 11px 14px;
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(61, 218, 215, 0.12), transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 400ms ease;
+}
+.btn-primary:hover:not(:disabled)::after { transform: translateX(100%); }
+.btn-primary:hover:not(:disabled) { border-color: var(--color-cyan); background: #1c2244; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-line);
+  color: var(--color-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.btn-ghost:hover { color: var(--color-cyan); border-color: #2b6f73; }
+
+.file-row {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 9px;
+  color: #7f89ab;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-row:hover { color: #c7cff0; background: #111830; }
+.file-row.active {
+  color: #e6ebff;
+  background: #121a33;
+  border-left-color: var(--color-cyan);
+}
+
+.console {
+  background: #060911;
+  border: 1px solid var(--color-line);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.console::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, transparent 0, transparent 3px, rgba(120, 160, 220, 0.025) 4px);
+}
+.console-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: #93a0c4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.console-line.err { color: #f08c96; }
+
+.pack-card {
+  position: relative;
+  background: linear-gradient(160deg, rgba(18, 24, 45, 0.95), rgba(10, 14, 26, 0.95));
+  border: 1px solid var(--color-line);
+  border-radius: 2px;
+  padding: 16px;
+  overflow: hidden;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.pack-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+  background: linear-gradient(180deg, var(--color-violet), transparent 70%);
+  opacity: 0.6;
+}
+.pack-card:hover { border-color: #394275; transform: translateY(-2px); }
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #9aa5c8;
+  border: 1px solid #28304c;
+  border-radius: 1px;
+  padding: 3px 7px;
+}
+
+::selection { background: rgba(124, 92, 255, 0.35); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #080b14; }
+::-webkit-scrollbar-thumb { background: #232b47; border-radius: 1px; }
+::-webkit-scrollbar-thumb:hover { background: #37406a; }
+
+.monaco-editor, .monaco-editor .margin, .monaco-editor-background {
+  background-color: #0c1120 !important;
+}
