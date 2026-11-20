@@ -80,7 +80,7 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
       if (disposed || event.payload.id !== id) return;
       setLineCount((value) => value + 1);
       setLastLine(event.payload.line);
-    }).then((fn) => { unlisten = fn; });
+    }).then((fn) => { if (disposed) fn(); else unlisten = fn; });
 
     invoke<ExportResult>("pack_export", { dir, id, format, side })
       .then((exported) => {

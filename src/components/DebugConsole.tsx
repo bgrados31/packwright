@@ -16,11 +16,13 @@ export default function DebugConsole({ onClose }: { onClose: () => void }) {
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
+      if (cancelled) return;
       setLines((previous) => [...previous.slice(-199), event.payload]);
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
   }, []);
 
   useEffect(() => {

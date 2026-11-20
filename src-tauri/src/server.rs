@@ -7,8 +7,8 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
-use tokio::io::AsyncBufReadExt;
-use tokio::process::{Child, Command};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex;
 
 use crate::config;
@@ -53,6 +53,7 @@ pub struct ServerBackup {
 
 pub struct ServerState {
     processes: Arc<Mutex<HashMap<String, Child>>>,
+    stdin: Arc<Mutex<HashMap<String, ChildStdin>>>,
     started: Arc<Mutex<HashMap<String, Instant>>>,
     app: AppHandle,
 }
@@ -61,6 +62,7 @@ impl ServerState {
     pub fn new(app: AppHandle) -> Self {
         Self {
             processes: Arc::new(Mutex::new(HashMap::new())),
+            stdin: Arc::new(Mutex::new(HashMap::new())),
             started: Arc::new(Mutex::new(HashMap::new())),
             app,
         }
@@ -725,11 +727,13 @@ pub async fn server_start(
     }
     let mut child = command
         .current_dir(&dir)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| AppError::Process(format!("Could not start server: {e}")))?;
 
+    let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let app = state.app.clone();
@@ -754,6 +758,9 @@ pub async fn server_start(
     }
     emit(&state.app, &id, "Server started", "stdout");
     processes.insert(name.clone(), child);
+    if let Some(stdin) = stdin {
+        state.stdin.lock().await.insert(name.clone(), stdin);
+    }
     state.started.lock().await.insert(name, Instant::now());
     Ok(())
 }
@@ -765,14 +772,26 @@ pub async fn server_stop(state: tauri::State<'_, ServerState>, name: String) -> 
         let _ = child.kill().await;
     }
     processes.remove(&name);
+    state.stdin.lock().await.remove(&name);
     state.started.lock().await.remove(&name);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn server_send(state: tauri::State<'_, ServerState>, _name: String, command: String) -> Result<()> {
-    //Los comandos interactivos requieren stdin persistente; por ahora se registra en la consola.
-    emit(&state.app, "server-command", &format!("> {command}"), "stdout");
+pub async fn server_send(state: tauri::State<'_, ServerState>, name: String, command: String) -> Result<()> {
+    let command = command.trim();
+    if command.is_empty() {
+        return Ok(());
+    }
+    let mut stdin_map = state.stdin.lock().await;
+    let stdin = stdin_map
+        .get_mut(&name)
+        .ok_or_else(|| AppError::Validation("The server is not running".into()))?;
+    stdin.write_all(format!("{command}\n").as_bytes()).await
+        .map_err(|e| AppError::Process(format!("Could not send command: {e}")))?;
+    stdin.flush().await
+        .map_err(|e| AppError::Process(format!("Could not flush command: {e}")))?;
+    emit(&state.app, &format!("server-{name}-command"), &format!("> {command}"), "command");
     Ok(())
 }
 

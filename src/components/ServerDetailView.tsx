@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -27,6 +27,7 @@ import type {
   ServerStats,
 } from "../lib/types";
 import { Checkbox } from "./ui";
+import ConsolePanel from "./ConsolePanel";
 
 type Props = {
   server: ServerInfo;
@@ -118,8 +119,6 @@ export default function ServerDetailView({ server, onBack }: Props) {
   const [eula, setEula] = useState(false);
   const [nogui, setNogui] = useState(true);
   const [lines, setLines] = useState<OpLine[]>([]);
-  const consoleRef = useRef<HTMLDivElement>(null);
-  const [command, setCommand] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,19 +140,14 @@ export default function ServerDetailView({ server, onBack }: Props) {
   }, [server.name]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
-      if (event.payload.id.startsWith(`server-${server.name}`)) {
-        setLines((previous) => [...previous.slice(-299), event.payload]);
-      }
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+      if (cancelled || !event.payload.id.startsWith(`server-${server.name}`)) return;
+      setLines((previous) => [...previous.slice(-299), event.payload]);
+    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
   }, [server.name]);
-
-  useEffect(() => {
-    const element = consoleRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [lines, tab]);
 
   const openTab = (next: Tab) => {
     setTab(next);
@@ -337,29 +331,23 @@ export default function ServerDetailView({ server, onBack }: Props) {
 
         {tab === "console" && (
           <div className="card p-4">
-            <div className="console-box" style={{ height: 380 }} ref={consoleRef}>
-              {lines.length === 0 ? <p className="text-[11px] text-muted">{t("output.empty")}</p> : lines.map((line, index) => (
-                <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <input
-                className="field text-[12px]"
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void invoke("server_send", { name: server.name, command });
-                    setCommand("");
-                  }
-                }}
-                placeholder="say Hello"
-              />
-              <button className="btn btn-secondary" onClick={() => { void invoke("server_send", { name: server.name, command }); setCommand(""); }}>
-                {t("servers.send")}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setLines([])} title={t("serverDetail.clear")}><RefreshCw size={13} /></button>
-            </div>
+            <ConsolePanel
+              lines={lines}
+              running={stats?.running ?? false}
+              height={380}
+              onClear={() => setLines([])}
+              onSend={async (command) => {
+                try {
+                  await invoke("server_send", { name: server.name, command });
+                } catch (cause) {
+                  setLines((current) => [...current.slice(-299), {
+                    id: `error-${Date.now()}`,
+                    stream: "stderr",
+                    line: messageOf(cause),
+                  }]);
+                }
+              }}
+            />
             <p className="mt-2 text-[10px] text-muted">{t("servers.commandHint")}</p>
           </div>
         )}

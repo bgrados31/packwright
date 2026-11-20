@@ -41,14 +41,14 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, onClos
 
   useEffect(() => {
     refresh();
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
       const id = event.payload.id;
-      if (id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-")) {
-        setLines((previous) => [...previous.slice(-39), event.payload]);
-      }
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+      if (cancelled || !(id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-"))) return;
+      setLines((previous) => [...previous.slice(-39), event.payload]);
+    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
   }, []);
 
   /** Un solo botón: serve + instancia + watcher + launcher. */

@@ -60,7 +60,7 @@ export type ExportResult = {
 
 export type OpLine = {
   id: string;
-  stream: "stdout" | "stderr";
+  stream: "stdout" | "stderr" | "command";
   line: string;
 };
 

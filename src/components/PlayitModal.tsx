@@ -35,13 +35,13 @@ export default function PlayitModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     refresh();
     invoke<string>("playit_get_secret").then(setSecret).catch(() => undefined);
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
-      if (event.payload.id.startsWith("playit")) {
-        setLines((previous) => [...previous.slice(-99), event.payload]);
-      }
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+      if (cancelled || !event.payload.id.startsWith("playit")) return;
+      setLines((previous) => [...previous.slice(-99), event.payload]);
+    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
   }, []);
 
   const run = async (action: () => Promise<unknown>) => {

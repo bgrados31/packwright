@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import PlayitModal from "./PlayitModal";
+import ConsolePanel from "./ConsolePanel";
 import {
   Activity,
   ArrowUpRight,
@@ -23,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerVersion } from "../lib/types";
+import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerStats, ServerVersion } from "../lib/types";
 import Select from "./Select";
 import MinecraftScene from "./MinecraftScene";
 import ServerDetailView from "./ServerDetailView";
@@ -66,13 +67,12 @@ export default function ServersView({ packs }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [consoleServer, setConsoleServer] = useState<ServerInfo | null>(null);
   const [lines, setLines] = useState<OpLine[]>([]);
-  const [command, setCommand] = useState("");
+  const [consoleRunning, setConsoleRunning] = useState(false);
   const [propertiesServer, setPropertiesServer] = useState<ServerInfo | null>(null);
   const [properties, setProperties] = useState("");
   const [syncPack, setSyncPack] = useState("");
   const [playitOpen, setPlayitOpen] = useState(false);
   const [detailServer, setDetailServer] = useState<ServerInfo | null>(null);
-  const consoleRef = useRef<HTMLDivElement>(null);
 
   const refresh = () => {
     invoke<ServerInfo[]>("server_list")
@@ -95,17 +95,14 @@ export default function ServersView({ packs }: Props) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<OpLine>("operation://line", (event) => {
+      if (cancelled) return;
       setLines((previous) => [...previous.slice(-199), event.payload]);
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+    }).then((fn) => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
   }, []);
-
-  useEffect(() => {
-    const element = consoleRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [lines, consoleServer]);
 
   const run = async (action: () => Promise<unknown>): Promise<boolean> => {
     setBusy(true);
@@ -178,9 +175,17 @@ export default function ServersView({ packs }: Props) {
     setName("");
   };
 
-  const start = (server: ServerInfo) => {
+  const openConsole = (server: ServerInfo) => {
     setLines([]);
     setConsoleServer(server);
+    invoke<ServerStats>("server_stats", { name: server.name })
+      .then((stats) => setConsoleRunning(stats.running))
+      .catch(() => setConsoleRunning(false));
+  };
+
+  const start = (server: ServerInfo) => {
+    openConsole(server);
+    setConsoleRunning(true);
     void run(() => invoke("server_start", {
       name: server.name,
       id: `server-${server.name}-${Date.now()}`,
@@ -252,7 +257,7 @@ export default function ServersView({ packs }: Props) {
                 <div className="mt-3 flex flex-wrap gap-1.5" onClick={(event) => event.stopPropagation()}>
                   <button className="server-action-btn primary" onClick={() => start(server)} title={t("servers.start")}><Play size={13} /></button>
                   <button className="server-action-btn danger" onClick={() => void run(() => invoke("server_stop", { name: server.name }))} title={t("servers.stop")}><Square size={13} /></button>
-                  <button className="server-action-btn" onClick={() => { setLines([]); setConsoleServer(server); }} title={t("servers.console")}><Terminal size={13} /></button>
+                  <button className="server-action-btn" onClick={() => openConsole(server)} title={t("servers.console")}><Terminal size={13} /></button>
                   <button className="server-action-btn" onClick={() => void run(() => invoke("server_backup", { name: server.name }))} title={t("servers.backup")}><Copy size={13} /></button>
                   <button className="server-action-btn" onClick={() => void invoke("server_open_folder", { name: server.name })} title={t("packs.folder")}><FolderOpen size={13} /></button>
                   <button className="server-action-btn" onClick={() => setPlayitOpen(true)} title={t("servers.tunnel")}><Wifi size={13} /></button>
@@ -375,15 +380,23 @@ export default function ServersView({ packs }: Props) {
               <button className="icon-btn" onClick={() => setConsoleServer(null)}><X size={16} /></button>
             </div>
             <div className="p-4">
-              <div className="console-box" style={{ height: 260 }} ref={consoleRef}>
-                {lines.length === 0 ? <p className="text-[11px] text-muted">{t("output.empty")}</p> : lines.map((line, index) => (
-                  <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
-                ))}
-              </div>
-              <div className="mt-2 flex gap-2">
-                <input className="field text-[12px]" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="say Hello" onKeyDown={(e) => { if (e.key === "Enter") { void invoke("server_send", { name: consoleServer.name, command }); setCommand(""); } }} />
-                <button className="btn btn-secondary" onClick={() => { void invoke("server_send", { name: consoleServer.name, command }); setCommand(""); }}>{t("servers.send")}</button>
-              </div>
+              <ConsolePanel
+                lines={lines}
+                running={consoleRunning}
+                height={260}
+                onClear={() => setLines([])}
+                onSend={async (command) => {
+                  try {
+                    await invoke("server_send", { name: consoleServer.name, command });
+                  } catch (cause) {
+                    setLines((current) => [...current.slice(-199), {
+                      id: `error-${Date.now()}`,
+                      stream: "stderr",
+                      line: messageOf(cause),
+                    }]);
+                  }
+                }}
+              />
               <p className="mt-2 text-[10px] text-muted">{t("servers.commandHint")}</p>
             </div>
           </div>
