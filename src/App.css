@@ -723,6 +723,34 @@ details summary::-webkit-details-marker { display: none; }
 
 /* --- Modal de exportación --- */
 .export-modal { max-width: 620px; }
+.export-picker { padding: 16px 18px 0; }
+.export-platform {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--pw-line);
+  border-radius: 10px;
+  background: var(--pw-surface);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.export-platform:hover:not(:disabled) { border-color: color-mix(in srgb, var(--pw-accent) 45%, var(--pw-line)); }
+.export-platform.active { border-color: var(--pw-accent); background: var(--pw-accent-soft); }
+.export-platform:disabled { cursor: not-allowed; opacity: .6; }
+.export-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--pw-line);
+  border-radius: 9px;
+  color: var(--pw-muted);
+  font-size: 12px;
+}
+.export-side.active { border-color: var(--pw-accent); background: var(--pw-accent-soft); color: var(--pw-accent); }
+.export-side:disabled { cursor: not-allowed; opacity: .6; }
+
 .export-format {
   display: flex;
   align-items: center;
@@ -820,6 +848,30 @@ details summary::-webkit-details-marker { display: none; }
 .release-badge.release { background: color-mix(in srgb, var(--pw-ok) 14%, transparent); color: var(--pw-ok); }
 .release-badge.beta { background: color-mix(in srgb, #c98a2e 16%, transparent); color: #c98a2e; }
 .release-badge.alpha { background: color-mix(in srgb, var(--pw-accent) 14%, transparent); color: var(--pw-accent); }
+.debug-console {
+  position: fixed;
+  z-index: 70;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  border: 1px solid var(--pw-line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--pw-surface) 96%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 44px -16px rgba(0, 0, 0, 0.5);
+}
+.debug-console-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--pw-line);
+  cursor: grab;
+  user-select: none;
+}
+.debug-console-head:active { cursor: grabbing; }
+.debug-console-body { height: 220px; overflow: auto; padding: 9px 11px; }
+
 .context-menu {
   position: fixed;
   z-index: 95;

@@ -8,6 +8,7 @@ import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
 import PackwizReinstallModal from "./PackwizReinstallModal";
 import Select from "./Select";
+import { Checkbox } from "./ui";
 
 type Props = {
   config: AppConfig;
@@ -215,6 +216,14 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
                 options={LOADERS.map((loader) => ({ value: loader, label: loader }))}
               />
             </div>
+          </div>
+          <div className="mt-4 border-t border-line pt-4">
+            <Checkbox
+              checked={draft.debug_console}
+              onChange={(checked) => patch({ debug_console: checked })}
+              label={t("settings.debugConsole")}
+            />
+            <p className="mt-1.5 pl-7 text-[11px] text-muted">{t("settings.debugConsoleHint")}</p>
           </div>
         </Section>
 

@@ -42,6 +42,9 @@ pub struct AppConfig {
     /// Raíces visibles en el árbol de archivos.
     #[serde(default = "default_editor_roots")]
     pub editor_roots: Vec<String>,
+    /// Muestra la consola flotante de operaciones (modo debug).
+    #[serde(default)]
+    pub debug_console: bool,
 }
 
 fn default_tab_size() -> u32 { 2 }
@@ -89,6 +92,7 @@ impl Default for AppConfig {
             editor_minimap: default_true(),
             editor_word_wrap: default_true(),
             editor_roots: default_editor_roots(),
+            debug_console: false,
         }
     }
 }

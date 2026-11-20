@@ -228,6 +228,8 @@
   "mods.autoHintShort": "Auto-update enabled",
 
   "output.empty": "Waiting for operations…",
+  "debug.title": "Debug console",
+  "debug.collapse": "Collapse",
 
   "export.button": "Export .mrpack",
   "export.exporting": "Exporting…",
@@ -239,6 +241,11 @@
   "export.issuesTitle": "{count} issue(s) found",
   "export.exportAnyway": "Export anyway",
   "export.another": "Export another",
+  "export.start": "Export modpack",
+  "export.stepPlatform": "Where do you want to export?",
+  "export.stepSide": "Which side?",
+  "export.hintModrinth": "For launchers and mod portals",
+  "export.hintCurseforge": "CurseForge-compatible zip",
   "export.title": "Exporting modpack",
   "export.consoleTitle": "Live output",
   "export.working": "Working…",
@@ -338,6 +345,8 @@
   "settings.launchers": "Launchers",
   "settings.advanced": "Advanced",
   "settings.servePort": "Local server port",
+  "settings.debugConsole": "Debug console (floating)",
+  "settings.debugConsoleHint": "Shows live output of packwiz operations in a floating panel.",
   "settings.about": "About",
   "settings.version": "Version",
   "settings.save": "Save changes",
@@ -354,5 +363,6 @@
   "settings.packwizReady": "Installation finished",
 
   "common.close": "Close",
+  "common.clear": "Clear",
   "common.error": "Error"
 }

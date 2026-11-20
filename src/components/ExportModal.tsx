@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -6,8 +6,9 @@ import {
   FileArchive,
   FolderOpen,
   Loader2,
+  Package,
   RotateCcw,
-  Terminal,
+  Server,
   TriangleAlert,
   X,
   XCircle,
@@ -21,10 +22,10 @@ type Props = {
   onClose: () => void;
 };
 
-type Phase = "checking" | "review" | "running" | "success" | "error";
+type Phase = "select" | "checking" | "review" | "running" | "success" | "error";
 type Format = "modrinth" | "curseforge";
 
-const BLOCKS = 12;
+const BLOCKS = 10;
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -40,53 +41,46 @@ function messageOf(error: unknown): string {
 
 export default function ExportModal({ dir, packName, onClose }: Props) {
   const { t } = useI18n();
-  const [phase, setPhase] = useState<Phase>("checking");
+  const [phase, setPhase] = useState<Phase>("select");
   const [format, setFormat] = useState<Format>("modrinth");
   const [side, setSide] = useState<"client" | "server">("client");
   const [validation, setValidation] = useState<ExportValidation | null>(null);
-  const [lines, setLines] = useState<OpLine[]>([]);
+  const [lineCount, setLineCount] = useState(0);
+  const [lastLine, setLastLine] = useState("");
   const [result, setResult] = useState<ExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [override, setOverride] = useState(false);
-  const consoleRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const validate = () => {
     setPhase("checking");
     setValidation(null);
-    setResult(null);
     setError(null);
-    setOverride(false);
+    setResult(null);
     invoke<ExportValidation>("export_validate", { dir })
       .then((value) => {
-        if (cancelled) return;
         setValidation(value);
-        setPhase(value.ok || override ? "running" : "review");
+        setPhase(value.ok ? "running" : "review");
       })
       .catch(() => {
-        if (cancelled) return;
         setValidation({ ok: true, issues: [] });
         setPhase("running");
       });
-    return () => { cancelled = true; };
-  }, [dir, attempt]);
+  };
 
   useEffect(() => {
     if (phase !== "running") return;
     const id = `export-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     let disposed = false;
-    const unlisteners: Array<() => void> = [];
+    let unlisten: (() => void) | undefined;
 
-    setLines([]);
-    setResult(null);
-    setError(null);
+    setLineCount(0);
+    setLastLine("");
 
     listen<OpLine>("operation://line", (event) => {
-      if (!disposed && event.payload.id === id) {
-        setLines((previous) => [...previous.slice(-199), event.payload]);
-      }
-    }).then((unlisten) => unlisteners.push(unlisten));
+      if (disposed || event.payload.id !== id) return;
+      setLineCount((value) => value + 1);
+      setLastLine(event.payload.line);
+    }).then((fn) => { unlisten = fn; });
 
     invoke<ExportResult>("pack_export", { dir, id, format, side })
       .then((exported) => {
@@ -98,40 +92,31 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
         if (disposed) return;
         setError(messageOf(cause));
         setPhase("error");
-        setLines((previous) => [...previous, { id, stream: "stderr", line: messageOf(cause) }]);
       });
 
     return () => {
       disposed = true;
-      unlisteners.forEach((unlisten) => unlisten());
+      unlisten?.();
     };
   }, [phase, dir, format, side, attempt]);
 
-  useEffect(() => {
-    const element = consoleRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [lines]);
-
-  const joined = lines.map((line) => line.line).join(" ").toLowerCase();
   const stage: TranslationKey =
     phase === "success"
       ? "export.done"
-      : joined.includes("exported")
+      : lastLine.toLowerCase().includes("exported")
         ? "export.stagePacking"
-        : joined.includes("reading external") || joined.includes("retrieving")
+        : lastLine.toLowerCase().includes("retriev")
           ? "export.stageMods"
-          : joined.includes("refreshing") || joined.includes("index")
+          : lastLine.toLowerCase().includes("index")
             ? "export.stageIndex"
-            : joined.includes("loading")
-              ? "export.stageLoading"
-              : "export.stagePreparing";
+            : "export.stagePreparing";
 
   const progress = phase === "success"
     ? BLOCKS
-    : Math.max(lines.length > 0 ? 1 : 0, Math.min(BLOCKS - 1, Math.ceil(lines.length / 2)));
+    : Math.max(lineCount > 0 ? 1 : 0, Math.min(BLOCKS - 1, Math.ceil(lineCount / 2)));
 
   const busy = phase === "checking" || phase === "running";
-  const canPickFormat = phase === "review" || phase === "success" || phase === "error";
+  const showPicker = phase === "select" || phase === "review" || phase === "checking";
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("export.title")}>
@@ -142,10 +127,10 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
               <Loader2 size={18} className="spin" />
             ) : phase === "success" ? (
               <CheckCircle2 size={18} />
-            ) : phase === "review" ? (
-              <TriangleAlert size={18} />
-            ) : (
+            ) : phase === "error" || phase === "review" ? (
               <XCircle size={18} />
+            ) : (
+              <Package size={18} />
             )}
           </span>
           <div className="min-w-0 flex-1">
@@ -157,101 +142,86 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
           </button>
         </div>
 
-        <div className="export-format">
-          {([
-            ["modrinth", t("export.formatModrinth")],
-            ["curseforge", t("export.formatCurseforge")],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              className={`export-format-option ${format === id ? "active" : ""}`}
-              disabled={!canPickFormat}
-              onClick={() => setFormat(id)}
-            >
-              {label}
-            </button>
-          ))}
-          {format === "curseforge" && (
-            <div className="ml-auto flex items-center gap-1.5">
-              {(["client", "server"] as const).map((value) => (
-                <button
-                  key={value}
-                  className={`filter-chip ${side === value ? "active" : ""}`}
-                  disabled={!canPickFormat}
-                  onClick={() => setSide(value)}
-                >
-                  {value === "client" ? t("mods.envClient") : t("mods.envServer")}
-                </button>
-              ))}
+        {showPicker && (
+          <div className="export-picker">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t("export.stepPlatform")}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { id: "modrinth" as const, icon: Package, label: t("export.formatModrinth"), hint: t("export.hintModrinth") },
+                { id: "curseforge" as const, icon: FileArchive, label: t("export.formatCurseforge"), hint: t("export.hintCurseforge") },
+              ]).map((option) => {
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.id}
+                    className={`export-platform ${format === option.id ? "active" : ""}`}
+                    onClick={() => setFormat(option.id)}
+                    disabled={busy}
+                  >
+                    <Icon size={18} className="shrink-0 text-accent" />
+                    <span className="min-w-0 text-left">
+                      <span className="block truncate text-[12px] font-medium">{option.label}</span>
+                      <span className="block truncate text-[10px] text-muted">{option.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
 
-        {phase === "checking" && (
-          <div className="mod-analysis analyzing" style={{ margin: "12px 18px" }}>
-            <Loader2 size={14} className="spin" /> {t("export.validating")}
-          </div>
-        )}
-
-        {phase === "review" && validation && (
-          <div className="mod-analysis warn" style={{ margin: "12px 18px" }}>
-            <div className="flex w-full items-start gap-2">
-              <TriangleAlert size={14} className="mt-0.5 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{t("export.issuesTitle", { count: validation.issues.length })}</p>
-                <ul className="mt-1 list-disc pl-4 text-[11px] opacity-90">
-                  {validation.issues.map((issue, index) => <li key={index}>{issue}</li>)}
-                </ul>
-                <div className="mt-2 flex gap-2">
-                  <button className="btn btn-primary" onClick={() => setPhase("running")}>
-                    {t("export.exportAnyway")}
-                  </button>
-                  <button className="btn btn-secondary" onClick={onClose}>
-                    {t("common.close")}
-                  </button>
+            {format === "curseforge" && (
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t("export.stepSide")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { id: "client" as const, label: t("mods.envClient") },
+                    { id: "server" as const, label: t("mods.envServer") },
+                  ]).map((option) => (
+                    <button
+                      key={option.id}
+                      className={`export-side ${side === option.id ? "active" : ""}`}
+                      onClick={() => setSide(option.id)}
+                      disabled={busy}
+                    >
+                      <Server size={13} className="shrink-0" /> {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
+
+            {phase === "review" && validation && (
+              <div className="mod-analysis warn" style={{ margin: "14px 0 0" }}>
+                <div className="flex w-full items-start gap-2">
+                  <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{t("export.issuesTitle", { count: validation.issues.length })}</p>
+                    <ul className="mt-1 list-disc pl-4 text-[11px] opacity-90">
+                      {validation.issues.map((issue, index) => <li key={index}>{issue}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {(phase === "running" || phase === "success" || phase === "error") && (
-          <>
-            <div className="export-progress">
-              <div className="export-blocks">
-                {Array.from({ length: BLOCKS }, (_, index) => (
-                  <span
-                    key={index}
-                    className={`export-block ${index < progress ? "on" : ""} ${phase === "running" && index === progress ? "next" : ""}`}
-                    style={{ animationDelay: `${index * 45}ms` }}
-                  />
-                ))}
-              </div>
-              <div className={`export-status ${phase === "success" ? "success" : phase === "error" ? "error" : ""}`}>
-                <span>{t(stage)}</span>
-                <span className="font-mono text-[10px] opacity-70">{Math.round((progress / BLOCKS) * 100)}%</span>
-              </div>
+          <div className="export-progress">
+            <div className="export-blocks">
+              {Array.from({ length: BLOCKS }, (_, index) => (
+                <span
+                  key={index}
+                  className={`export-block ${index < progress ? "on" : ""} ${phase === "running" && index === progress ? "next" : ""}`}
+                  style={{ animationDelay: `${index * 45}ms` }}
+                />
+              ))}
             </div>
-
-            <div className="export-console-wrap">
-              <div className="export-console-head">
-                <span className="flex items-center gap-1.5"><Terminal size={12} /> {t("export.consoleTitle")}</span>
-                <span className="font-mono text-[9px] opacity-60">{lines.length}</span>
-              </div>
-              <div className="console-box export-console" ref={consoleRef}>
-                {lines.length === 0 ? (
-                  <div className="console-placeholder"><Terminal size={13} /> {t("output.empty")}</div>
-                ) : (
-                  lines.map((line, index) => (
-                    <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
-                  ))
-                )}
-                {phase === "running" && <div className="console-line cursor">▍</div>}
-              </div>
+            <div className={`export-status ${phase === "success" ? "success" : phase === "error" ? "error" : ""}`}>
+              <span>{t(stage)}</span>
+              <span className="font-mono text-[10px] opacity-70">{Math.round((progress / BLOCKS) * 100)}%</span>
             </div>
-
             {result && (
-              <div className="export-result">
+              <div className="export-result" style={{ margin: "14px 0 0" }}>
                 <FileArchive size={18} className="shrink-0 text-accent" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-medium">{result.name}</p>
@@ -260,37 +230,35 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
                 <CheckCircle2 size={15} className="shrink-0 text-ok" />
               </div>
             )}
-
-            {error && <div className="modal-message error">{error}</div>}
-          </>
-        )}
-
-        {phase !== "review" && phase !== "checking" && (
-          <div className="modal-footer">
-            {phase === "error" ? (
-              <button className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>
-                <RotateCcw size={14} /> {t("settings.retry")}
-              </button>
-            ) : phase === "success" ? (
-              <>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}
-                >
-                  <FolderOpen size={14} /> {t("export.viewFolder")}
-                </button>
-                <button className="btn btn-ghost" onClick={() => { setPhase("checking"); setAttempt((value) => value + 1); }}>
-                  {t("export.another")}
-                </button>
-              </>
-            ) : (
-              <span className="text-[11px] text-muted">{t("export.working")}</span>
-            )}
-            <button className="btn btn-primary" onClick={onClose} disabled={busy}>
-              {phase === "success" ? t("export.done") : t("common.close")}
-            </button>
+            {error && <div className="modal-message error" style={{ margin: "12px 0 0" }}>{error}</div>}
           </div>
         )}
+
+        <div className="modal-footer">
+          {phase === "error" ? (
+            <button className="btn btn-secondary" onClick={() => setAttempt((value) => value + 1)}>
+              <RotateCcw size={14} /> {t("settings.retry")}
+            </button>
+          ) : phase === "success" ? (
+            <>
+              <button className="btn btn-secondary" onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}>
+                <FolderOpen size={14} /> {t("export.viewFolder")}
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setPhase("select"); setAttempt((value) => value + 1); }}>
+                {t("export.another")}
+              </button>
+            </>
+          ) : phase === "select" || phase === "review" ? (
+            <button className="btn btn-primary" onClick={validate} disabled={busy}>
+              {phase === "review" ? t("export.exportAnyway") : t("export.start")}
+            </button>
+          ) : (
+            <span className="text-[11px] text-muted">{t("export.working")}</span>
+          )}
+          <button className="btn btn-secondary" onClick={onClose} disabled={busy}>
+            {t("common.close")}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -228,6 +228,8 @@
   "mods.autoHintShort": "Actualización automática",
 
   "output.empty": "Esperando operaciones…",
+  "debug.title": "Consola de debug",
+  "debug.collapse": "Contraer",
 
   "export.button": "Exportar .mrpack",
   "export.exporting": "Exportando…",
@@ -239,6 +241,11 @@
   "export.issuesTitle": "{count} problema(s) encontrado(s)",
   "export.exportAnyway": "Exportar de todos modos",
   "export.another": "Exportar otro",
+  "export.start": "Exportar modpack",
+  "export.stepPlatform": "¿Dónde quieres exportar?",
+  "export.stepSide": "¿Qué lado?",
+  "export.hintModrinth": "Para launchers y portales de mods",
+  "export.hintCurseforge": "Zip compatible con CurseForge",
   "export.title": "Exportando modpack",
   "export.consoleTitle": "Salida en vivo",
   "export.working": "Trabajando…",
@@ -338,6 +345,8 @@
   "settings.launchers": "Launchers",
   "settings.advanced": "Avanzado",
   "settings.servePort": "Puerto del servidor local",
+  "settings.debugConsole": "Consola de debug (flotante)",
+  "settings.debugConsoleHint": "Muestra la salida en vivo de packwiz en un panel flotante.",
   "settings.about": "Acerca de",
   "settings.version": "Versión",
   "settings.save": "Guardar cambios",
@@ -354,5 +363,6 @@
   "settings.packwizReady": "Instalación finalizada",
 
   "common.close": "Cerrar",
+  "common.clear": "Limpiar",
   "common.error": "Error"
 }

@@ -29,6 +29,7 @@ export type AppConfig = {
   editor_minimap: boolean;
   editor_word_wrap: boolean;
   editor_roots: string[];
+  debug_console: boolean;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };

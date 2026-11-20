@@ -14,6 +14,7 @@ import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
 import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
+import DebugConsole from "./components/DebugConsole";
 import { useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
@@ -827,6 +828,9 @@ export default function App() {
         )}
 
       <Toasts items={toasts} onDismiss={dismissToast} />
+      {config?.debug_console && (
+        <DebugConsole onClose={() => void saveConfig({ ...config, debug_console: false })} />
+      )}
     </div>
   );
 }
