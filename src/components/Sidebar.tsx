@@ -1,32 +1,24 @@
 import {
-  CircleAlert,
-  CircleCheck,
-  Languages,
+  Boxes,
   LayoutGrid,
-  Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
+  Server,
   Settings2,
-  Sun,
+  House,
   type LucideIcon,
 } from "lucide-react";
-import { useI18n, type Locale } from "../i18n";
+import { useI18n } from "../i18n";
 
-export type SidebarView = "packs" | "create" | "settings" | "editor";
+export type SidebarView = "home" | "packs" | "servers" | "instances" | "create" | "editor" | "settings";
 
 type Props = {
   collapsed: boolean;
   onToggleCollapse: () => void;
   active: SidebarView;
+  onHome: () => void;
   onPacks: () => void;
-  onCreate: () => void;
   onSettings: () => void;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
-  locale: Locale;
-  onToggleLocale: () => void;
-  packwizFound: boolean;
   packsCount: number;
 };
 
@@ -35,15 +27,17 @@ type ItemProps = {
   label: string;
   active?: boolean;
   collapsed: boolean;
-  onClick: () => void;
+  onClick?: () => void;
+  disabled?: boolean;
   badge?: string;
 };
 
-function NavItem({ icon: Icon, label, active = false, collapsed, onClick, badge }: ItemProps) {
+function NavItem({ icon: Icon, label, active = false, collapsed, onClick, disabled = false, badge }: ItemProps) {
   return (
     <button
       className={`sidebar-item ${active ? "active" : ""}`}
       onClick={onClick}
+      disabled={disabled}
       title={collapsed ? label : undefined}
     >
       <Icon size={17} strokeWidth={1.8} className="sidebar-item-icon" />
@@ -76,20 +70,37 @@ export default function Sidebar(props: Props) {
 
       <nav className="sidebar-nav">
         <NavItem
+          icon={House}
+          label={t("nav.home")}
+          active={props.active === "home"}
+          collapsed={props.collapsed}
+          onClick={props.onHome}
+        />
+        <NavItem
           icon={LayoutGrid}
           label={t("nav.modpacks")}
-          active={props.active === "packs" || props.active === "editor"}
+          active={props.active === "packs" || props.active === "create" || props.active === "editor"}
           collapsed={props.collapsed}
           onClick={props.onPacks}
           badge={props.collapsed ? undefined : String(props.packsCount)}
         />
         <NavItem
-          icon={Plus}
-          label={t("nav.newPack")}
-          active={props.active === "create"}
+          icon={Server}
+          label={t("nav.servers")}
           collapsed={props.collapsed}
-          onClick={props.onCreate}
+          disabled
+          badge={props.collapsed ? undefined : t("nav.soon")}
         />
+        <NavItem
+          icon={Boxes}
+          label={t("nav.instances")}
+          collapsed={props.collapsed}
+          disabled
+          badge={props.collapsed ? undefined : t("nav.soon")}
+        />
+      </nav>
+
+      <div className="sidebar-footer">
         <NavItem
           icon={Settings2}
           label={t("setup.settingsTitle")}
@@ -97,28 +108,6 @@ export default function Sidebar(props: Props) {
           collapsed={props.collapsed}
           onClick={props.onSettings}
         />
-      </nav>
-
-      <div className="sidebar-footer">
-        <NavItem
-          icon={props.theme === "light" ? Moon : Sun}
-          label={t("nav.toggleTheme")}
-          collapsed={props.collapsed}
-          onClick={props.onToggleTheme}
-        />
-        <NavItem
-          icon={Languages}
-          label={t("nav.language")}
-          collapsed={props.collapsed}
-          onClick={props.onToggleLocale}
-          badge={props.collapsed ? undefined : props.locale.toUpperCase()}
-        />
-
-        <div className={`sidebar-status ${props.collapsed ? "collapsed" : ""}`} title={props.packwizFound ? t("workspace.ready") : t("workspace.notReady")}>
-          {props.packwizFound ? <CircleCheck size={14} /> : <CircleAlert size={14} />}
-          {!props.collapsed && <span className="truncate">{props.packwizFound ? t("workspace.ready") : t("workspace.notReady")}</span>}
-        </div>
-
         <button
           className="sidebar-item sidebar-collapse"
           onClick={props.onToggleCollapse}

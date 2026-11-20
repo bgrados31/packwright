@@ -29,6 +29,12 @@ pub fn launcher_defaults() -> std::collections::HashMap<String, String> {
 }
 
 #[tauri::command]
+pub fn open_path(path: String) -> Result<()> {
+    tauri_plugin_opener::open_path(path, None::<&str>)
+        .map_err(|e| AppError::Io(format!("Could not open the folder: {e}")))
+}
+
+#[tauri::command]
 pub fn config_set(config: AppConfig) -> Result<AppConfig> {
     config::save(&config)?;
     config::ensure_workspace(&config)?;

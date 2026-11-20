@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { LOCALES, useI18n, type Locale, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig } from "../lib/types";
+import LauncherPicker, { LAUNCHERS } from "./LauncherPicker";
 import Select from "./Select";
 
 type Props = {
@@ -11,13 +12,6 @@ type Props = {
   onCancel?: () => void;
   onLocaleChange: (locale: Locale) => void;
 };
-
-const LAUNCHERS: Array<{ value: string; label: TranslationKey; glyph: string }> = [
-  { value: "atlauncher", label: "launcher.atlauncher", glyph: "A" },
-  { value: "prism", label: "launcher.prism", glyph: "P" },
-  { value: "modrinth", label: "launcher.modrinth", glyph: "M" },
-  { value: "multimc", label: "launcher.multimc", glyph: "Mc" },
-];
 
 const STEPS = ["setup.workspaceTitle", "setup.launcherTitle", "setup.prefsTitle", "setup.reviewTitle"] as const;
 
@@ -47,16 +41,6 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
     } finally {
       setPicking(null);
     }
-  };
-
-  const toggleLauncher = (value: string) => {
-    const active = draft.launchers.includes(value);
-    const launchers = active
-      ? draft.launchers.filter((item) => item !== value)
-      : [...draft.launchers, value];
-    const paths = { ...draft.launcher_paths };
-    if (!active && !paths[value] && defaults[value]) paths[value] = defaults[value];
-    patch({ launchers, launcher_paths: paths });
   };
 
   const changeLocale = (next: Locale) => {
@@ -125,55 +109,16 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
           {step === 1 && (
             <div className="mt-5">
               <p className="text-[13px] leading-6 text-muted">{t("setup.launcherBody")}</p>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {LAUNCHERS.map((launcher) => {
-                  const active = draft.launchers.includes(launcher.value);
-                  return (
-                    <button
-                      key={launcher.value}
-                      className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
-                        active
-                          ? "border-accent bg-accent-soft"
-                          : "border-line bg-surface hover:border-accent/40"
-                      }`}
-                      onClick={() => toggleLauncher(launcher.value)}
-                    >
-                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-semibold ${active ? "bg-accent text-white" : "bg-subtle text-muted"}`}>
-                        {launcher.glyph}
-                      </span>
-                      <span className="text-sm font-medium">{t(launcher.label)}</span>
-                      <span className={`ml-auto h-2 w-2 rounded-full ${active ? "bg-accent" : "border border-line"}`} />
-                    </button>
-                  );
-                })}
+              <div className="mt-5">
+                <LauncherPicker
+                  launchers={draft.launchers}
+                  paths={draft.launcher_paths}
+                  defaults={defaults}
+                  onChange={(launchers, paths) => patch({ launchers, launcher_paths: paths })}
+                  onBrowse={(key) => void pickFolder(key)}
+                  picking={picking}
+                />
               </div>
-
-              {draft.launchers.length > 0 && (
-                <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5">
-                  {draft.launchers.map((value) => {
-                    const meta = LAUNCHERS.find((item) => item.value === value);
-                    return (
-                      <div key={value} className="flex flex-col gap-1.5">
-                        <span className="text-xs text-muted">
-                          {t("setup.launcherPath", { name: meta ? t(meta.label) : value })}
-                          {defaults[value] && <span className="ml-2 text-[10px] text-accent">· {t("setup.detected")}</span>}
-                        </span>
-                        <div className="flex gap-2">
-                          <input
-                            className="field font-mono text-xs"
-                            value={draft.launcher_paths[value] ?? ""}
-                            onChange={(event) => patch({ launcher_paths: { ...draft.launcher_paths, [value]: event.target.value } })}
-                            spellCheck={false}
-                          />
-                          <button className="btn btn-secondary shrink-0" onClick={() => void pickFolder(value)} disabled={picking !== null}>
-                            {picking === value ? "…" : t("setup.browse")}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
 

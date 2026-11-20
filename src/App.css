@@ -97,6 +97,7 @@
 .sidebar-item:hover { background: var(--pw-subtle); color: var(--pw-ink); }
 .sidebar-item.active { background: var(--pw-accent-soft); color: var(--pw-accent); font-weight: 500; }
 .sidebar-item-icon { flex: none; }
+.sidebar-item:disabled { opacity: 0.42; cursor: not-allowed; }
 .sidebar-badge {
   margin-left: auto;
   border-radius: 5px;

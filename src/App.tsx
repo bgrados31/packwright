@@ -10,6 +10,8 @@ import PackEditor from "./components/PackEditor";
 import SetupView from "./components/SetupView";
 import Sidebar, { type SidebarView } from "./components/Sidebar";
 import PacksView from "./components/PacksView";
+import HomeView from "./components/HomeView";
+import SettingsView from "./components/SettingsView";
 import { useI18n } from "./i18n";
 import {
   type AppConfig,
@@ -44,7 +46,7 @@ function errorText(error: unknown): string {
 }
 
 export default function App() {
-  const { t, locale, setLocale } = useI18n();
+  const { t, setLocale } = useI18n();
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("packwright-theme") as "light" | "dark") || "light",
   );
@@ -55,8 +57,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<OpLine[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
   );
@@ -109,7 +110,7 @@ export default function App() {
     try {
       const saved = await invoke<AppConfig>("config_set", { config: next });
       setConfig(saved);
-      setShowSettings(false);
+      if (saved.locale === "en" || saved.locale === "es") setLocale(saved.locale);
       await loadPacks();
     } catch (cause) {
       setError(errorText(cause));
@@ -204,7 +205,7 @@ export default function App() {
         description: form.description,
       });
       setForm(emptyForm);
-      setShowCreate(false);
+      setView("packs");
       await loadPacks();
     } catch (cause) {
       setError(errorText(cause));
@@ -219,6 +220,7 @@ export default function App() {
       const details = await invoke<PackMeta>("meta_get", { dir });
       setFiles(list);
       setSelectedPack(dir);
+      setView("editor");
       setDiagnostics([]);
       setShowHistory(false);
       setMeta(details);
@@ -342,13 +344,7 @@ export default function App() {
   const activePack = packs.find((pack) => pack.dir === selectedPack);
   const availableLoaders = mcVersions.find((version) => version.id === form.minecraft_version)?.loaders ?? [];
 
-  const activeView: SidebarView = showSettings
-    ? "settings"
-    : showCreate
-      ? "create"
-      : selectedPack
-        ? "editor"
-        : "packs";
+  const activeView: SidebarView = selectedPack && view === "editor" ? "editor" : view;
   const inSetup = config === null || !config.setup_complete;
 
   return (
@@ -358,14 +354,9 @@ export default function App() {
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
           active={activeView}
-          onPacks={() => { setSelectedPack(null); setShowCreate(false); setShowSettings(false); }}
-          onCreate={() => { setSelectedPack(null); setShowSettings(false); setShowCreate(true); }}
-          onSettings={() => { setSelectedPack(null); setShowCreate(false); setShowSettings(true); }}
-          theme={theme}
-          onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
-          locale={locale}
-          onToggleLocale={() => setLocale(locale === "en" ? "es" : "en")}
-          packwizFound={Boolean(packwiz?.found)}
+          onHome={() => { setSelectedPack(null); setView("home"); }}
+          onPacks={() => { setSelectedPack(null); setView("packs"); }}
+          onSettings={() => { setSelectedPack(null); setView("settings"); }}
           packsCount={packs.length}
         />
       )}
@@ -387,19 +378,30 @@ export default function App() {
             onSave={(next) => void saveConfig(next)}
             onLocaleChange={setLocale}
           />
-        ) : showSettings ? (
-          <div className="view-enter mx-auto max-w-2xl">
-            <SetupView
+        ) : view === "settings" ? (
+          <div className="view-enter">
+            <SettingsView
               config={config}
-              isSetup={false}
+              theme={theme}
+              onThemeChange={setTheme}
+              packwizFound={Boolean(packwiz?.found)}
               onSave={(next) => void saveConfig(next)}
-              onCancel={() => setShowSettings(false)}
-              onLocaleChange={setLocale}
+              onCancel={() => setView("home")}
             />
           </div>
-        ) : showCreate ? (
+        ) : view === "home" ? (
+          <HomeView
+            packs={packs}
+            workspace={config?.workspace ?? "—"}
+            launchersCount={config?.launchers.length ?? 0}
+            onNew={() => setView("create")}
+            onGoPacks={() => setView("packs")}
+            onOpenPack={(dir) => { setSelectedPack(dir); setView("editor"); }}
+            onOpenWorkspace={() => void invoke("open_path", { path: config?.workspace ?? "" })}
+          />
+        ) : view === "create" ? (
           <div className="view-enter mx-auto max-w-lg">
-            <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setShowCreate(false)}>
+            <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setView("packs")}>
               ← {t("editor.back")}
             </button>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{t("nav.newPack")}</p>
@@ -419,11 +421,11 @@ export default function App() {
               />
             </div>
           </div>
-        ) : selectedPack ? (
+        ) : view === "editor" ? (
           <div className="view-enter">
             <PackEditor
-              packName={activePack?.name ?? selectedPack}
-              dir={selectedPack}
+              packName={activePack?.name ?? selectedPack ?? ""}
+              dir={selectedPack ?? ""}
               version={activePack?.version ?? null}
               minecraftVersion={activePack?.minecraft_version ?? null}
               theme={theme}
@@ -437,7 +439,7 @@ export default function App() {
               meta={meta}
               metaDirty={metaDirty}
               hasIcon={hasIcon}
-              onBack={() => { setSelectedPack(null); setActiveFile(null); }}
+              onBack={() => { setSelectedPack(null); setActiveFile(null); setView("packs"); }}
               onSaveFile={() => void saveFile()}
               onHistory={() => void loadHistory()}
               onRestore={(id) => void restoreVersion(id)}
@@ -449,7 +451,7 @@ export default function App() {
               onGenerateReadme={() => void generateReadme()}
             />
           </div>
-        ) : packs.length === 0 ? (
+        ) : view === "packs" && packs.length === 0 ? (
           <WelcomeView
             form={form}
             onChange={setForm}
@@ -467,7 +469,7 @@ export default function App() {
             workspace={config?.workspace ?? "—"}
             onOpen={(dir) => void openPack(dir)}
             onReveal={(dir) => void reveal(dir)}
-            onNew={() => setShowCreate(true)}
+            onNew={() => setView("create")}
           />
         )}
       </main>
