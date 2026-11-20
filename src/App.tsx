@@ -32,7 +32,6 @@ type OpLine = { id: string; stream: "stdout" | "stderr"; line: string };
 type ErrorInfo = { message: string; kind: string };
 type FileEntry = { path: string; name: string; size: number };
 type Diagnostic = { line: number; column: number; message: string; severity: string };
-
 type HistoryEntry = { id: string; path: string };
 type McVersion = { id: string; kind: string; release_time: string };
 type LoaderVersion = { id: string; stable: boolean };
@@ -142,27 +141,38 @@ function App() {
     };
   }, [loadAll]);
 
-  // Versiones reales de Minecraft (manifest de Mojang, con caché en Rust).
-  useEffect(() => {
-    invoke<McVersion[]>("versions_minecraft", { include_snapshots: false })
-      .then(setMcVersions)
-      .catch(() => setMcVersions([]));
+  const loadMcVersions = useCallback(async () => {
+    try {
+      const list = await invoke<McVersion[]>("versions_minecraft", { include_snapshots: false });
+      setMcVersions(list);
+    } catch {
+      setMcVersions([]);
+    }
   }, []);
 
-  // Versiones del loader compatibles con la MC y el loader elegidos.
-  useEffect(() => {
-    if (!form.minecraft_version || !form.loader) return;
-    let cancelled = false;
+  const loadLoaderVersions = useCallback(async (loader: string, mc: string) => {
+    if (!loader || !mc) return;
     setLoadingVersions(true);
-    invoke<LoaderVersion[]>("versions_loader", {
-      loader: form.loader,
-      mc_version: form.minecraft_version,
-    })
-      .then((list) => { if (!cancelled) setLoaderVersions(list); })
-      .catch(() => { if (!cancelled) setLoaderVersions([]); })
-      .finally(() => { if (!cancelled) setLoadingVersions(false); });
-    return () => { cancelled = true; };
-  }, [form.minecraft_version, form.loader]);
+    try {
+      const list = await invoke<LoaderVersion[]>("versions_loader", { loader, mc_version: mc });
+      setLoaderVersions(list);
+    } catch {
+      setLoaderVersions([]);
+    } finally {
+      setLoadingVersions(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMcVersions(); }, [loadMcVersions]);
+  useEffect(() => {
+    loadLoaderVersions(form.loader, form.minecraft_version);
+  }, [form.loader, form.minecraft_version, loadLoaderVersions]);
+
+  const reloadVersions = async () => {
+    setError(null);
+    await loadMcVersions();
+    await loadLoaderVersions(form.loader, form.minecraft_version);
+  };
 
   const openPack = useCallback(async (dir: string) => {
     try {
@@ -175,7 +185,7 @@ function App() {
       const meta = await invoke<PackMeta>("meta_get", { dir });
       setMetaForm(meta);
       setMetaDirty(false);
-      setHasIcon(await invoke<boolean>("pack_has_icon", { dir, path: meta.icon || "assets/icon.png" }));
+      setHasIcon(await invoke<boolean>("pack_has_icon", { dir, path: meta.icon || ".packwright/assets/icon.png" }));
       const first = list.find((f) => f.path === "pack.toml") ?? list[0];
       if (first) {
         setActiveFile(first.path);
@@ -306,12 +316,10 @@ function App() {
   const useDefaultIcon = async () => {
     if (!selectedPack) return;
     try {
-      const path = await invoke<string>("pack_icon_set_default", { dir: selectedPack });
+      await invoke<string>("pack_icon_set_default", { dir: selectedPack });
       setMetaForm((prev) => prev ? { ...prev, icon: ".packwright/assets/icon.png" } : prev);
       setMetaDirty(true);
       setHasIcon(await invoke<boolean>("pack_has_icon", { dir: selectedPack, path: ".packwright/assets/icon.png" }));
-      // la ruta devuelta es solo informativa; el valor canónico es relativo al pack
-      void path;
     } catch (err) {
       setError(errorText(err));
     }
@@ -352,8 +360,11 @@ function App() {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pack-mc" className="text-xs font-medium text-muted">
-            Minecraft {mcVersions.length > 0 && <span className="font-normal">· {mcVersions.length} versiones</span>}
+          <label htmlFor="pack-mc" className="flex items-center justify-between text-xs font-medium text-muted">
+            <span>Minecraft {mcVersions.length > 0 && <span className="font-normal">· {mcVersions.length}</span>}</span>
+            <button type="button" className="text-[10px] font-normal text-accent hover:underline" onClick={reloadVersions}>
+              Recargar
+            </button>
           </label>
           {mcVersions.length > 0 ? (
             <select
@@ -366,9 +377,7 @@ function App() {
               {form.minecraft_version && !mcVersions.some((v) => v.id === form.minecraft_version) && (
                 <option value={form.minecraft_version}>{form.minecraft_version} (actual)</option>
               )}
-              {mcVersions.map((v) => (
-                <option key={v.id} value={v.id}>{v.id}</option>
-              ))}
+              {mcVersions.map((v) => <option key={v.id} value={v.id}>{v.id}</option>)}
             </select>
           ) : (
             <input
@@ -387,7 +396,7 @@ function App() {
             id="pack-loader"
             className="field"
             value={form.loader}
-            onChange={(e) => setForm({ ...form, loader: e.target.value })}
+            onChange={(e) => setForm({ ...form, loader: e.target.value, loader_version: "" })}
           >
             {LOADERS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
@@ -413,7 +422,10 @@ function App() {
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted" htmlFor="pack-lv">Versión del loader</label>
+            <label className="text-xs text-muted" htmlFor="pack-lv">
+              Versión del loader {loaderVersions.length > 0 && <span className="font-normal">· {loaderVersions.length}</span>}
+              {loadingVersions && <span className="ml-1 font-normal">cargando…</span>}
+            </label>
             {loaderVersions.length > 0 ? (
               <select
                 id="pack-lv"
@@ -486,7 +498,6 @@ function App() {
       )}
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        {/* Primera apertura: pantalla limpia y centrada */}
         {!showCreate && !selectedPack && packs.length === 0 ? (
           <div className="mx-auto max-w-lg py-8">
             <div className="text-center">
@@ -547,84 +558,78 @@ function App() {
             </div>
 
             {editorTab === "files" ? (
-            <div className="card mt-6 overflow-hidden">
-              <div className="grid grid-cols-[210px_1fr]">
-                <aside className="max-h-[600px] overflow-auto border-r border-line p-2">
-                  <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">Archivos</div>
-                  {files.map((f) => (
-                    <button
-                      key={f.path}
-                      className={`file-row ${f.path === activeFile ? "active" : ""}`}
-                      onClick={() => openFile(f.path)}
-                      title={f.path}
-                    >
-                      {f.path}
-                    </button>
-                  ))}
-                </aside>
+              <div className="card mt-6 overflow-hidden">
+                <div className="grid grid-cols-[210px_1fr]">
+                  <aside className="max-h-[600px] overflow-auto border-r border-line p-2">
+                    <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">Archivos</div>
+                    {files.map((f) => (
+                      <button
+                        key={f.path}
+                        className={`file-row ${f.path === activeFile ? "active" : ""}`}
+                        onClick={() => openFile(f.path)}
+                        title={f.path}
+                      >
+                        {f.path}
+                      </button>
+                    ))}
+                  </aside>
 
-                <div className="min-w-0">
-                  <div className="flex h-10 items-center justify-between border-b border-line px-4 text-xs">
-                    <span className="font-mono text-muted">{activeFile ?? "—"}</span>
-                    <div className="flex items-center gap-3">
-                      {dirty && <span className="text-muted">Sin guardar</span>}
-                      {diagnostics.length > 0 ? (
-                        <span className="text-bad">{diagnostics.length} error(es)</span>
-                      ) : (
-                        <span className="text-ok">Sin errores</span>
-                      )}
+                  <div className="min-w-0">
+                    <div className="flex h-10 items-center justify-between border-b border-line px-4 text-xs">
+                      <span className="font-mono text-muted">{activeFile ?? "—"}</span>
+                      <div className="flex items-center gap-3">
+                        {dirty && <span className="text-muted">Sin guardar</span>}
+                        {diagnostics.length > 0 ? (
+                          <span className="text-bad">{diagnostics.length} error(es)</span>
+                        ) : (
+                          <span className="text-ok">Sin errores</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {showHistory && (
-                    <div className="border-b border-line bg-subtle px-4 py-3">
-                      <div className="mb-2 text-xs font-medium text-muted">Versiones anteriores</div>
-                      <div className="flex flex-wrap gap-2">
-                        {history.length === 0 && <span className="text-xs text-muted">Sin versiones guardadas</span>}
-                        {history.map((h) => (
-                          <button key={h.id} className="btn btn-secondary text-xs" onClick={() => restoreVersion(h.id)}>
-                            {new Date(Number(h.id) * 1000).toLocaleString()}
-                          </button>
+                    {showHistory && (
+                      <div className="border-b border-line bg-subtle px-4 py-3">
+                        <div className="mb-2 text-xs font-medium text-muted">Versiones anteriores</div>
+                        <div className="flex flex-wrap gap-2">
+                          {history.length === 0 && <span className="text-xs text-muted">Sin versiones guardadas</span>}
+                          {history.map((h) => (
+                            <button key={h.id} className="btn btn-secondary text-xs" onClick={() => restoreVersion(h.id)}>
+                              {new Date(Number(h.id) * 1000).toLocaleString()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {diagnostics.length > 0 && (
+                      <div className="border-b border-bad/30 bg-bad/5 px-4 py-2">
+                        {diagnostics.slice(0, 3).map((d, i) => (
+                          <div key={i} className="output-line err">
+                            {d.line}:{d.column} — {d.message.split("\n")[0]}
+                          </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {diagnostics.length > 0 && (
-                    <div className="border-b border-bad/30 bg-bad/5 px-4 py-2">
-                      {diagnostics.slice(0, 3).map((d, i) => (
-                        <div key={i} className="output-line err">
-                          {d.line}:{d.column} — {d.message.split("\n")[0]}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <Suspense
-                    fallback={
-                      <div className="grid h-[520px] place-items-center text-sm text-muted">
-                        Cargando editor…
-                      </div>
-                    }
-                  >
-                    <CodeEditor
-                      theme={theme}
-                      path={activeFile ?? "pack.toml"}
-                      value={content}
-                      diagnostics={diagnostics}
-                      onChange={(value) => { setContent(value); setDirty(true); }}
-                    />
-                  </Suspense>
+                    <Suspense
+                      fallback={<div className="grid h-[520px] place-items-center text-sm text-muted">Cargando editor…</div>}
+                    >
+                      <CodeEditor
+                        theme={theme}
+                        path={activeFile ?? "pack.toml"}
+                        value={content}
+                        diagnostics={diagnostics}
+                        onChange={(value) => { setContent(value); setDirty(true); }}
+                      />
+                    </Suspense>
+                  </div>
                 </div>
               </div>
-            </div>
             ) : (
               <div className="mt-6 grid grid-cols-[1fr_320px] gap-6">
                 <div className="card p-6">
                   <h2 className="text-lg font-semibold">Detalles del pack</h2>
-                  <p className="mt-1 text-sm text-muted">
-                    Esta información aparece al compartir o publicar el modpack.
-                  </p>
+                  <p className="mt-1 text-sm text-muted">Esta información aparece al compartir o publicar el modpack.</p>
                   {metaForm && (
                     <div className="mt-6 flex flex-col gap-4">
                       <label className="flex flex-col gap-1.5">
@@ -692,9 +697,7 @@ function App() {
                         )}
                         {metaForm?.categories.slice(0, 3).map((c) => <span key={c} className="chip">{c}</span>)}
                       </div>
-                      <p className="mt-4 text-xs text-muted">
-                        v{packs.find((p) => p.dir === selectedPack)?.version ?? "—"}
-                      </p>
+                      <p className="mt-4 text-xs text-muted">v{packs.find((p) => p.dir === selectedPack)?.version ?? "—"}</p>
                     </div>
                   </div>
                   <p className="mt-3 text-xs text-muted">
@@ -720,9 +723,7 @@ function App() {
                     <span className="text-xs text-muted">v{pack.version ?? "—"}</span>
                   </div>
                   <h2 className="mt-4 font-medium">{pack.name}</h2>
-                  <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted">
-                    {pack.description || "Sin descripción"}
-                  </p>
+                  <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted">{pack.description || "Sin descripción"}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     <span className="chip">MC {pack.minecraft_version ?? "—"}</span>
                     <span className="chip">{pack.loader ?? "—"}</span>
@@ -748,9 +749,7 @@ function App() {
             </div>
             <div className="max-h-28 overflow-auto">
               {logs.map((log, i) => (
-                <div key={i} className={`output-line ${log.stream === "stderr" ? "err" : ""}`}>
-                  {log.line}
-                </div>
+                <div key={i} className={`output-line ${log.stream === "stderr" ? "err" : ""}`}>{log.line}</div>
               ))}
             </div>
           </div>

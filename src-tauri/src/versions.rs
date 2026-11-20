@@ -246,6 +246,7 @@ async fn fetch_loader(http: &reqwest::Client, loader: &str, mc: &str) -> Result<
 
 #[tauri::command]
 pub async fn versions_loader(loader: String, mc_version: String) -> Result<Vec<LoaderVersion>> {
+    eprintln!("[versions] peticion loader: {loader}@{mc_version}");
     let key = format!("{loader}@{mc_version}");
 
     {
