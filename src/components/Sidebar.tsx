@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Command,
   LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
@@ -15,6 +16,7 @@ export type SidebarView = "home" | "packs" | "servers" | "instances" | "create" 
 type Props = {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onCommands: () => void;
   active: SidebarView;
   onHome: () => void;
   onPacks: () => void;
@@ -101,6 +103,15 @@ export default function Sidebar(props: Props) {
       </nav>
 
       <div className="sidebar-footer">
+        <button className="sidebar-item" onClick={props.onCommands} title={t("palette.title")}>
+          <Command size={17} strokeWidth={1.8} className="sidebar-item-icon" />
+          {!props.collapsed && (
+            <>
+              <span className="truncate">{t("palette.title")}</span>
+              <span className="sidebar-badge">⌘K</span>
+            </>
+          )}
+        </button>
         <NavItem
           icon={Settings2}
           label={t("setup.settingsTitle")}

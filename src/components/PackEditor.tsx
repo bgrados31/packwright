@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, ImagePlus, Loader2, PackageOpen, Play, Radio, Settings2, Trash2, X } from "lucide-react";
+import { Copy, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Radio, Rocket, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -19,6 +19,8 @@ import PackImage from "./PackImage";
 import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
 import ServeModal from "./ServeModal";
 import DevInstanceModal from "./DevInstanceModal";
+import GitPanel from "./GitPanel";
+import PublishModal from "./PublishModal";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -83,6 +85,8 @@ export default function PackEditor(props: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [serveOpen, setServeOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
+  const [gitOpen, setGitOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -147,6 +151,12 @@ export default function PackEditor(props: Props) {
           <p className="mt-1 font-mono text-xs text-muted">{props.dir}</p>
         </div>
         <div className="flex gap-2">
+          <button className="btn btn-ghost" onClick={() => setPublishOpen(true)} title={t("publish.title")}>
+            <Rocket size={14} /> {t("publish.title")}
+          </button>
+          <button className="btn btn-ghost" onClick={() => setGitOpen(true)} title={t("git.title")}>
+            <GitBranch size={14} /> {t("git.title")}
+          </button>
           <button className="btn btn-ghost" onClick={() => setDevOpen(true)} title={t("dev.title")}>
             <Play size={14} /> {t("dev.title")}
           </button>
@@ -609,6 +619,23 @@ export default function PackEditor(props: Props) {
           </div>
         </div>
       )}
+
+      {publishOpen &&
+        createPortal(
+          <PublishModal
+            dir={props.dir}
+            projectId={props.config.modrinth_project_id ?? ""}
+            hasToken={Boolean(props.config.modrinth_token?.trim())}
+            onClose={() => setPublishOpen(false)}
+          />,
+          document.body,
+        )}
+
+      {gitOpen &&
+        createPortal(
+          <GitPanel dir={props.dir} onClose={() => setGitOpen(false)} />,
+          document.body,
+        )}
 
       {devOpen &&
         createPortal(

@@ -2,6 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import {
+  FileArchive,
+  Globe,
+  House,
+  Layers,
+  LayoutGrid,
+  Moon,
+  PackageOpen,
+  Plus,
+  Settings2,
+  Sun,
+} from "lucide-react";
 import "./App.css";
 
 import CreatePackForm from "./components/CreatePackForm";
@@ -16,6 +28,9 @@ import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
 import DebugConsole from "./components/DebugConsole";
 import ImportModal from "./components/ImportModal";
+import ProfileModal from "./components/ProfileModal";
+import CommandPalette, { type PaletteAction } from "./components/CommandPalette";
+import type { PackProfile } from "./lib/profiles";
 import { useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
@@ -31,6 +46,7 @@ import {
   type OpenFile,
   type ModHistoryItem,
   type ModOperation,
+  type ModVersion,
   type OpLine,
   type PackInfo,
   type PackMeta,
@@ -76,7 +92,7 @@ function fileKey(root: string, path: string): string {
 }
 
 export default function App() {
-  const { t, setLocale } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("packwright-theme") as "light" | "dark") || "light",
   );
@@ -88,6 +104,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [view, setView] = useState<SidebarView>("home");
@@ -216,28 +234,66 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [activeTab?.key, activeTab?.path, activeTab?.content, selectedPack]);
 
-  const createPack = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const createPack = async (event?: React.FormEvent, override?: CreatePackInput): Promise<PackInfo | null> => {
+    event?.preventDefault();
+    const input = override ?? form;
     setBusy(true);
     setError(null);
     try {
-      await invoke<PackInfo>("pack_create", {
-        name: form.name,
-        author: form.author || "Packwright",
-        minecraftVersion: form.minecraft_version,
-        loader: form.loader,
-        loaderVersion: form.loaderVersion,
-        version: form.version,
-        description: form.description,
+      const created = await invoke<PackInfo>("pack_create", {
+        name: input.name,
+        author: input.author || "Packwright",
+        minecraftVersion: input.minecraft_version,
+        loader: input.loader,
+        loaderVersion: input.loaderVersion,
+        version: input.version,
+        description: input.description,
       });
       setForm(emptyForm);
       setView("packs");
       await loadPacks();
+      return created;
     } catch (cause) {
       setError(errorText(cause));
+      return null;
     } finally {
       setBusy(false);
     }
+  };
+
+  const createFromProfile = async (profile: PackProfile) => {
+    setProfileOpen(false);
+    const input: CreatePackInput = {
+      ...emptyForm,
+      name: profile.name,
+      loader: profile.loader,
+      minecraft_version: mcVersions[0]?.id ?? "1.21.1",
+      description: profile.description,
+    };
+    const created = await createPack(undefined, input);
+    if (!created) return;
+    for (const mod of profile.mods) {
+      try {
+        const versions = await invoke<ModVersion[]>("mods_versions", {
+          projectId: mod.id,
+          mcVersion: input.minecraft_version,
+          loader: profile.loader,
+          projectType: "mod",
+        });
+        const chosen = versions.find((version) => version.release_type === "release") ?? versions[0];
+        if (!chosen) continue;
+        await invoke("mods_add", {
+          dir: created.dir,
+          projectId: mod.id,
+          versionId: chosen.id,
+          id: `profile-${Date.now()}-${mod.id}`,
+        });
+      } catch {
+        // Los mods opcionales del perfil son best-effort.
+      }
+    }
+    await loadPacks();
+    pushToast(t("profiles.created", { name: profile.name }));
   };
 
   const openPack = async (dir: string) => {
@@ -317,6 +373,10 @@ export default function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void saveFile();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -659,6 +719,43 @@ export default function App() {
   const availableLoaders = mcVersions.find((version) => version.id === form.minecraft_version)?.loaders ?? [];
 
   const activeView: SidebarView = selectedPack && view === "editor" ? "editor" : view;
+
+  const paletteActions: PaletteAction[] = [
+    { id: "home", label: t("nav.home"), group: t("palette.groupNavigate"), icon: <House size={14} />, run: () => setView("home") },
+    { id: "packs", label: t("nav.modpacks"), group: t("palette.groupNavigate"), icon: <LayoutGrid size={14} />, run: () => setView("packs") },
+    { id: "settings", label: t("setup.settingsTitle"), group: t("palette.groupNavigate"), icon: <Settings2 size={14} />, run: () => setView("settings") },
+    { id: "new", label: t("nav.newPack"), group: t("palette.groupCreate"), icon: <Plus size={14} />, run: () => setView("create") },
+    { id: "profile", label: t("profiles.start"), group: t("palette.groupCreate"), icon: <Layers size={14} />, run: () => setProfileOpen(true) },
+    { id: "import", label: t("import.title"), group: t("palette.groupCreate"), icon: <FileArchive size={14} />, run: () => setImportOpen(true) },
+    {
+      id: "export",
+      label: t("export.title"),
+      group: t("palette.groupPack"),
+      icon: <PackageOpen size={14} />,
+      run: () => { if (selectedPack) setExportTarget(selectedPack); },
+    },
+    {
+      id: "editor",
+      label: t("editor.files"),
+      group: t("palette.groupPack"),
+      icon: <LayoutGrid size={14} />,
+      run: () => { if (selectedPack) setView("editor"); },
+    },
+    {
+      id: "theme",
+      label: t("settings.theme"),
+      group: t("palette.groupPreferences"),
+      icon: theme === "dark" ? <Sun size={14} /> : <Moon size={14} />,
+      run: () => setTheme(theme === "dark" ? "light" : "dark"),
+    },
+    {
+      id: "language",
+      label: t("setup.language"),
+      group: t("palette.groupPreferences"),
+      icon: <Globe size={14} />,
+      run: () => setLocale(locale === "en" ? "es" : "en"),
+    },
+  ];
   const inSetup = config === null || !config.setup_complete;
 
   return (
@@ -667,6 +764,7 @@ export default function App() {
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
+          onCommands={() => setPaletteOpen(true)}
           active={activeView}
           onHome={() => { setSelectedPack(null); setView("home"); }}
           onPacks={() => { setSelectedPack(null); setView("packs"); }}
@@ -715,9 +813,14 @@ export default function App() {
           />
         ) : view === "create" ? (
           <div className="view-enter mx-auto max-w-lg">
-            <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setView("packs")}>
-              ← {t("editor.back")}
-            </button>
+            <div className="mb-5 flex items-center justify-between">
+              <button className="text-sm text-muted hover:text-ink" onClick={() => setView("packs")}>
+                ← {t("editor.back")}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setProfileOpen(true)}>
+                <Layers size={14} /> {t("profiles.start")}
+              </button>
+            </div>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{t("nav.newPack")}</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t("welcome.cardTitle")}</h1>
             <p className="mt-1 text-sm text-muted">{t("welcome.cardSubtitle")}</p>
@@ -830,6 +933,15 @@ export default function App() {
           document.body,
         )}
 
+      {profileOpen &&
+        createPortal(
+          <ProfileModal
+            onClose={() => setProfileOpen(false)}
+            onPick={(profile) => void createFromProfile(profile)}
+          />,
+          document.body,
+        )}
+
       {importOpen &&
         createPortal(
           <ImportModal
@@ -841,6 +953,10 @@ export default function App() {
           />,
           document.body,
         )}
+
+      {paletteOpen && (
+        <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />
+      )}
 
       <Toasts items={toasts} onDismiss={dismissToast} />
       {config?.debug_console && (

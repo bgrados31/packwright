@@ -225,6 +225,30 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
             />
             <p className="mt-1.5 pl-7 text-[11px] text-muted">{t("settings.debugConsoleHint")}</p>
           </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-line pt-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">{t("settings.modrinthToken")}</span>
+              <input
+                className="field font-mono text-xs"
+                type="password"
+                value={draft.modrinth_token ?? ""}
+                onChange={(event) => patch({ modrinth_token: event.target.value })}
+                placeholder="••••••••"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">{t("settings.modrinthProject")}</span>
+              <input
+                className="field font-mono text-xs"
+                value={draft.modrinth_project_id ?? ""}
+                onChange={(event) => patch({ modrinth_project_id: event.target.value })}
+                placeholder="Project ID"
+                spellCheck={false}
+              />
+            </div>
+          </div>
         </Section>
 
         <Section index="06" title={t("settings.about")}>

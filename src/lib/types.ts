@@ -30,6 +30,8 @@ export type AppConfig = {
   editor_word_wrap: boolean;
   editor_roots: string[];
   debug_console: boolean;
+  modrinth_token: string;
+  modrinth_project_id: string;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };

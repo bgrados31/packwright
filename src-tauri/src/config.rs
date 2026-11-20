@@ -45,6 +45,11 @@ pub struct AppConfig {
     /// Muestra la consola flotante de operaciones (modo debug).
     #[serde(default)]
     pub debug_console: bool,
+    /// Credenciales para publicar en Modrinth.
+    #[serde(default)]
+    pub modrinth_token: String,
+    #[serde(default)]
+    pub modrinth_project_id: String,
 }
 
 fn default_tab_size() -> u32 { 2 }
@@ -93,6 +98,8 @@ impl Default for AppConfig {
             editor_word_wrap: default_true(),
             editor_roots: default_editor_roots(),
             debug_console: false,
+            modrinth_token: String::new(),
+            modrinth_project_id: String::new(),
         }
     }
 }

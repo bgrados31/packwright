@@ -31,6 +31,10 @@ pub struct CommandRunner {
 }
 
 impl CommandRunner {
+    pub fn app_handle(&self) -> &AppHandle {
+        &self.app
+    }
+
     pub fn new(app: AppHandle) -> Self {
         Self {
             queue: Arc::new(Mutex::new(())),

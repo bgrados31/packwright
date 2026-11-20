@@ -2,12 +2,14 @@ mod config;
 mod dev;
 mod error;
 mod export;
+mod git;
 mod import;
 mod files;
 mod meta;
 mod mods;
 mod model;
 mod pack;
+mod publish;
 mod serve;
 mod process;
 mod versions;
@@ -61,6 +63,12 @@ pub fn run() {
             dev::dev_launch,
             dev::dev_stop,
             dev::dev_status,
+            git::git_init,
+            git::git_status,
+            git::git_commit,
+            git::git_tag,
+            git::git_changelog,
+            publish::modrinth_publish,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,

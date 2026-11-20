@@ -63,12 +63,12 @@
 - [x] Logs en vivo con detección de errores (marcados como stderr)
 - [x] Launch / restart & rejoin / stop desde la app
 
-## Fase 2 — Calidad y publicación
-- [ ] Git: commit/tag por versión + changelog
-- [ ] Publicación directa a Modrinth (API)
-- [ ] Perfiles base de packs
+## Fase 2 — Calidad y publicación ✅
+- [x] Git: init/status/commit/tag + changelog
+- [x] Publicación directa a Modrinth (token + project ID en Settings)
+- [x] Perfiles base de packs (Performance, Vanilla+, Kitchen sink)
 - [x] i18n ES / EN
-- [ ] Command palette y atajos
+- [x] Command palette (Ctrl/Cmd+K) y atajos
 
 ## Fase 3 — Servidores (el plan original)
 - [ ] Workspace con packs y servidores
