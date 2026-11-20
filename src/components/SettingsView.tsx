@@ -94,7 +94,7 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
                 ]).map((option) => (
                   <button
                     key={option.id}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                       theme === option.id ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface text-muted hover:text-ink"
                     }`}
                     onClick={() => onThemeChange(option.id)}
