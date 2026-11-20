@@ -53,6 +53,7 @@ pub fn run() {
             mods::mods_analyze,
             mods::mods_history,
             mods::mods_history_record,
+            mods::mods_icons,
             mods::mods_add,
             mods::mods_command,
             mods::mods_command_bulk,

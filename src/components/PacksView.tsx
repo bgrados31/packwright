@@ -6,7 +6,6 @@ import {
   Eye,
   FolderOpen,
   LayoutGrid,
-  List,
   Loader2,
   PackageOpen,
   Plus,
@@ -20,6 +19,7 @@ import type { PackInfo } from "../lib/types";
 import MinecraftScene from "./MinecraftScene";
 import PackImage from "./PackImage";
 import Select from "./Select";
+import { ViewToggle } from "./ui";
 
 type Props = {
   packs: PackInfo[];
@@ -138,24 +138,11 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
             ]}
           />
         </div>
-        <div className="view-toggle">
-          <button
-            className={view === "grid" ? "active" : ""}
-            onClick={() => setView("grid")}
-            title={t("packs.viewGrid")}
-            aria-label={t("packs.viewGrid")}
-          >
-            <LayoutGrid size={14} />
-          </button>
-          <button
-            className={view === "list" ? "active" : ""}
-            onClick={() => setView("list")}
-            title={t("packs.viewList")}
-            aria-label={t("packs.viewList")}
-          >
-            <List size={14} />
-          </button>
-        </div>
+        <ViewToggle
+          value={view}
+          onChange={setView}
+          labels={{ grid: t("packs.viewGrid"), list: t("packs.viewList") }}
+        />
       </div>
 
       {/* Filtros por loader */}

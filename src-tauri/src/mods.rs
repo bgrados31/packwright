@@ -655,6 +655,39 @@ pub fn mods_history_record(dir: String, entry: ModHistoryEntry) -> Result<()> {
     Ok(())
 }
 
+/// Iconos de proyectos en una sola llamada (para las tarjetas de instalados).
+#[tauri::command]
+pub async fn mods_icons(project_ids: Vec<String>) -> Result<HashMap<String, String>> {
+    if project_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let ids_json = serde_json::to_string(&project_ids)
+        .map_err(|e| AppError::Parse(format!("Could not build project ids: {e}")))?;
+    let response = http_client()?
+        .get("https://api.modrinth.com/v2/projects")
+        .query(&[("ids", ids_json.as_str())])
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Could not fetch project icons: {e}")))?;
+    if !response.status().is_success() {
+        return Ok(HashMap::new());
+    }
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    Ok(body
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let id = item["id"].as_str()?;
+                    let icon = item["icon_url"].as_str()?;
+                    Some((id.to_string(), icon.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
 #[tauri::command]
 pub fn mods_health(dir: String) -> Result<ModHealth> {
     let mods = list_mods(&pack_root(&dir)?)?;

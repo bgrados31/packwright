@@ -37,8 +37,10 @@ import type {
   ModSearchResult,
   ModVersion,
 } from "../lib/types";
+import { cachedModIcon, loadModIcons } from "../lib/modIcons";
 import { mdLite } from "../lib/markdown";
 import Select from "./Select";
+import { FilterChips, SearchField, Tag, ViewToggle } from "./ui";
 
 type Props = {
   dir: string;
@@ -86,6 +88,23 @@ function messageOf(error: unknown): string {
 
 function releaseChip(type: string) {
   return <span className={`release-badge ${type}`}>{type}</span>;
+}
+
+function InstalledIcon({ mod }: { mod: InstalledMod }) {
+  const url = cachedModIcon(mod.project_id);
+  return (
+    <div className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-subtle text-muted">
+      <Box size={16} />
+      {url && (
+        <img
+          src={url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(event) => { event.currentTarget.style.display = "none"; }}
+        />
+      )}
+    </div>
+  );
 }
 
 /** Ficha de un mod: banner, galería, descripción, versiones agrupadas e instalación. */
@@ -283,7 +302,7 @@ function ModDetail({
                   )}
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {(project?.categories ?? hit.categories).filter((c) => !LOADER_TAGS.has(c)).slice(0, 8).map((category) => (
-                      <span key={category} className="chip">{prettyCategory(category)}</span>
+                      <Tag key={category} seed={category}>{prettyCategory(category)}</Tag>
                     ))}
                   </div>
                   {(hit.client_side === "unsupported" || hit.server_side === "unsupported") && (
@@ -425,7 +444,10 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   const [selected, setSelected] = useState<string[]>([]);
   const [installedQuery, setInstalledQuery] = useState("");
   const [installedFilter, setInstalledFilter] = useState("all");
+  const [installedView, setInstalledView] = useState<"grid" | "list">("grid");
+  const [iconsRevision, setIconsRevision] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const installedSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -444,6 +466,15 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [dir, revision]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = installed.map((mod) => mod.project_id).filter(Boolean) as string[];
+    void loadModIcons(ids).then(() => {
+      if (!cancelled) setIconsRevision((value) => value + 1);
+    });
+    return () => { cancelled = true; };
+  }, [installed]);
 
   useEffect(() => {
     invoke<ModCategory[]>("mods_categories", { projectType })
@@ -495,12 +526,13 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (event.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(tag ?? "")) {
         event.preventDefault();
-        searchRef.current?.focus();
+        if (tab === "installed") installedSearchRef.current?.focus();
+        else searchRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [tab]);
 
   const installedIds = useMemo(
     () => new Set(installed.map((mod) => mod.project_id).filter(Boolean) as string[]),
@@ -830,10 +862,10 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5 px-4">
                       {hit.categories.filter((c) => !LOADER_TAGS.has(c)).slice(0, 3).map((category) => (
-                        <span key={category} className="chip">{prettyCategory(category)}</span>
+                        <Tag key={category} seed={category}>{prettyCategory(category)}</Tag>
                       ))}
-                      {hit.client_side === "unsupported" && <span className="chip">{t("catalog.server")}</span>}
-                      {hit.server_side === "unsupported" && <span className="chip">{t("catalog.client")}</span>}
+                      {hit.client_side === "unsupported" && <Tag seed="server">{t("catalog.server")}</Tag>}
+                      {hit.server_side === "unsupported" && <Tag seed="client">{t("catalog.client")}</Tag>}
                     </div>
                     <div className="mt-3 flex items-center gap-3 border-t border-line px-4 py-2.5 text-[11px] text-muted">
                       <span className="inline-flex items-center gap-1"><Download size={11} /> {formatCount(hit.downloads)}</span>
@@ -887,26 +919,29 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
           )}
         </div>
       ) : tab === "installed" ? (
-        <div className="mt-5">
+        <div className="mt-5" data-icons={iconsRevision}>
           <div className="surface-soft flex flex-wrap items-center gap-2.5 p-2.5">
-            <div className="relative min-w-[200px] flex-1">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input
-                className="field field-icon"
-                value={installedQuery}
-                onChange={(event) => setInstalledQuery(event.target.value)}
-                placeholder={t("mods.searchInstalled")}
-              />
-            </div>
-            {([
-              ["all", t("packs.filterAll")],
-              ["pinned", t("mods.pinnedOnly")],
-              ["manual", t("mods.manualOnly")],
-            ] as const).map(([id, label]) => (
-              <button key={id} className={`filter-chip ${installedFilter === id ? "active" : ""}`} onClick={() => setInstalledFilter(id)}>
-                {label}
-              </button>
-            ))}
+            <SearchField
+              className="min-w-[200px] flex-1"
+              value={installedQuery}
+              onChange={setInstalledQuery}
+              placeholder={t("mods.searchInstalled")}
+              inputRef={installedSearchRef}
+            />
+            <FilterChips
+              value={installedFilter}
+              onChange={setInstalledFilter}
+              options={[
+                { value: "all", label: t("packs.filterAll"), count: installed.length },
+                { value: "pinned", label: t("mods.pinnedOnly"), count: installed.filter((mod) => mod.pinned).length },
+                { value: "manual", label: t("mods.manualOnly"), count: installed.filter((mod) => mod.source === "manual").length },
+              ]}
+            />
+            <ViewToggle
+              value={installedView}
+              onChange={setInstalledView}
+              labels={{ grid: t("packs.viewGrid"), list: t("packs.viewList") }}
+            />
           </div>
 
           <div className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5 ${selected.length ? "border-accent/40 bg-accent-soft" : "border-line bg-surface"}`}>
@@ -952,15 +987,38 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                 <button className="btn btn-primary mt-5" onClick={() => setTab("discover")}><Search size={14} /> {t("mods.discover")}</button>
               </div>
             </div>
+          ) : installedView === "list" ? (
+            <div className="card mt-5 divide-y divide-line overflow-hidden">
+              {visibleInstalled.map((mod) => (
+                <div key={mod.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-subtle">
+                  <input type="checkbox" className="accent-accent" checked={selected.includes(mod.id)} onChange={() => toggle(mod.id)} aria-label={t("mods.selectAll")} />
+                  <InstalledIcon mod={mod} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-[13px] font-medium">
+                      {mod.name}
+                      {mod.pinned && <Pin size={10} className="shrink-0 text-accent" />}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-muted">{mod.filename || mod.id}</p>
+                  </div>
+                  <Tag seed={mod.side}>{mod.side}</Tag>
+                  <Tag seed={mod.source}>{mod.source}</Tag>
+                  <div className="flex shrink-0 gap-1">
+                    <button className="btn btn-ghost px-2" onClick={() => run(mod.pinned ? "unpin" : "pin", mod)} title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}>
+                      {mod.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+                    </button>
+                    <button className="btn btn-ghost px-2" onClick={() => run("update", mod)} title={t("mods.action.update")}><RefreshCw size={13} /></button>
+                    <button className="btn btn-ghost btn-danger px-2" onClick={() => run("remove", mod)} title={t("mods.action.remove")}><Trash2 size={13} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-3">
               {visibleInstalled.map((mod) => (
                 <article key={mod.id} className="card mod-installed-card stagger">
                   <div className="flex items-start gap-3 p-4">
                     <input type="checkbox" className="mt-1 accent-accent" checked={selected.includes(mod.id)} onChange={() => toggle(mod.id)} aria-label={t("mods.selectAll")} />
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-subtle text-muted">
-                      <Box size={16} />
-                    </div>
+                    <InstalledIcon mod={mod} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="truncate text-[13px] font-semibold">{mod.name}</h3>
@@ -970,9 +1028,9 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5 px-4">
-                    <span className="chip">{mod.side}</span>
-                    <span className="chip">{mod.source}</span>
-                    {mod.optional && <span className="chip">{t("mods.optional")}</span>}
+                    <Tag seed={mod.side}>{mod.side}</Tag>
+                    <Tag seed={mod.source}>{mod.source}</Tag>
+                    {mod.optional && <Tag seed="optional">{t("mods.optional")}</Tag>}
                   </div>
                   <div className="mt-3 flex items-center gap-1.5 border-t border-line px-3 py-2.5">
                     <button className="btn btn-ghost px-2" onClick={() => run(mod.pinned ? "unpin" : "pin", mod)} title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}>
