@@ -46,6 +46,7 @@ pub fn run() {
             export::pack_export,
             mods::mods_search,
             mods::mods_project,
+            mods::mods_categories,
             mods::mods_versions,
             mods::mods_list,
             mods::mods_health,

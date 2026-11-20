@@ -81,6 +81,18 @@ export type ModSearchHit = {
   categories: string[];
 };
 
+export type ModSearchResult = {
+  hits: ModSearchHit[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ModCategory = {
+  name: string;
+  header: string;
+};
+
 export type ModProject = {
   name: string;
   description: string;

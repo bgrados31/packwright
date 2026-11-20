@@ -25,12 +25,15 @@ import {
 import { useI18n, type TranslationKey } from "../i18n";
 import type {
   InstalledMod,
+  ModCategory,
   ModHealth,
   ModOperation,
   ModProject,
   ModSearchHit,
+  ModSearchResult,
   ModVersion,
 } from "../lib/types";
+import { mdLite } from "../lib/markdown";
 import Select from "./Select";
 
 type Props = {
@@ -237,7 +240,7 @@ function ModDetail({
               {section === "description" ? (
                 <div className="mod-detail-section">
                   {project?.body ? (
-                    <p className="whitespace-pre-line text-[12px] leading-6 text-muted">{project.body.slice(0, 2200)}</p>
+                    <div className="md-body" dangerouslySetInnerHTML={{ __html: mdLite(project.body) }} />
                   ) : (
                     <p className="text-[12px] text-muted">{project?.description || hit.description}</p>
                   )}
@@ -332,8 +335,13 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("relevance");
   const [environment, setEnvironment] = useState("any");
-  const [category, setCategory] = useState("all");
   const [hits, setHits] = useState<ModSearchHit[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [categories, setCategories] = useState<ModCategory[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModSearchHit | null>(null);
@@ -354,22 +362,35 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   }, [dir, revision]);
 
   useEffect(() => {
+    invoke<ModCategory[]>("mods_categories", { projectType: "mod" })
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, []);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [query, sort, environment, selectedCategories, minecraftVersion, loader]);
+
+  useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(async () => {
       setSearching(true);
       setSearchError(null);
       try {
-        let result = await invoke<ModSearchHit[]>("mods_search", {
+        const result = await invoke<ModSearchResult>("mods_search", {
           query,
           mcVersion: minecraftVersion,
           loader,
+          sort,
+          categories: selectedCategories,
+          environment,
+          limit: 24,
+          offset,
         });
-        if (environment === "client") result = result.filter((hit) => hit.server_side === "unsupported");
-        if (environment === "server") result = result.filter((hit) => hit.client_side === "unsupported");
-        if (sort === "downloads") result = [...result].sort((a, b) => b.downloads - a.downloads);
-        if (sort === "follows") result = [...result].sort((a, b) => b.follows - a.follows);
-        if (sort === "newest") result = [...result].sort((a, b) => b.date_modified.localeCompare(a.date_modified));
-        if (!cancelled) setHits(result);
+        if (!cancelled) {
+          setHits(result.hits);
+          setTotal(result.total);
+        }
       } catch (cause) {
         if (!cancelled) setSearchError(messageOf(cause));
       } finally {
@@ -377,7 +398,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
       }
     }, query ? 300 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query, sort, environment, minecraftVersion, loader]);
+  }, [query, sort, environment, selectedCategories, offset, minecraftVersion, loader]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -396,18 +417,19 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
     [installed],
   );
 
-  const categories = useMemo(() => {
-    const counts = new Map<string, number>();
-    hits.forEach((hit) => hit.categories.forEach((value) => {
-      if (!LOADER_TAGS.has(value)) counts.set(value, (counts.get(value) ?? 0) + 1);
-    }));
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
-  }, [hits]);
+  const filteredCategories = useMemo(() => {
+    const needle = categoryQuery.trim().toLowerCase();
+    if (!needle) return categories;
+    return categories.filter((item) => item.name.toLowerCase().includes(needle));
+  }, [categories, categoryQuery]);
 
-  const visibleHits = useMemo(
-    () => (category === "all" ? hits : hits.filter((hit) => hit.categories.includes(category))),
-    [hits, category],
-  );
+  const pageCount = Math.max(1, Math.ceil(total / 24));
+  const currentPage = Math.floor(offset / 24) + 1;
+
+  const toggleCategory = (name: string) =>
+    setSelectedCategories((current) =>
+      current.includes(name) ? current.filter((value) => value !== name) : [...current, name],
+    );
 
   const visibleInstalled = useMemo(() => {
     const needle = installedQuery.trim().toLowerCase();
@@ -531,19 +553,74 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                 {label}
               </button>
             ))}
+            <button
+              className={`filter-chip ${filtersOpen ? "active" : ""}`}
+              onClick={() => setFiltersOpen((value) => !value)}
+            >
+              <ChevronDown size={12} /> {t("mods.filters")}
+              {selectedCategories.length > 0 && <span className="filter-count">{selectedCategories.length}</span>}
+            </button>
             <span className="ml-auto font-mono text-[10px] text-muted">
-              {searching ? t("mods.searching") : t("catalog.results", { count: visibleHits.length })}
+              {searching ? t("mods.searching") : t("catalog.results", { count: total })}
             </span>
           </div>
 
-          {categories.length > 0 && (
+          {filtersOpen && (
+            <div className="card mt-2 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xs font-semibold">{t("mods.categories")}</h3>
+                {(selectedCategories.length > 0 || query || environment !== "any") && (
+                  <button
+                    className="btn btn-quiet text-[10px]"
+                    onClick={() => {
+                      setSelectedCategories([]);
+                      setQuery("");
+                      setEnvironment("any");
+                    }}
+                  >
+                    <X size={11} /> {t("mods.clearFilters")}
+                  </button>
+                )}
+              </div>
+              <div className="relative mt-3">
+                <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  className="field field-icon"
+                  value={categoryQuery}
+                  onChange={(event) => setCategoryQuery(event.target.value)}
+                  placeholder={t("mods.categorySearch")}
+                />
+              </div>
+              <div className="mt-3 grid max-h-56 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
+                {filteredCategories.map((item) => {
+                  const active = selectedCategories.includes(item.name);
+                  return (
+                    <button
+                      key={item.name}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] transition ${
+                        active ? "bg-accent-soft text-accent" : "text-muted hover:bg-subtle hover:text-ink"
+                      }`}
+                      onClick={() => toggleCategory(item.name)}
+                    >
+                      <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded border ${active ? "border-accent bg-accent text-white" : "border-line"}`}>
+                        {active && <Check size={10} strokeWidth={3} />}
+                      </span>
+                      <span className="truncate">{prettyCategory(item.name)}</span>
+                    </button>
+                  );
+                })}
+                {filteredCategories.length === 0 && (
+                  <p className="col-span-full py-4 text-center text-[11px] text-muted">{t("mods.noCategories")}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {selectedCategories.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <button className={`filter-chip ${category === "all" ? "active" : ""}`} onClick={() => setCategory("all")}>
-                {t("packs.filterAll")}
-              </button>
-              {categories.map(([name, count]) => (
-                <button key={name} className={`filter-chip ${category === name ? "active" : ""}`} onClick={() => setCategory(name)}>
-                  {prettyCategory(name)} <span className="filter-count">{count}</span>
+              {selectedCategories.map((name) => (
+                <button key={name} className="filter-chip active" onClick={() => toggleCategory(name)}>
+                  {prettyCategory(name)} <X size={10} />
                 </button>
               ))}
             </div>
@@ -564,7 +641,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
             </div>
           ) : (
             <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-              {visibleHits.map((hit) => {
+              {hits.map((hit) => {
                 const isInstalled = installedIds.has(hit.project_id);
                 const banner = hit.featured_gallery ?? hit.gallery?.[0] ?? null;
                 return (
@@ -613,6 +690,46 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                   </article>
                 );
               })}
+            </div>
+          )}
+
+          {!searching && total > 0 && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                className="btn btn-secondary"
+                disabled={offset === 0}
+                onClick={() => setOffset((value) => Math.max(0, value - 24))}
+              >
+                <ChevronLeft size={14} /> {t("mods.prev")}
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, pageCount) }, (_, index) => {
+                  let page = index + 1;
+                  if (pageCount > 5) {
+                    if (currentPage > 3) page = Math.min(pageCount - 4, currentPage - 2) + index;
+                  }
+                  return (
+                    <button
+                      key={page}
+                      className={`pagination-page ${page === currentPage ? "active" : ""}`}
+                      onClick={() => setOffset((page - 1) * 24)}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                {pageCount > 5 && currentPage < pageCount - 2 && <span className="px-1 text-muted">…</span>}
+              </div>
+              <button
+                className="btn btn-secondary"
+                disabled={offset + 24 >= total}
+                onClick={() => setOffset((value) => value + 24)}
+              >
+                {t("mods.next")} <ChevronRight size={14} />
+              </button>
+              <span className="font-mono text-[10px] text-muted">
+                {t("mods.pageOf", { page: currentPage, pages: pageCount })}
+              </span>
             </div>
           )}
         </div>

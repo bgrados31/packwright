@@ -47,6 +47,20 @@ pub struct ModProject {
 }
 
 #[derive(Debug, Serialize)]
+pub struct ModSearchResult {
+    pub hits: Vec<ModSearchHit>,
+    pub total: u64,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModCategory {
+    pub name: String,
+    pub header: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ModVersion {
     pub id: String,
     pub name: String,
@@ -126,7 +140,12 @@ pub async fn mods_search(
     query: String,
     mc_version: Option<String>,
     loader: Option<String>,
-) -> Result<Vec<ModSearchHit>> {
+    sort: Option<String>,
+    categories: Option<Vec<String>>,
+    environment: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<ModSearchResult> {
     let mut facets: Vec<Vec<String>> = vec![vec!["project_type:mod".to_string()]];
     if let Some(version) = mc_version.filter(|value| !value.is_empty()) {
         facets.push(vec![format!("versions:{version}")]);
@@ -134,14 +153,40 @@ pub async fn mods_search(
     if let Some(loader) = loader.filter(|value| !value.is_empty()) {
         facets.push(vec![format!("categories:{loader}")]);
     }
+    match environment.as_deref() {
+        Some("client") => facets.push(vec![
+            "client_side:required".to_string(),
+            "client_side:optional".to_string(),
+        ]),
+        Some("server") => facets.push(vec![
+            "server_side:required".to_string(),
+            "server_side:optional".to_string(),
+        ]),
+        _ => {}
+    }
+    if let Some(selected) = categories.filter(|values| !values.is_empty()) {
+        facets.push(
+            selected
+                .into_iter()
+                .map(|category| format!("categories:{category}"))
+                .collect(),
+        );
+    }
     let facets_json = serde_json::to_string(&facets)
         .map_err(|e| AppError::Parse(format!("Could not build search facets: {e}")))?;
+
+    let index = sort.filter(|value| ["relevance", "downloads", "follows", "newest", "updated"].contains(&value.as_str()))
+        .unwrap_or_else(|| "relevance".to_string());
+    let page_limit = limit.unwrap_or(24).clamp(1, 48);
+    let page_offset = offset.unwrap_or(0);
 
     let response = http_client()?
         .get("https://api.modrinth.com/v2/search")
         .query(&[
             ("query", query.as_str()),
-            ("limit", "24"),
+            ("index", index.as_str()),
+            ("limit", &page_limit.to_string()),
+            ("offset", &page_offset.to_string()),
             ("facets", facets_json.as_str()),
         ])
         .send()
@@ -162,8 +207,10 @@ pub async fn mods_search(
         .get("hits")
         .and_then(|value| value.as_array())
         .ok_or_else(|| AppError::Parse("Modrinth response has no hits".into()))?;
+    let total = body["total_hits"].as_u64().unwrap_or(hits.len() as u64);
 
-    Ok(hits
+    Ok(ModSearchResult {
+        hits: hits
         .iter()
         .map(|hit| ModSearchHit {
             project_id: hit["project_id"].as_str().unwrap_or("").to_string(),
@@ -181,7 +228,57 @@ pub async fn mods_search(
             server_side: hit["server_side"].as_str().unwrap_or("").to_string(),
             categories: strings(hit, "categories"),
         })
-        .collect())
+        .collect(),
+        total,
+        limit: page_limit,
+        offset: page_offset,
+    })
+}
+
+/// Categorías reales de Modrinth (no derivadas de la página actual).
+#[tauri::command]
+pub async fn mods_categories(project_type: Option<String>) -> Result<Vec<ModCategory>> {
+    let kind = project_type.unwrap_or_else(|| "mod".to_string());
+    let response = http_client()?
+        .get("https://api.modrinth.com/v2/tag/category")
+        .query(&[("project_type", kind.as_str())])
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Could not fetch categories: {e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::Process(format!(
+            "Modrinth categories returned HTTP {}",
+            response.status()
+        )));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Parse(format!("Invalid categories response: {e}")))?;
+    let excluded = [
+        "forge", "fabric", "neoforge", "quilt", "liteloader", "bukkit",
+        "spigot", "paper", "purpur", "folia", "velocity", "bungeecord",
+        "waterfall", "sponge", "rift", "modloader", "minecraft",
+    ];
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    if let Some(items) = body.as_array() {
+        for item in items {
+            let name = item["name"].as_str().unwrap_or("");
+            if name.is_empty() || excluded.contains(&name.to_ascii_lowercase().as_str()) {
+                continue;
+            }
+            if !seen.insert(name.to_ascii_lowercase()) {
+                continue;
+            }
+            result.push(ModCategory {
+                name: name.to_string(),
+                header: item["header"].as_str().unwrap_or("").to_string(),
+            });
+        }
+    }
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(result)
 }
 
 /// Versiones compatibles de un proyecto de Modrinth.

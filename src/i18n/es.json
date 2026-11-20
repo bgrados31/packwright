@@ -148,6 +148,14 @@
   "mods.envAny": "Cualquiera",
   "mods.envClient": "Cliente",
   "mods.envServer": "Servidor",
+  "mods.filters": "Filtros",
+  "mods.categories": "Categorías",
+  "mods.clearFilters": "Limpiar filtros",
+  "mods.categorySearch": "Buscar categorías…",
+  "mods.noCategories": "No hay categorías coincidentes",
+  "mods.prev": "Anterior",
+  "mods.next": "Siguiente",
+  "mods.pageOf": "Página {page} de {pages}",
 
   "output.empty": "Esperando operaciones…",
 
