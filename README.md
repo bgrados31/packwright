@@ -43,6 +43,8 @@ Packwright une las dos mitades: **lo que instalas en el cliente y lo que corres 
 
 ### Modpacks
 - Crear/editar packs packwiz (`pack.toml`, versión de Minecraft y loader).
+- Versiones reales de Minecraft desde el manifest de Mojang y del loader (Fabric API, Maven de Forge/NeoForge y API de Purpur), con caché local para trabajar offline.
+- Metadatos profesionales (resumen, icono, licencia, categorías, web) y generador de README.
 - Catálogo de Modrinth y CurseForge con búsqueda, filtros y detalle de versiones.
 - Instalar, actualizar, fijar (pin) y quitar mods.
 - Health checks: duplicados, dependencias faltantes, conflictos de versión.

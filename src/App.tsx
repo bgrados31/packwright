@@ -34,6 +34,8 @@ type FileEntry = { path: string; name: string; size: number };
 type Diagnostic = { line: number; column: number; message: string; severity: string };
 
 type HistoryEntry = { id: string; path: string };
+type McVersion = { id: string; kind: string; release_time: string };
+type LoaderVersion = { id: string; stable: boolean };
 type PackMeta = {
   summary: string;
   license: string;
@@ -103,6 +105,9 @@ function App() {
   const [metaForm, setMetaForm] = useState<PackMeta | null>(null);
   const [metaDirty, setMetaDirty] = useState(false);
   const [hasIcon, setHasIcon] = useState(false);
+  const [mcVersions, setMcVersions] = useState<McVersion[]>([]);
+  const [loaderVersions, setLoaderVersions] = useState<LoaderVersion[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -136,6 +141,28 @@ function App() {
       unlisteners.forEach((fn) => fn());
     };
   }, [loadAll]);
+
+  // Versiones reales de Minecraft (manifest de Mojang, con caché en Rust).
+  useEffect(() => {
+    invoke<McVersion[]>("versions_minecraft", { include_snapshots: false })
+      .then(setMcVersions)
+      .catch(() => setMcVersions([]));
+  }, []);
+
+  // Versiones del loader compatibles con la MC y el loader elegidos.
+  useEffect(() => {
+    if (!form.minecraft_version || !form.loader) return;
+    let cancelled = false;
+    setLoadingVersions(true);
+    invoke<LoaderVersion[]>("versions_loader", {
+      loader: form.loader,
+      mc_version: form.minecraft_version,
+    })
+      .then((list) => { if (!cancelled) setLoaderVersions(list); })
+      .catch(() => { if (!cancelled) setLoaderVersions([]); })
+      .finally(() => { if (!cancelled) setLoadingVersions(false); });
+    return () => { cancelled = true; };
+  }, [form.minecraft_version, form.loader]);
 
   const openPack = useCallback(async (dir: string) => {
     try {
@@ -325,14 +352,34 @@ function App() {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pack-mc" className="text-xs font-medium text-muted">Minecraft</label>
-          <input
-            id="pack-mc"
-            className="field"
-            value={form.minecraft_version}
-            onChange={(e) => setForm({ ...form, minecraft_version: e.target.value })}
-            required
-          />
+          <label htmlFor="pack-mc" className="text-xs font-medium text-muted">
+            Minecraft {mcVersions.length > 0 && <span className="font-normal">· {mcVersions.length} versiones</span>}
+          </label>
+          {mcVersions.length > 0 ? (
+            <select
+              id="pack-mc"
+              className="field"
+              value={form.minecraft_version}
+              onChange={(e) => setForm({ ...form, minecraft_version: e.target.value, loader_version: "" })}
+              required
+            >
+              {form.minecraft_version && !mcVersions.some((v) => v.id === form.minecraft_version) && (
+                <option value={form.minecraft_version}>{form.minecraft_version} (actual)</option>
+              )}
+              {mcVersions.map((v) => (
+                <option key={v.id} value={v.id}>{v.id}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="pack-mc"
+              className="field"
+              value={form.minecraft_version}
+              onChange={(e) => setForm({ ...form, minecraft_version: e.target.value })}
+              placeholder="1.21.1"
+              required
+            />
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="pack-loader" className="text-xs font-medium text-muted">Loader</label>
@@ -367,7 +414,27 @@ function App() {
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted" htmlFor="pack-lv">Versión del loader</label>
-            <input id="pack-lv" className="field" value={form.loader_version} onChange={(e) => setForm({ ...form, loader_version: e.target.value })} placeholder="Automática" />
+            {loaderVersions.length > 0 ? (
+              <select
+                id="pack-lv"
+                className="field"
+                value={form.loader_version}
+                onChange={(e) => setForm({ ...form, loader_version: e.target.value })}
+              >
+                <option value="">Automática (recomendada)</option>
+                {loaderVersions.map((v) => (
+                  <option key={v.id} value={v.id}>{v.id}{v.stable ? "" : " · inestable"}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="pack-lv"
+                className="field"
+                value={form.loader_version}
+                onChange={(e) => setForm({ ...form, loader_version: e.target.value })}
+                placeholder={loadingVersions ? "Cargando versiones…" : "Automática"}
+              />
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted" htmlFor="pack-desc">Descripción</label>
