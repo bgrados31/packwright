@@ -13,9 +13,8 @@ import PacksView from "./components/PacksView";
 import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
 import ExportModal from "./components/ExportModal";
-import OperationModal from "./components/OperationModal";
 import Toasts, { type Toast } from "./components/Toasts";
-import { useI18n } from "./i18n";
+import { useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
   type CreatePackInput,
@@ -68,7 +67,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
-  const [modsOperation, setModsOperation] = useState<ModOperation | null>(null);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [view, setView] = useState<SidebarView>("home");
@@ -371,22 +369,35 @@ export default function App() {
   };
 
   const runModOperation = async (operation: ModOperation) => {
-    if (operation.kind !== "add") {
-      setModsOperation(operation);
-      return;
-    }
-
     const id = `mod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const name = operation.modName ?? t("mods.title");
     const lines: string[] = [];
     let stage = "prepare";
+    const actionKey = (kind: ModOperation["kind"]): TranslationKey => {
+      switch (kind) {
+        case "add": return "mods.action.add";
+        case "remove": return "mods.action.remove";
+        case "pin": return "mods.action.pin";
+        case "unpin": return "mods.action.unpin";
+        case "update": return "mods.action.update";
+        case "refresh": return "mods.action.refresh";
+      }
+    };
     const label = () => {
-      const labels: Record<string, string> = {
-        prepare: t("mods.stagePreparing"),
-        download: t("mods.stageDownloading"),
-        deps: t("mods.stageDependencies"),
-        adding: t("mods.stageAdding"),
-      };
-      return `${operation.modName ?? t("mods.title")} · ${labels[stage] ?? labels.prepare}`;
+      const running = operation.kind === "add" && stage !== "prepare"
+        ? { prepare: t("mods.stagePreparing"), download: t("mods.stageDownloading"), deps: t("mods.stageDependencies"), adding: t("mods.stageAdding") }[stage] ?? t("mods.stagePreparing")
+        : t(actionKey(operation.kind));
+      return `${name} · ${running}`;
+    };
+    const successTitle = () => {
+      switch (operation.kind) {
+        case "add": return t("mods.toastSuccess", { name });
+        case "remove": return t("mods.toastRemoved", { name });
+        case "pin": return t("mods.toastPinned", { name });
+        case "unpin": return t("mods.toastUnpinned", { name });
+        case "update": return t("mods.toastUpdated", { name });
+        case "refresh": return t("mods.toastRefreshed");
+      }
     };
 
     setToasts((current) => [...current, { id, title: label(), state: "running" }]);
@@ -395,15 +406,16 @@ export default function App() {
     const ready = listen<OpLine>("operation://line", (event) => {
       if (event.payload.id !== id) return;
       lines.push(event.payload.line);
-      const text = lines.join(" ").toLowerCase();
-      const next = text.includes("dependenc")
-        ? "deps"
-        : text.includes("download") || text.includes("retriev")
-          ? "download"
-          : text.includes("success") || text.includes("added")
-            ? "adding"
-            : stage;
-      stage = next;
+      if (operation.kind === "add") {
+        const text = lines.join(" ").toLowerCase();
+        stage = text.includes("dependenc")
+          ? "deps"
+          : text.includes("download") || text.includes("retriev")
+            ? "download"
+            : text.includes("success") || text.includes("added")
+              ? "adding"
+              : stage;
+      }
       setToasts((current) =>
         current.map((item) =>
           item.id === id
@@ -418,24 +430,50 @@ export default function App() {
 
     try {
       await ready;
-      await invoke("mods_add", {
-        dir: operation.dir,
-        projectId: operation.projectId,
-        versionId: operation.versionId,
-        id,
-      });
-      const after = await invoke<InstalledMod[]>("mods_list", { dir: operation.dir }).catch(() => before);
-      const added = after.filter((mod) => !beforeIds.has(mod.id));
-      const main = added.filter((mod) => mod.project_id === operation.projectId).map(toHistoryItem);
-      const dependencies = added.filter((mod) => mod.project_id !== operation.projectId).map(toHistoryItem);
-      if (main.length === 0 && added.length > 0) main.push(toHistoryItem(added[0]));
+      const call = operation.kind === "add"
+        ? invoke("mods_add", {
+            dir: operation.dir,
+            projectId: operation.projectId,
+            versionId: operation.versionId,
+            id,
+          })
+        : operation.names
+          ? invoke("mods_command_bulk", {
+              dir: operation.dir,
+              action: operation.kind,
+              names: operation.names,
+              id,
+            })
+          : invoke("mods_command", {
+              dir: operation.dir,
+              action: operation.kind,
+              name: operation.name,
+              id,
+            });
+      await call;
+
+      let main: ModHistoryItem[] = [];
+      let dependencies: ModHistoryItem[] = [];
+      if (operation.kind === "add") {
+        const after = await invoke<InstalledMod[]>("mods_list", { dir: operation.dir }).catch(() => before);
+        const added = after.filter((mod) => !beforeIds.has(mod.id));
+        main = added.filter((mod) => mod.project_id === operation.projectId).map(toHistoryItem);
+        dependencies = added.filter((mod) => mod.project_id !== operation.projectId).map(toHistoryItem);
+        if (main.length === 0 && added.length > 0) main.push(toHistoryItem(added[0]));
+      } else {
+        main = (operation.names ?? (operation.name ? [operation.name] : [])).map((item) => ({
+          id: item,
+          name,
+          version: null,
+        }));
+      }
       await recordModHistory(operation, true, lines, main, dependencies);
       setToasts((current) =>
         current.map((item) =>
           item.id === id
             ? {
                 id,
-                title: t("mods.toastSuccess", { name: operation.modName ?? t("mods.title") }),
+                title: successTitle(),
                 detail: dependencies.length > 0 ? t("mods.toastDeps", { count: dependencies.length }) : undefined,
                 state: "success",
               }
@@ -451,7 +489,9 @@ export default function App() {
           item.id === id
             ? {
                 id,
-                title: t("mods.toastError", { name: operation.modName ?? t("mods.title") }),
+                title: operation.kind === "add"
+                  ? t("mods.toastError", { name })
+                  : t("mods.toastGenericError", { action: t(actionKey(operation.kind)), name }),
                 detail: errorText(cause).slice(0, 90),
                 state: "error",
               }
@@ -629,27 +669,6 @@ export default function App() {
             dir={exportTarget}
             packName={packs.find((pack) => pack.dir === exportTarget)?.name ?? exportTarget}
             onClose={() => setExportTarget(null)}
-          />,
-          document.body,
-        )}
-
-      {modsOperation &&
-        createPortal(
-          <OperationModal
-            operation={modsOperation}
-            onClose={() => setModsOperation(null)}
-            onSuccess={() => {
-              setModsRevision((value) => value + 1);
-              void loadPacks();
-              const names = modsOperation?.names ?? (modsOperation?.name ? [modsOperation.name] : []);
-              void recordModHistory(
-                modsOperation!,
-                true,
-                [],
-                names.map((name) => ({ id: name, name: modsOperation?.modName ?? name, version: null })),
-                [],
-              );
-            }}
           />,
           document.body,
         )}
