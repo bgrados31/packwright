@@ -291,10 +291,12 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
 
                 <div className="mt-5 flex items-center gap-2">
                   <button
-                    className="btn btn-primary flex-1"
+                    className="btn btn-primary px-3 mr-auto"
                     onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
+                    title={t("packs.view")}
+                    aria-label={t("packs.view")}
                   >
-                    <Eye size={14} /> {t("packs.view")}
+                    <Eye size={15} />
                   </button>
                   <button
                     className="btn btn-secondary px-3"
@@ -367,8 +369,10 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
               <button
                 className="btn btn-primary px-3"
                 onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
+                title={t("packs.view")}
+                aria-label={t("packs.view")}
               >
-                <Eye size={14} /> {t("packs.view")}
+                <Eye size={15} />
               </button>
             </article>
           ))}
