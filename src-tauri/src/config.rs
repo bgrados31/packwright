@@ -1,0 +1,109 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::error::{AppError, Result};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppConfig {
+    /// Carpeta que contiene los modpacks (cada subcarpeta con pack.toml es un pack).
+    pub workspace: PathBuf,
+    /// Ruta manual a packwiz. Si es None se autodetecta.
+    pub packwiz_path: Option<PathBuf>,
+    /// Puerto para `packwiz serve`.
+    pub serve_port: u16,
+    /// Interfaz: "es" o "en".
+    pub locale: String,
+    /// Ruta a la instalación de ATLauncher (opcional, para la Fase 3).
+    pub atlauncher_path: Option<PathBuf>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        let workspace = dirs::document_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("Packwright")
+            .join("packs");
+        Self {
+            workspace,
+            packwiz_path: None,
+            serve_port: 8080,
+            locale: "es".to_string(),
+            atlauncher_path: None,
+        }
+    }
+}
+
+fn config_path() -> Result<PathBuf> {
+    let base = dirs::config_dir()
+        .ok_or_else(|| AppError::Config("No se pudo resolver la carpeta de configuración".into()))?;
+    Ok(base.join("packwright").join("config.json"))
+}
+
+pub fn load() -> Result<AppConfig> {
+    let path = config_path()?;
+    if !path.exists() {
+        let cfg = AppConfig::default();
+        save(&cfg)?;
+        return Ok(cfg);
+    }
+    let text = std::fs::read_to_string(&path)?;
+    let cfg: AppConfig = serde_json::from_str(&text)
+        .map_err(|e| AppError::Config(format!("config.json inválido: {e}")))?;
+    Ok(cfg)
+}
+
+pub fn save(cfg: &AppConfig) -> Result<()> {
+    let path = config_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = serde_json::to_string_pretty(cfg)
+        .map_err(|e| AppError::Config(format!("No se pudo serializar la configuración: {e}")))?;
+    std::fs::write(&path, text)?;
+    Ok(())
+}
+
+pub fn ensure_workspace(cfg: &AppConfig) -> Result<()> {
+    std::fs::create_dir_all(&cfg.workspace)?;
+    Ok(())
+}
+
+/// Resuelve el ejecutable de packwiz: config → env → ruta conocida → PATH.
+pub fn resolve_packwiz(cfg: &AppConfig) -> Result<PathBuf> {
+    if let Some(p) = &cfg.packwiz_path {
+        if p.is_file() {
+            return Ok(p.clone());
+        }
+    }
+
+    if let Ok(value) = std::env::var("PACKWIZ_CMD") {
+        let p = PathBuf::from(value);
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
+
+    let exe = if cfg!(windows) { "packwiz.exe" } else { "packwiz" };
+
+    if let Some(local) = dirs::data_local_dir() {
+        let candidate = local.join("Programs").join("packwiz").join(exe);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join(exe);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    Err(AppError::NotFound(
+        "No se encontró packwiz. Instálalo o indica su ruta en la configuración.".into(),
+    ))
+}
