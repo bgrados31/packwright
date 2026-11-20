@@ -47,6 +47,19 @@
   --mcn-portal-rim: #3d2b4d;
   --mcn-portal: #7a3fc0;
   --mcn-portal-deep: #4a2270;
+
+  /* Variante End (Servidores) */
+  --mce-sky-top: #160f28;
+  --mce-sky-bottom: #2d1f47;
+  --mce-star: #d8c9ff;
+  --mce-stone: #c9c4d8;
+  --mce-stone-dark: #9c94b4;
+  --mce-obsidian: #231a34;
+  --mce-obsidian-edge: #3b2b57;
+  --mce-portal: #9b5de5;
+  --mce-portal-deep: #5b2ea8;
+  --mce-glow: #f0d9ff;
+  --mce-crystal: #d8a8ff;
 }
 
 .dark {
@@ -91,6 +104,18 @@
   --mcn-portal-rim: #32233f;
   --mcn-portal: #6d37ad;
   --mcn-portal-deep: #3c1b5c;
+
+  --mce-sky-top: #0d0918;
+  --mce-sky-bottom: #211735;
+  --mce-star: #cfc0f5;
+  --mce-stone: #a9a2bd;
+  --mce-stone-dark: #7d7597;
+  --mce-obsidian: #191226;
+  --mce-obsidian-edge: #2e2244;
+  --mce-portal: #8c4fd6;
+  --mce-portal-deep: #4a2387;
+  --mce-glow: #e6ccff;
+  --mce-crystal: #c894f5;
 }
 
 .app-shell.sidebar-collapsed { --sidebar-w: 68px; }
@@ -1308,3 +1333,173 @@ details summary::-webkit-details-marker { display: none; }
   transition: border-color 140ms ease, background 140ms ease;
 }
 .pack-row:hover { border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-line)); background: var(--pw-subtle); }
+
+/* --- Servidores: escena End, tarjetas y vista detallada --- */
+@keyframes mcStar { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+@keyframes mcPortalGlow { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes mcCrystal { 0%, 100% { opacity: 0.6; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+@keyframes mcMote { 0% { opacity: 0; transform: translateY(8px); } 35% { opacity: 0.85; } 100% { opacity: 0; transform: translateY(-18px); } }
+@keyframes mcIsland { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes serverPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pw-ok) 45%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+.mc-end-star { animation: mcStar 2.6s ease-in-out infinite; }
+.mc-end-portal { animation: mcPortalGlow 3.2s ease-in-out infinite; }
+.mc-end-portal-inner { animation-delay: 0.45s; }
+.mc-end-crystal { animation: mcCrystal 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.mc-end-mote { animation: mcMote 4s linear infinite; }
+.mc-end-island { animation: mcIsland 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+.mc-hero-server { min-height: 208px; }
+.mc-hero-server .mc-hero-scrim {
+  background: linear-gradient(90deg, var(--pw-bg) 0%, color-mix(in srgb, var(--pw-bg) 82%, transparent) 46%, transparent 100%);
+}
+.mc-hero-server .mc-hero-content { padding: 24px 28px; }
+.mc-hero-server .hero-cta { right: 24px; bottom: 22px; }
+
+.server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(298px, 1fr)); gap: 14px; }
+.server-card {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.server-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--mce-portal) 55%, var(--pw-line));
+  box-shadow: 0 16px 30px -16px rgba(0, 0, 0, 0.55);
+}
+.server-card-banner {
+  position: relative;
+  height: 58px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--pw-line);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--mce-sky-bottom) 70%, var(--pw-surface)), var(--pw-surface));
+}
+.server-card-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: linear-gradient(var(--pw-grid) 1px, transparent 1px), linear-gradient(90deg, var(--pw-grid) 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+.server-card-banner-glow {
+  position: absolute;
+  right: 12%;
+  top: -28px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--mce-portal), transparent 66%);
+  opacity: 0.5;
+  animation: mcPortalGlow 3.6s ease-in-out infinite;
+}
+.server-card-badge {
+  position: absolute;
+  left: 14px;
+  bottom: -13px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--pw-surface);
+  border-radius: 11px;
+  background: var(--pw-subtle);
+  color: var(--pw-accent);
+  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5);
+}
+.server-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pw-muted);
+}
+.server-status-dot.on { background: var(--pw-ok); animation: serverPulse 2s ease-in-out infinite; }
+.server-action-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--pw-line);
+  border-radius: 8px;
+  background: var(--pw-subtle);
+  color: var(--pw-muted);
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.server-action-btn:hover { color: var(--pw-ink); border-color: var(--pw-accent); background: var(--pw-accent-soft); transform: translateY(-1px); }
+.server-action-btn.primary { color: var(--pw-ok); }
+.server-action-btn.danger { color: var(--pw-bad); }
+
+.server-detail-head {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--pw-line);
+  border-radius: 14px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--mce-sky-bottom) 55%, var(--pw-surface)), var(--pw-surface));
+  padding: 18px 20px;
+}
+.server-detail-head::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--mce-portal), transparent 65%);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: mcPortalGlow 5s ease-in-out infinite;
+}
+.server-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--pw-line);
+  border-radius: 10px;
+  background: var(--pw-surface);
+}
+.server-stat-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pw-muted); }
+.server-stat-value { font-size: 18px; font-weight: 600; }
+.server-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--pw-line); }
+.server-tabs button {
+  padding: 9px 13px;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  color: var(--pw-muted);
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.server-tabs button:hover { color: var(--pw-ink); }
+.server-tabs button.active { border-color: var(--mce-portal); color: var(--pw-ink); font-weight: 500; }
+.server-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: left;
+  transition: background 140ms ease;
+}
+.server-file-row:hover { background: var(--pw-subtle); }
+.server-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--pw-line);
+  border-radius: 9px;
+  font-size: 12px;
+}
+.server-join { color: var(--pw-ok); }
+.server-leave { color: var(--pw-bad); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-end-star, .mc-end-portal, .mc-end-crystal, .mc-end-mote,
+  .mc-end-island, .server-card-banner-glow, .server-detail-head::after,
+  .server-status-dot.on { animation: none !important; }
+}

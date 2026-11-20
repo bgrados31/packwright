@@ -1,5 +1,5 @@
 type Props = {
-  variant?: "overworld" | "nether";
+  variant?: "overworld" | "nether" | "end";
   className?: string;
 };
 
@@ -138,10 +138,110 @@ function Nether() {
   );
 }
 
+const END_STARS = [
+  [64, 38], [142, 74], [224, 30], [318, 58], [396, 24], [462, 78],
+  [548, 34], [626, 62], [704, 26], [786, 70], [862, 36], [944, 58],
+  [104, 122], [288, 108], [520, 118], [740, 104], [908, 126],
+];
+
+function End() {
+  return (
+    <>
+      <rect width="1000" height="300" style={{ fill: "var(--mce-sky-top)" }} />
+      <rect y="170" width="1000" height="130" style={{ fill: "var(--mce-sky-bottom)" }} />
+
+      {END_STARS.map(([x, y], index) => (
+        <rect
+          key={`star-${index}`}
+          className="mc-end-star"
+          x={x}
+          y={y}
+          width={index % 4 === 0 ? 4 : 3}
+          height={index % 4 === 0 ? 4 : 3}
+          style={{ fill: "var(--mce-star)", animationDelay: `${(index % 7) * 0.42}s` }}
+        />
+      ))}
+
+      {/* islas flotantes */}
+      {[
+        [40, 128, 150],
+        [790, 150, 190],
+        [420, 92, 120],
+      ].map(([x, y, width], index) => (
+        <g key={`island-${index}`} className="mc-end-island" style={{ animationDelay: `${index * 1.1}s` }}>
+          <rect x={x} y={y} width={width} height="14" style={{ fill: "var(--mce-stone)" }} />
+          <rect x={x + 18} y={y + 14} width={width - 36} height="12" style={{ fill: "var(--mce-stone-dark)" }} />
+          <rect x={x + 46} y={y + 26} width={width - 92} height="10" style={{ fill: "var(--mce-stone-dark)" }} />
+          <rect x={x + width / 2 - 6} y={y + 36} width="12" height="12" style={{ fill: "var(--mce-stone-dark)" }} />
+        </g>
+      ))}
+
+      {/* portal central */}
+      <g transform="translate(430 74)">
+        <rect x="0" y="0" width="140" height="150" style={{ fill: "var(--mce-obsidian)" }} />
+        <rect className="mc-end-portal" x="16" y="16" width="108" height="118" style={{ fill: "var(--mce-portal)" }} />
+        <rect className="mc-end-portal mc-end-portal-inner" x="32" y="32" width="76" height="86" style={{ fill: "var(--mce-portal-deep)" }} />
+        <rect x="0" y="0" width="140" height="14" style={{ fill: "var(--mce-obsidian-edge)" }} />
+        <rect x="0" y="136" width="140" height="14" style={{ fill: "var(--mce-obsidian-edge)" }} />
+        <rect x="0" y="0" width="14" height="150" style={{ fill: "var(--mce-obsidian-edge)" }} />
+        <rect x="126" y="0" width="14" height="150" style={{ fill: "var(--mce-obsidian-edge)" }} />
+        {[
+          [24, 18], [64, 10], [104, 18], [24, 124], [64, 132], [104, 124],
+          [12, 46], [12, 98], [128, 46], [128, 98],
+        ].map(([x, y], index) => (
+          <rect key={`eye-${index}`} x={x} y={y} width="10" height="10" style={{ fill: "var(--mce-glow)" }} />
+        ))}
+      </g>
+
+      {/* pilares de obsidiana con cristales */}
+      {[
+        [96, 108], [230, 148], [700, 132], [884, 96],
+      ].map(([x, y], index) => (
+        <g key={`pillar-${index}`}>
+          <rect x={x} y={y} width="22" height={250 - y} style={{ fill: "var(--mce-obsidian)" }} />
+          <rect x={x} y={y} width="6" height={250 - y} style={{ fill: "var(--mce-obsidian-edge)" }} />
+          <rect
+            className="mc-end-crystal"
+            x={x + 3}
+            y={y - 20}
+            width="16"
+            height="22"
+            style={{ fill: "var(--mce-crystal)", animationDelay: `${index * 0.7}s` }}
+          />
+        </g>
+      ))}
+
+      {/* motas flotando */}
+      {[
+        [180, 200], [366, 168], [520, 214], [688, 184], [820, 220],
+      ].map(([x, y], index) => (
+        <rect
+          key={`mote-${index}`}
+          className="mc-end-mote"
+          x={x}
+          y={y}
+          width="6"
+          height="6"
+          style={{ fill: "var(--mce-glow)", animationDelay: `${index * 0.9}s` }}
+        />
+      ))}
+
+      {/* suelo de end stone */}
+      {COLUMNS.map((x, index) => (
+        <g key={`floor-${x}`}>
+          <rect x={x} y="250" width="20" height="20" style={{ fill: index % 3 === 0 ? "var(--mce-stone-dark)" : "var(--mce-stone)" }} />
+          <rect x={x} y="270" width="20" height="20" style={{ fill: index % 4 === 0 ? "var(--mce-stone)" : "var(--mce-stone-dark)" }} />
+          <rect x={x} y="290" width="20" height="10" style={{ fill: "var(--mce-stone-dark)" }} />
+        </g>
+      ))}
+    </>
+  );
+}
+
 export default function MinecraftScene({ variant = "overworld", className = "" }: Props) {
   return (
     <svg className={`mc-scene ${className}`} viewBox="0 0 1000 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      {variant === "nether" ? <Nether /> : <Overworld />}
+      {variant === "nether" ? <Nether /> : variant === "end" ? <End /> : <Overworld />}
     </svg>
   );
 }

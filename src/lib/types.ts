@@ -202,6 +202,37 @@ export type ServerPlayers = {
   banned: string[];
 };
 
+export type ServerStats = {
+  running: boolean;
+  uptime_secs: number;
+  plugins: number;
+  mods: number;
+  backups: number;
+  jar_exists: boolean;
+  eula: boolean;
+  world_size: number;
+  total_size: number;
+  issues: string[];
+};
+
+export type ServerFileEntry = {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+};
+
+export type PlayerEvent = {
+  time: string;
+  name: string;
+  kind: string;
+};
+
+export type ServerActivity = {
+  online: string[];
+  events: PlayerEvent[];
+};
+
 export type ModHistoryItem = {
   id: string;
   name: string;

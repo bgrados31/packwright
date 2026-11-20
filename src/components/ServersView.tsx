@@ -4,26 +4,29 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import PlayitModal from "./PlayitModal";
 import {
-  Box,
+  Activity,
+  ArrowUpRight,
   Copy,
   Download,
   FolderOpen,
-  Globe2,
+  HardDrive,
   Loader2,
   Play,
   Plus,
   RefreshCw,
   Save,
   Server,
+  Sparkles,
   Square,
   Terminal,
-  Users,
   Wifi,
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { OpLine, PackInfo, ServerInfo, ServerPlayers, ServerVersion } from "../lib/types";
+import type { OpLine, PackInfo, ServerInfo, ServerVersion } from "../lib/types";
 import Select from "./Select";
+import MinecraftScene from "./MinecraftScene";
+import ServerDetailView from "./ServerDetailView";
 import { Checkbox } from "./ui";
 
 type Props = {
@@ -65,12 +68,9 @@ export default function ServersView({ packs }: Props) {
   const [command, setCommand] = useState("");
   const [propertiesServer, setPropertiesServer] = useState<ServerInfo | null>(null);
   const [properties, setProperties] = useState("");
-  const [playersServer, setPlayersServer] = useState<ServerInfo | null>(null);
-  const [players, setPlayers] = useState<ServerPlayers | null>(null);
-  const [playerName, setPlayerName] = useState("");
-  const [playerList, setPlayerList] = useState("whitelist");
   const [syncPack, setSyncPack] = useState("");
   const [playitOpen, setPlayitOpen] = useState(false);
+  const [detailServer, setDetailServer] = useState<ServerInfo | null>(null);
 
   const refresh = () => {
     invoke<ServerInfo[]>("server_list")
@@ -169,66 +169,78 @@ export default function ServersView({ packs }: Props) {
     }));
   };
 
-  const openProperties = async (server: ServerInfo) => {
-    setPropertiesServer(server);
-    setProperties(await invoke<string>("server_properties", { name: server.name }));
-  };
-
-  const openPlayers = async (server: ServerInfo) => {
-    setPlayersServer(server);
-    setPlayers(await invoke<ServerPlayers>("server_players", { name: server.name }));
-  };
-
   return (
     <div className="view-enter">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{t("nav.servers")}</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight">{t("servers.title")}</h1>
-          <p className="mt-1 text-sm text-muted">{t("servers.subtitle", { count: servers.length })}</p>
-        </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          <Plus size={15} /> {t("servers.new")}
-        </button>
-      </div>
-
-      {error && (
-        <div className="modal-message error mt-4">{error}</div>
-      )}
-
-      {!loading && servers.length === 0 ? (
-        <div className="card mt-6 grid place-items-center py-20">
-          <div className="text-center">
-            <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft text-accent"><Server size={20} /></div>
-            <p className="mt-4 text-sm font-medium">{t("servers.empty")}</p>
-            <p className="mt-1 text-xs text-muted">{t("servers.emptyHint")}</p>
-          </div>
-        </div>
+      {detailServer ? (
+        <ServerDetailView
+          server={detailServer}
+          onBack={() => { setDetailServer(null); refresh(); }}
+        />
       ) : (
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
+        <>
+          <section className="mc-hero mc-hero-compact mc-hero-server">
+            <MinecraftScene variant="end" />
+            <div className="mc-hero-scrim" />
+            <div className="mc-hero-content">
+              <span className="mc-hero-badge"><Sparkles size={12} /> {t("servers.heroBadge")}</span>
+              <h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("servers.title")}</h1>
+              <p className="mt-2 text-[13px] text-muted">{t("servers.subtitle", { count: servers.length })}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="hero-pill"><Server size={12} /> {servers.length} {t("servers.statTotal")}</span>
+                <span className="hero-pill"><HardDrive size={12} /> {(servers.reduce((sum, item) => sum + (item.memory ?? 2048), 0) / 1024).toFixed(1)} GB RAM</span>
+              </div>
+            </div>
+            <div className="hero-cta flex gap-2">
+              <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> {t("servers.new")}</button>
+            </div>
+          </section>
+
+          {error && (
+            <div className="modal-message error mt-4">{error}</div>
+          )}
+
+          {!loading && servers.length === 0 ? (
+            <div className="card mt-6 grid place-items-center py-20">
+              <div className="text-center">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft text-accent"><Server size={20} /></div>
+                <p className="mt-4 text-sm font-medium">{t("servers.empty")}</p>
+                <p className="mt-1 text-xs text-muted">{t("servers.emptyHint")}</p>
+              </div>
+            </div>
+          ) : (
+        <div className="server-grid mt-6">
           {servers.map((server) => (
-            <article key={server.name} className="card mod-installed-card">
-              <div className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><Server size={17} /></span>
-                  <div className="min-w-0 flex-1">
+            <article
+              key={server.name}
+              className="card server-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => setDetailServer(server)}
+              onKeyDown={(event) => { if (event.key === "Enter") setDetailServer(server); }}
+            >
+              <div className="server-card-banner">
+                <div className="server-card-banner-glow" />
+                <span className="ui-tag tag-3 absolute right-3 top-3">{server.template}</span>
+                <span className="server-card-badge"><Server size={17} /></span>
+              </div>
+              <div className="p-4 pt-6">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <h2 className="truncate text-[14px] font-semibold">{server.name}</h2>
-                    <p className="font-mono text-[10px] text-muted">:{server.port} · {server.version}</p>
+                    <p className="font-mono text-[10px] text-muted">:{server.port} · {server.version} · {server.memory ?? 2048} MB</p>
                   </div>
-                  <span className="ui-tag tag-3">{server.template}</span>
+                  <ArrowUpRight size={15} className="shrink-0 text-muted" />
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <button className="btn btn-ghost px-2" onClick={() => start(server)} title={t("servers.start")}><Play size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void run(() => invoke("server_stop", { name: server.name }))} title={t("servers.stop")}><Square size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => { setLines([]); setConsoleServer(server); }} title={t("servers.console")}><Terminal size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void openProperties(server)} title={t("servers.properties")}><Settings2Icon /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void openPlayers(server)} title={t("servers.players")}><Users size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void run(() => invoke("server_backup", { name: server.name }))} title={t("servers.backup")}><Copy size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void run(() => invoke("server_install_geyser", { name: server.name }))} title={t("servers.geyser")}><Globe2 size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void invoke("server_open_folder", { name: server.name })} title={t("packs.folder")}><FolderOpen size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => setPlayitOpen(true)} title={t("servers.tunnel")}><Wifi size={14} /></button>
+                <div className="mt-3 flex flex-wrap gap-1.5" onClick={(event) => event.stopPropagation()}>
+                  <button className="server-action-btn primary" onClick={() => start(server)} title={t("servers.start")}><Play size={13} /></button>
+                  <button className="server-action-btn danger" onClick={() => void run(() => invoke("server_stop", { name: server.name }))} title={t("servers.stop")}><Square size={13} /></button>
+                  <button className="server-action-btn" onClick={() => { setLines([]); setConsoleServer(server); }} title={t("servers.console")}><Terminal size={13} /></button>
+                  <button className="server-action-btn" onClick={() => void run(() => invoke("server_backup", { name: server.name }))} title={t("servers.backup")}><Copy size={13} /></button>
+                  <button className="server-action-btn" onClick={() => void invoke("server_open_folder", { name: server.name })} title={t("packs.folder")}><FolderOpen size={13} /></button>
+                  <button className="server-action-btn" onClick={() => setPlayitOpen(true)} title={t("servers.tunnel")}><Wifi size={13} /></button>
+                  <button className="server-action-btn" onClick={() => setDetailServer(server)} title={t("servers.details")}><Activity size={13} /></button>
                 </div>
-                <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+                <div className="mt-3 flex items-center gap-2 border-t border-line pt-3" onClick={(event) => event.stopPropagation()}>
                   <select className="field !py-1.5 text-[11px]" value={syncPack} onChange={(event) => setSyncPack(event.target.value)}>
                     <option value="">{t("servers.syncSelect")}</option>
                     {packs.map((pack) => <option key={pack.dir} value={pack.dir}>{pack.name}</option>)}
@@ -245,6 +257,8 @@ export default function ServersView({ packs }: Props) {
             </article>
           ))}
         </div>
+          )}
+        </>
       )}
 
       {createOpen && (
@@ -270,7 +284,7 @@ export default function ServersView({ packs }: Props) {
               </div>
               <div className="grid grid-cols-[1fr_112px] gap-3">
                 <label className="flex flex-col gap-1.5">
-                  <span className="flex items-center justify-between text-xs text-muted">
+                  <span className="flex h-5 items-center justify-between text-xs text-muted">
                     <span>{template === "velocity" ? t("servers.version") : t("form.minecraft")}</span>
                     <button type="button" className="icon-btn !h-5 !w-5" onClick={() => void loadVersions(template)} title={t("servers.refreshVersions")}>
                       <RefreshCw size={12} className={versionsLoading ? "spin" : ""} />
@@ -294,7 +308,7 @@ export default function ServersView({ packs }: Props) {
                     <input className="field" value={version} onChange={(e) => setVersion(e.target.value)} placeholder={versionsLoading ? t("servers.versionsLoading") : "1.21.1"} />
                   )}
                 </label>
-                <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.port")}</span><input className="field" type="number" min={1} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} /></label>
+                <label className="flex flex-col gap-1.5"><span className="flex h-5 items-center text-xs text-muted">{t("servers.port")}</span><input className="field" type="number" min={1} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} /></label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1.5">
@@ -371,40 +385,7 @@ export default function ServersView({ packs }: Props) {
         </div>
       )}
 
-      {playersServer && players && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.players")}>
-          <div className="modal-card" style={{ maxWidth: 460 }}>
-            <div className="modal-header">
-              <span className="modal-icon running"><Users size={18} /></span>
-              <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{t("servers.players")}</h2><p className="text-[11px] text-muted">{playersServer.name}</p></div>
-              <button className="icon-btn" onClick={() => setPlayersServer(null)}><X size={16} /></button>
-            </div>
-            <div className="p-4">
-              <select className="field text-[12px]" value={playerList} onChange={(e) => setPlayerList(e.target.value)}>
-                <option value="whitelist">{t("servers.whitelist")}</option>
-                <option value="ops">{t("servers.ops")}</option>
-                <option value="bans">{t("servers.bans")}</option>
-              </select>
-              <div className="mt-2 flex gap-2">
-                <input className="field text-[12px]" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Player" />
-                <button className="btn btn-secondary" onClick={() => void run(() => invoke("server_player_add", { name: playersServer.name, list: playerList, player: playerName }))}><Plus size={13} /></button>
-              </div>
-              <div className="mt-3 flex flex-col gap-1">
-                {players[playerList as keyof ServerPlayers].map((player) => (
-                  <div key={player} className="rounded-md bg-subtle px-3 py-1.5 text-[12px]">{player}</div>
-                ))}
-              </div>
-            </div>
-            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setPlayersServer(null)}>{t("common.close")}</button></div>
-          </div>
-        </div>
-      )}
-
       {playitOpen && <PlayitModal onClose={() => setPlayitOpen(false)} />}
     </div>
   );
-}
-
-function Settings2Icon() {
-  return <Box size={14} />;
 }
