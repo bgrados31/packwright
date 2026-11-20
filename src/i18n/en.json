@@ -459,5 +459,7 @@
   "servers.bans": "Bans",
   "servers.geyser": "Install Geyser (Bedrock)",
   "servers.tunnel": "Set up playit.gg tunnel",
+  "servers.jarUrl": "Custom jar URL (required for Paper/Velocity)",
+  "servers.getJar": "Get the jar from the official site",
   "common.error": "Error"
 }

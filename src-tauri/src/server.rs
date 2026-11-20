@@ -78,24 +78,9 @@ async fn jar_for(template: &str, version: &str) -> Result<(String, String)> {
         .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;
     let url = match template {
         "paper" | "velocity" => {
-            let project = template;
-            let versions: Value = client
-                .get(format!("https://api.papermc.io/v2/projects/{project}"))
-                .send().await.map_err(|e| AppError::Process(format!("PaperMC API: {e}")))?
-                .json().await.map_err(|e| AppError::Parse(format!("PaperMC JSON: {e}")))?;
-            let available = versions["versions"].as_array().cloned().unwrap_or_default();
-            let chosen = available.iter().filter_map(|v| v.as_str())
-                .find(|v| *v == version).or_else(|| available.first().and_then(|v| v.as_str()))
-                .ok_or_else(|| AppError::NotFound("No compatible version found".into()))?;
-            let builds: Value = client
-                .get(format!("https://api.papermc.io/v2/projects/{project}/versions/{chosen}/builds"))
-                .send().await.map_err(|e| AppError::Process(format!("PaperMC builds: {e}")))?
-                .json().await.map_err(|e| AppError::Parse(format!("PaperMC builds JSON: {e}")))?;
-            let build = builds["builds"].as_array().and_then(|a| a.last())
-                .ok_or_else(|| AppError::NotFound("No build found".into()))?;
-            let file = build["downloads"]["application"]["name"].as_str()
-                .ok_or_else(|| AppError::Parse("No download name".into()))?;
-            (chosen.to_string(), format!("https://api.papermc.io/v2/projects/{project}/versions/{chosen}/builds/{}/downloads/{file}", build["build"]))
+            return Err(AppError::Validation(format!(
+                "The {template} API was retired. Paste the jar URL from https://papermc.io/downloads/{template}"
+            )));
         }
         "purpur" => {
             let meta: Value = client
@@ -129,7 +114,7 @@ async fn jar_for(template: &str, version: &str) -> Result<(String, String)> {
 }
 
 #[tauri::command]
-pub async fn server_create(name: String, template: String, version: String, port: u16, java: String) -> Result<ServerInfo> {
+pub async fn server_create(name: String, template: String, version: String, port: u16, java: String, jar_url: Option<String>) -> Result<ServerInfo> {
     let cfg = config::load()?;
     let name = safe_name(&name)?;
     let root = servers_root(&cfg);
@@ -140,7 +125,11 @@ pub async fn server_create(name: String, template: String, version: String, port
     }
     std::fs::create_dir_all(&dir)?;
 
-    let (resolved_version, url) = jar_for(&template, &version).await?;
+    let (resolved_version, url) = if let Some(custom) = jar_url.filter(|value| !value.trim().is_empty()) {
+        (version.clone(), custom.trim().to_string())
+    } else {
+        jar_for(&template, &version).await?
+    };
     let jar_name = format!("{template}-{resolved_version}.jar");
     let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
         .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;

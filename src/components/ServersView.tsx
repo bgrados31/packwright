@@ -47,6 +47,7 @@ export default function ServersView({ packs }: Props) {
   const [version, setVersion] = useState("1.21.1");
   const [port, setPort] = useState(25565);
   const [java, setJava] = useState("java");
+  const [jarUrl, setJarUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consoleServer, setConsoleServer] = useState<ServerInfo | null>(null);
@@ -91,7 +92,7 @@ export default function ServersView({ packs }: Props) {
   };
 
   const create = async () => {
-    await run(() => invoke("server_create", { name, template, version, port, java }));
+    await run(() => invoke("server_create", { name, template, version, port, java, jarUrl: jarUrl.trim() || null }));
     setCreateOpen(false);
     setName("");
   };
@@ -206,6 +207,13 @@ export default function ServersView({ packs }: Props) {
                 <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.port")}</span><input className="field" type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} /></label>
                 <label className="flex flex-col gap-1.5"><span className="text-xs text-muted">{t("servers.java")}</span><input className="field" value={java} onChange={(e) => setJava(e.target.value)} /></label>
               </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-muted">{t("servers.jarUrl")}</span>
+                <input className="field font-mono text-[11px]" value={jarUrl} onChange={(e) => setJarUrl(e.target.value)} placeholder="https://…/server.jar" spellCheck={false} />
+              </label>
+              <button className="btn btn-ghost text-[11px]" onClick={() => void openUrl(`https://papermc.io/downloads/${template}`)}>
+                <Download size={12} /> {t("servers.getJar")}
+              </button>
               {error && <div className="modal-message error">{error}</div>}
             </div>
             <div className="modal-footer">
