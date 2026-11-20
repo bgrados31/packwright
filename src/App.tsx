@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 import CreatePackForm from "./components/CreatePackForm";
-import OutputPanel from "./components/OutputPanel";
 import WelcomeView from "./components/WelcomeView";
 import PackEditor from "./components/PackEditor";
 import SetupView from "./components/SetupView";
@@ -24,7 +22,6 @@ import {
   type HistoryEntry,
   type LoaderVersion,
   type McVersion,
-  type OpLine,
   type PackInfo,
   type PackMeta,
   type PackwizStatus,
@@ -59,7 +56,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
-  const [logs, setLogs] = useState<OpLine[]>([]);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
@@ -122,15 +118,6 @@ export default function App() {
 
   useEffect(() => {
     loadPacks();
-    let disposed = false;
-    const unlisteners: Array<() => void> = [];
-    listen<OpLine>("operation://line", (event) => {
-      if (!disposed) setLogs((previous) => [...previous.slice(-199), event.payload]);
-    }).then((unlisten) => unlisteners.push(unlisten));
-    return () => {
-      disposed = true;
-      unlisteners.forEach((unlisten) => unlisten());
-    };
   }, [loadPacks]);
 
   useEffect(() => {
@@ -196,7 +183,6 @@ export default function App() {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    setLogs([]);
     try {
       await invoke<PackInfo>("pack_create", {
         name: form.name,
@@ -255,7 +241,6 @@ export default function App() {
   const saveFile = useCallback(async () => {
     if (!selectedPack || !activeFile || !dirty) return;
     try {
-      setLogs([]);
       await invoke("file_write", { dir: selectedPack, path: activeFile, content });
       setDirty(false);
       await loadPacks();
@@ -498,8 +483,6 @@ export default function App() {
           />
         )}
       </main>
-
-      <OutputPanel lines={logs} onClear={() => setLogs([])} />
 
       {exportTarget &&
         createPortal(

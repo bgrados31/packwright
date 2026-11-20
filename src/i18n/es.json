@@ -92,8 +92,6 @@
   "editor.removeImage": "Quitar",
   "editor.uploading": "Subiendo…",
 
-  "output.title": "Salida de packwiz",
-  "output.clear": "Limpiar",
   "output.empty": "Esperando operaciones…",
 
   "export.button": "Exportar .mrpack",
