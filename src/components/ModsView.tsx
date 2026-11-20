@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -876,27 +877,29 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
         </div>
       )}
 
-      {detail && (
-        <ModDetail
-          hit={detail}
-          minecraftVersion={minecraftVersion}
-          loader={loader}
-          projectType={projectType}
-          installed={installedIds.has(detail.project_id)}
-          onClose={() => setDetail(null)}
-          onInstall={(version) => {
-            onOperation({
-              kind: "add",
-              dir,
-              label: t("mods.action.add"),
-              projectId: detail.project_id,
-              versionId: version.id,
-              modName: detail.name,
-            });
-            setDetail(null);
-          }}
-        />
-      )}
+      {detail &&
+        createPortal(
+          <ModDetail
+            hit={detail}
+            minecraftVersion={minecraftVersion}
+            loader={loader}
+            projectType={projectType}
+            installed={installedIds.has(detail.project_id)}
+            onClose={() => setDetail(null)}
+            onInstall={(version) => {
+              onOperation({
+                kind: "add",
+                dir,
+                label: t("mods.action.add"),
+                projectId: detail.project_id,
+                versionId: version.id,
+                modName: detail.name,
+              });
+              setDetail(null);
+            }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
