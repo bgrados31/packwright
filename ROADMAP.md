@@ -73,7 +73,7 @@
 ## Fase 3 — Servidores ✅ (núcleo)
 - [x] Workspace con packs y servidores
 - [x] Templates: Vanilla, Paper, Purpur, Forge, NeoForge, Fabric, Velocity
-- [x] Setup automático (jar, eula, properties, Java; JVM args fijos `-Xmx2G`)
+- [x] Setup automático (jar oficial vía APIs: Fill v3 para Paper/Velocity, Mojang, Fabric, Forge, NeoForge y Purpur; eula, properties, Java; JVM args fijos `-Xmx2G`)
 - [x] start/stop/restart + consola en vivo
 - [x] Sync cliente ↔ servidor (mods)
 - [x] Bedrock + GeyserMC (instalador del plugin)

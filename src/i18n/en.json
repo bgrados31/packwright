@@ -459,7 +459,7 @@
   "servers.bans": "Bans",
   "servers.geyser": "Install Geyser (Bedrock)",
   "servers.tunnel": "Set up playit.gg tunnel",
-  "servers.jarUrl": "Custom jar URL (required for Paper/Velocity)",
+  "servers.jarUrl": "Custom jar URL (optional — official jar is downloaded automatically)",
   "servers.getJar": "Get the jar from the official site",
   "playit.title": "playit.gg tunnel",
   "playit.subtitle": "Expose your server without port forwarding.",

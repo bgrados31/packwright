@@ -73,44 +73,223 @@ fn emit(app: &AppHandle, id: &str, line: &str, stream: &str) {
     let _ = app.emit("operation://line", json!({ "id": id, "stream": stream, "line": line }));
 }
 
-async fn jar_for(template: &str, version: &str) -> Result<(String, String)> {
-    let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;
-    let url = match template {
+fn http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder().user_agent("Packwright/0.1").build()
+        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))
+}
+
+async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value> {
+    let response = client.get(url).send().await
+        .map_err(|e| AppError::Process(format!("Request failed ({url}): {e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::Process(format!("Request returned HTTP {} ({url})", response.status())));
+    }
+    response.json().await
+        .map_err(|e| AppError::Parse(format!("Invalid JSON ({url}): {e}")))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum JarKind {
+    Direct,
+    Installer,
+}
+
+struct JarSetup {
+    version: String,
+    name: String,
+    url: String,
+    kind: JarKind,
+}
+
+/// Resuelve el jar oficial de cada plataforma usando sus APIs públicas.
+async fn jar_for(client: &reqwest::Client, template: &str, version: &str) -> Result<JarSetup> {
+    match template {
+        // PaperMC retiró api.papermc.io/v2; la web oficial usa fill.papermc.io/v3.
         "paper" | "velocity" => {
-            return Err(AppError::Validation(format!(
-                "The {template} API was retired. Paste the jar URL from https://papermc.io/downloads/{template}"
-            )));
+            let meta: Value = get_json(client, &format!("https://fill.papermc.io/v3/projects/{template}/versions")).await?;
+            let entries = meta["versions"].as_array()
+                .ok_or_else(|| AppError::Parse("Invalid Fill versions response".into()))?;
+            let exact = entries.iter().find_map(|entry| {
+                let id = entry["version"]["id"].as_str()?;
+                (id == version).then_some(id)
+            });
+            let stable = entries.iter().find_map(|entry| {
+                let id = entry["version"]["id"].as_str()?;
+                let supported = entry["version"]["support"]["status"].as_str() == Some("SUPPORTED");
+                (supported && !id.contains("SNAPSHOT")).then_some(id)
+            });
+            let chosen = exact
+                .or(stable)
+                .or_else(|| entries.first()?.get("version")?.get("id")?.as_str())
+                .ok_or_else(|| AppError::NotFound(format!("No {template} version available")))?;
+            let build: Value = get_json(client, &format!(
+                "https://fill.papermc.io/v3/projects/{template}/versions/{chosen}/builds/latest"
+            )).await?;
+            let download = &build["downloads"]["server:default"];
+            let url = download["url"].as_str()
+                .ok_or_else(|| AppError::Parse("Fill build has no download URL".into()))?.to_string();
+            let name = download["name"].as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{template}-{chosen}.jar"));
+            Ok(JarSetup { version: chosen.to_string(), name, url, kind: JarKind::Direct })
         }
         "purpur" => {
-            let meta: Value = client
-                .get("https://api.purpurmc.org/v2/purpur")
-                .send().await.map_err(|e| AppError::Process(format!("Purpur API: {e}")))?
-                .json().await.map_err(|e| AppError::Parse(format!("Purpur JSON: {e}")))?;
+            let meta: Value = get_json(client, "https://api.purpurmc.org/v2/purpur").await?;
             let versions = meta["versions"].as_array().cloned().unwrap_or_default();
             let chosen = versions.iter().filter_map(|v| v.as_str())
                 .find(|v| *v == version).or_else(|| versions.first().and_then(|v| v.as_str()))
                 .ok_or_else(|| AppError::NotFound("No compatible Purpur version".into()))?;
-            (chosen.to_string(), format!("https://api.purpurmc.org/v2/purpur/{chosen}/latest/download"))
+            Ok(JarSetup {
+                version: chosen.to_string(),
+                name: format!("purpur-{chosen}.jar"),
+                url: format!("https://api.purpurmc.org/v2/purpur/{chosen}/latest/download"),
+                kind: JarKind::Direct,
+            })
         }
-        "fabric" => (
-            version.to_string(),
-            format!("https://meta.fabricmc.net/v2/versions/loader/{version}/profile/server/build"),
-        ),
-        "forge" => (
-            version.to_string(),
-            format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{version}-{version}/forge-{version}-{version}-installer.jar"),
-        ),
-        "neoforge" => (
-            version.to_string(),
-            format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{version}/neoforge-{version}-installer.jar"),
-        ),
-        _ => (
-            version.to_string(),
-            format!("https://piston-data.mojang.com/v1/objects/{version}/server.jar"),
-        ),
+        // El endpoint legacy /profile/server/build ya no existe; el server/jar es el oficial.
+        "fabric" => {
+            let loaders: Value = get_json(client, &format!("https://meta.fabricmc.net/v2/versions/loader/{version}")).await?;
+            let entries = loaders.as_array()
+                .ok_or_else(|| AppError::Parse("Invalid Fabric loader response".into()))?;
+            let loader = entries.iter().find(|e| e["loader"]["stable"].as_bool() == Some(true))
+                .or_else(|| entries.first())
+                .and_then(|e| e["loader"]["version"].as_str())
+                .ok_or_else(|| AppError::NotFound(format!("No Fabric loader for {version}")))?;
+            let installers: Value = get_json(client, "https://meta.fabricmc.net/v2/versions/installer").await?;
+            let installer = installers.as_array().and_then(|items| {
+                items.iter().find(|e| e["stable"].as_bool() == Some(true)).or_else(|| items.first())
+            }).and_then(|e| e["version"].as_str())
+                .ok_or_else(|| AppError::NotFound("No Fabric installer available".into()))?;
+            Ok(JarSetup {
+                version: version.to_string(),
+                name: format!("fabric-server-{version}.jar"),
+                url: format!("https://meta.fabricmc.net/v2/versions/loader/{version}/{loader}/{installer}/server/jar"),
+                kind: JarKind::Direct,
+            })
+        }
+        "forge" => {
+            let promos: Value = get_json(client, "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json").await?;
+            let recommended = format!("{version}-recommended");
+            let latest = format!("{version}-latest");
+            let forge = promos["promos"].get(recommended.as_str())
+                .or_else(|| promos["promos"].get(latest.as_str()))
+                .and_then(Value::as_str)
+                .ok_or_else(|| AppError::NotFound(format!("No Forge version for {version}")))?;
+            Ok(JarSetup {
+                version: version.to_string(),
+                name: format!("forge-{version}-{forge}-installer.jar"),
+                url: format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{version}-{forge}/forge-{version}-{forge}-installer.jar"),
+                kind: JarKind::Installer,
+            })
+        }
+        "neoforge" => {
+            let response = client.get("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml")
+                .send().await.map_err(|e| AppError::Process(format!("NeoForge metadata: {e}")))?;
+            if !response.status().is_success() {
+                return Err(AppError::Process(format!("NeoForge metadata returned HTTP {}", response.status())));
+            }
+            let xml = response.text().await.map_err(|e| AppError::Parse(format!("NeoForge metadata: {e}")))?;
+            let prefix = version.strip_prefix("1.").unwrap_or(version);
+            let needle = format!("{prefix}.");
+            let resolved = xml.split("<version>")
+                .filter_map(|part| part.split("</version>").next())
+                .filter(|value| value.starts_with(&needle))
+                .last()
+                .ok_or_else(|| AppError::NotFound(format!("No NeoForge version for {version}")))?
+                .to_string();
+            Ok(JarSetup {
+                version: version.to_string(),
+                name: format!("neoforge-{resolved}-installer.jar"),
+                url: format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{resolved}/neoforge-{resolved}-installer.jar"),
+                kind: JarKind::Installer,
+            })
+        }
+        _ => {
+            // vanilla: el manifest de Mojang da la URL con hash de cada versión.
+            let manifest: Value = get_json(client, "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").await?;
+            let versions = manifest["versions"].as_array()
+                .ok_or_else(|| AppError::Parse("Invalid Mojang manifest".into()))?;
+            let latest = manifest["latest"]["release"].as_str().unwrap_or("");
+            let chosen = versions.iter().find(|v| v["id"].as_str() == Some(version))
+                .or_else(|| versions.iter().find(|v| v["id"].as_str() == Some(latest)))
+                .ok_or_else(|| AppError::NotFound("No vanilla version available".into()))?;
+            let version_url = chosen["url"].as_str()
+                .ok_or_else(|| AppError::Parse("Mojang version has no metadata URL".into()))?;
+            let detail: Value = get_json(client, version_url).await?;
+            let url = detail["downloads"]["server"]["url"].as_str()
+                .ok_or_else(|| AppError::Parse("Mojang version has no server jar".into()))?;
+            Ok(JarSetup {
+                version: version.to_string(),
+                name: format!("vanilla-{version}.jar"),
+                url: url.to_string(),
+                kind: JarKind::Direct,
+            })
+        }
+    }
+}
+
+fn find_server_jar(dir: &Path, installer: &str) -> Result<String> {
+    let mut best: Option<(String, u64)> = None;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.ends_with(".jar") || name == installer {
+            continue;
+        }
+        let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+        if best.as_ref().map(|(_, current)| size > *current).unwrap_or(true) {
+            best = Some((name, size));
+        }
+    }
+    best.map(|(name, _)| name)
+        .ok_or_else(|| AppError::Process("The installer did not produce a server jar".into()))
+}
+
+async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, jar_url: Option<&str>) -> Result<(String, String)> {
+    let client = http_client()?;
+    let setup = match jar_url.filter(|value| !value.trim().is_empty()) {
+        Some(custom) => {
+            let url = custom.trim().to_string();
+            let name = url.split('?').next().unwrap_or(&url).rsplit('/').next()
+                .filter(|value| !value.is_empty() && *value != "download")
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{template}-{version}.jar"));
+            JarSetup { version: version.to_string(), name, url, kind: JarKind::Direct }
+        }
+        None => jar_for(&client, template, version).await?,
     };
-    Ok(url)
+
+    let response = client.get(&setup.url).send().await
+        .map_err(|e| AppError::Process(format!("Jar download failed: {e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::Process(format!("Jar download returned HTTP {}", response.status())));
+    }
+    let bytes = response.bytes().await
+        .map_err(|e| AppError::Process(format!("Jar read failed: {e}")))?;
+    let target = dir.join(&setup.name);
+    std::fs::write(&target, &bytes)?;
+
+    let jar_name = match setup.kind {
+        JarKind::Direct => setup.name,
+        JarKind::Installer => {
+            let java = if java.trim().is_empty() { "java" } else { java.trim() };
+            let output = Command::new(java)
+                .arg("-jar")
+                .arg(&target)
+                .arg("--installServer")
+                .current_dir(dir)
+                .output().await
+                .map_err(|e| AppError::Process(format!("Could not run installer with {java}: {e}")))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let detail = stderr.lines().last().or_else(|| stdout.lines().last()).unwrap_or("unknown error");
+                return Err(AppError::Process(format!("Installer failed: {detail}")));
+            }
+            find_server_jar(dir, &setup.name)?
+        }
+    };
+    Ok((setup.version, jar_name))
 }
 
 #[tauri::command]
@@ -125,20 +304,14 @@ pub async fn server_create(name: String, template: String, version: String, port
     }
     std::fs::create_dir_all(&dir)?;
 
-    let (resolved_version, url) = if let Some(custom) = jar_url.filter(|value| !value.trim().is_empty()) {
-        (version.clone(), custom.trim().to_string())
-    } else {
-        jar_for(&template, &version).await?
+    let prepared = prepare_server(&dir, &template, &version, &java, jar_url.as_deref()).await;
+    let (resolved_version, jar_name) = match prepared {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(error);
+        }
     };
-    let jar_name = format!("{template}-{resolved_version}.jar");
-    let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;
-    let response = client.get(&url).send().await.map_err(|e| AppError::Process(format!("Download failed: {e}")))?;
-    if !response.status().is_success() {
-        return Err(AppError::Process(format!("Jar download returned HTTP {}", response.status())));
-    }
-    let bytes = response.bytes().await.map_err(|e| AppError::Process(format!("Jar read failed: {e}")))?;
-    std::fs::write(dir.join(&jar_name), &bytes)?;
 
     std::fs::write(dir.join("eula.txt"), "eula=true\n")?;
     std::fs::write(dir.join("server.properties"), format!("server-port={port}\nmotd=Packwright server\nonline-mode=true\n"))?;
@@ -429,4 +602,32 @@ pub fn server_sync(name: String, pack: String) -> Result<usize> {
 fn safe_component(name: &std::ffi::OsStr) -> bool {
     let value = name.to_string_lossy();
     !value.contains('/') && !value.contains('\\') && !value.contains("..")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires network access to upstream APIs"]
+    async fn resolves_official_jars() {
+        let client = http_client().unwrap();
+        for (template, version) in [
+            ("paper", "1.21.1"),
+            ("velocity", "3.4.0"),
+            ("vanilla", "1.21.1"),
+            ("fabric", "1.21.1"),
+            ("forge", "1.20.1"),
+            ("neoforge", "26.3"),
+            ("purpur", "1.21.1"),
+        ] {
+            let setup = jar_for(&client, template, version).await
+                .unwrap_or_else(|error| panic!("{template}: {error:?}"));
+            assert!(setup.url.starts_with("https://"), "{template}: {}", setup.url);
+            assert!(!setup.name.is_empty(), "{template}: empty jar name");
+            let response = client.head(&setup.url).send().await.unwrap();
+            assert!(response.status().is_success(), "{template}: HTTP {} for {}", response.status(), setup.url);
+            println!("{template} -> {} ({})", setup.name, setup.url);
+        }
+    }
 }
