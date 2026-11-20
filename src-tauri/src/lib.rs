@@ -51,6 +51,8 @@ pub fn run() {
             mods::mods_list,
             mods::mods_health,
             mods::mods_analyze,
+            mods::mods_history,
+            mods::mods_history_record,
             mods::mods_add,
             mods::mods_command,
             mods::mods_command_bulk,

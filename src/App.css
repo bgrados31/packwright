@@ -701,6 +701,36 @@ details summary::-webkit-details-marker { display: none; }
 .release-badge.release { background: color-mix(in srgb, var(--pw-ok) 14%, transparent); color: var(--pw-ok); }
 .release-badge.beta { background: color-mix(in srgb, #c98a2e 16%, transparent); color: #c98a2e; }
 .release-badge.alpha { background: color-mix(in srgb, var(--pw-accent) 14%, transparent); color: var(--pw-accent); }
+.toast-stack {
+  position: fixed;
+  top: 18px;
+  right: 20px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 40px));
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--pw-line);
+  border-radius: 11px;
+  background: var(--pw-surface);
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  animation: dropIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.toast-icon { display: grid; place-items: center; flex: none; margin-top: 1px; }
+.toast.running .toast-icon { color: var(--pw-accent); }
+.toast.success { border-color: color-mix(in srgb, var(--pw-ok) 35%, transparent); }
+.toast.success .toast-icon { color: var(--pw-ok); }
+.toast.error { border-color: color-mix(in srgb, var(--pw-bad) 35%, transparent); }
+.toast.error .toast-icon { color: var(--pw-bad); }
+
 .pagination-page {
   min-width: 30px;
   height: 30px;
@@ -745,8 +775,7 @@ details summary::-webkit-details-marker { display: none; }
 /* --- Mods: tarjetas del catálogo --- */
 .mod-hit { overflow: hidden; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease, opacity 180ms ease; }
 .mod-hit:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--pw-accent) 45%, var(--pw-line)); box-shadow: 0 14px 30px -18px rgba(0,0,0,.3); }
-.mod-hit.installed { filter: blur(0.7px) saturate(0.7); opacity: 0.72; }
-.mod-hit.installed:hover { filter: none; opacity: 1; }
+
 .mod-quick-install {
   position: absolute;
   top: 9px;
@@ -763,6 +792,7 @@ details summary::-webkit-details-marker { display: none; }
   color: var(--pw-accent);
   font-size: 10px;
   font-weight: 600;
+  cursor: pointer;
   opacity: 0.75;
   transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
 }

@@ -152,6 +152,22 @@ export type ModAnalysis = {
   checked: number;
 };
 
+export type ModHistoryItem = {
+  id: string;
+  name: string;
+  version: string | null;
+};
+
+export type ModHistoryEntry = {
+  id: string;
+  at: number;
+  action: string;
+  ok: boolean;
+  main: ModHistoryItem[];
+  dependencies: ModHistoryItem[];
+  output: string[];
+};
+
 export type ModHealth = {
   duplicates: string[];
   unmanaged: number;

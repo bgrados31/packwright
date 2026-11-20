@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::State;
 
@@ -104,6 +104,24 @@ pub struct ModAnalysis {
     pub missing_required: Vec<ModDep>,
     pub conflicts: Vec<ModDep>,
     pub checked: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModHistoryItem {
+    pub id: String,
+    pub name: String,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModHistoryEntry {
+    pub id: String,
+    pub at: u64,
+    pub action: String,
+    pub ok: bool,
+    pub main: Vec<ModHistoryItem>,
+    pub dependencies: Vec<ModHistoryItem>,
+    pub output: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -593,6 +611,48 @@ pub async fn mods_analyze(
 #[tauri::command]
 pub fn mods_list(dir: String) -> Result<Vec<InstalledMod>> {
     list_mods(&pack_root(&dir)?)
+}
+
+fn history_path(root: &Path) -> PathBuf {
+    root.join(".packwright").join("mod-history.json")
+}
+
+#[tauri::command]
+pub fn mods_history(dir: String) -> Result<Vec<ModHistoryEntry>> {
+    let root = pack_root(&dir)?;
+    let path = history_path(&root);
+    if !path.is_file() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(path)?;
+    let mut entries: Vec<ModHistoryEntry> = serde_json::from_str(&text).unwrap_or_default();
+    entries.reverse();
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn mods_history_record(dir: String, entry: ModHistoryEntry) -> Result<()> {
+    let root = pack_root(&dir)?;
+    let path = history_path(&root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut entries: Vec<ModHistoryEntry> = if path.is_file() {
+        serde_json::from_str(&std::fs::read_to_string(&path)?).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    entries.push(entry);
+    if entries.len() > 100 {
+        let skip = entries.len() - 100;
+        entries.drain(0..skip);
+    }
+    let tmp = path.with_extension("json.tmp");
+    let json = serde_json::to_string_pretty(&entries)
+        .map_err(|e| AppError::Parse(format!("Could not serialize mod history: {e}")))?;
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(tmp, path)?;
+    Ok(())
 }
 
 #[tauri::command]

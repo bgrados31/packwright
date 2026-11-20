@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 import CreatePackForm from "./components/CreatePackForm";
@@ -13,6 +14,7 @@ import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
 import ExportModal from "./components/ExportModal";
 import OperationModal from "./components/OperationModal";
+import Toasts, { type Toast } from "./components/Toasts";
 import { useI18n } from "./i18n";
 import {
   type AppConfig,
@@ -21,9 +23,13 @@ import {
   type ErrorInfo,
   type FileEntry,
   type HistoryEntry,
+  type InstalledMod,
   type LoaderVersion,
   type McVersion,
+  type ModHistoryEntry,
+  type ModHistoryItem,
   type ModOperation,
+  type OpLine,
   type PackInfo,
   type PackMeta,
   type PackwizStatus,
@@ -46,6 +52,10 @@ function errorText(error: unknown): string {
   return String(error);
 }
 
+function toHistoryItem(mod: InstalledMod): ModHistoryItem {
+  return { id: mod.id, name: mod.name, version: mod.version_id };
+}
+
 export default function App() {
   const { t, setLocale } = useI18n();
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -60,6 +70,7 @@ export default function App() {
   const [exportTarget, setExportTarget] = useState<string | null>(null);
   const [modsOperation, setModsOperation] = useState<ModOperation | null>(null);
   const [modsRevision, setModsRevision] = useState(0);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
@@ -333,6 +344,126 @@ export default function App() {
     }
   };
 
+  const dismissToast = (id: string) =>
+    setToasts((current) => current.filter((item) => item.id !== id));
+
+  const recordModHistory = async (
+    operation: ModOperation,
+    ok: boolean,
+    output: string[],
+    main: ModHistoryItem[],
+    dependencies: ModHistoryItem[],
+  ) => {
+    const entry: ModHistoryEntry = {
+      id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: Date.now(),
+      action: operation.kind,
+      ok,
+      main,
+      dependencies,
+      output: output.slice(-40),
+    };
+    try {
+      await invoke("mods_history_record", { dir: operation.dir, entry });
+    } catch {
+      // El historial es best-effort.
+    }
+  };
+
+  const runModOperation = async (operation: ModOperation) => {
+    if (operation.kind !== "add") {
+      setModsOperation(operation);
+      return;
+    }
+
+    const id = `mod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const lines: string[] = [];
+    let stage = "prepare";
+    const label = () => {
+      const labels: Record<string, string> = {
+        prepare: t("mods.stagePreparing"),
+        download: t("mods.stageDownloading"),
+        deps: t("mods.stageDependencies"),
+        adding: t("mods.stageAdding"),
+      };
+      return `${operation.modName ?? t("mods.title")} · ${labels[stage] ?? labels.prepare}`;
+    };
+
+    setToasts((current) => [...current, { id, title: label(), state: "running" }]);
+
+    let unlisten: (() => void) | undefined;
+    const ready = listen<OpLine>("operation://line", (event) => {
+      if (event.payload.id !== id) return;
+      lines.push(event.payload.line);
+      const text = lines.join(" ").toLowerCase();
+      const next = text.includes("dependenc")
+        ? "deps"
+        : text.includes("download") || text.includes("retriev")
+          ? "download"
+          : text.includes("success") || text.includes("added")
+            ? "adding"
+            : stage;
+      stage = next;
+      setToasts((current) =>
+        current.map((item) =>
+          item.id === id
+            ? { ...item, title: label(), detail: lines[lines.length - 1]?.slice(0, 72) }
+            : item,
+        ),
+      );
+    }).then((fn) => { unlisten = fn; });
+
+    const before = await invoke<InstalledMod[]>("mods_list", { dir: operation.dir }).catch(() => [] as InstalledMod[]);
+    const beforeIds = new Set(before.map((mod) => mod.id));
+
+    try {
+      await ready;
+      await invoke("mods_add", {
+        dir: operation.dir,
+        projectId: operation.projectId,
+        versionId: operation.versionId,
+        id,
+      });
+      const after = await invoke<InstalledMod[]>("mods_list", { dir: operation.dir }).catch(() => before);
+      const added = after.filter((mod) => !beforeIds.has(mod.id));
+      const main = added.filter((mod) => mod.project_id === operation.projectId).map(toHistoryItem);
+      const dependencies = added.filter((mod) => mod.project_id !== operation.projectId).map(toHistoryItem);
+      if (main.length === 0 && added.length > 0) main.push(toHistoryItem(added[0]));
+      await recordModHistory(operation, true, lines, main, dependencies);
+      setToasts((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                id,
+                title: t("mods.toastSuccess", { name: operation.modName ?? t("mods.title") }),
+                detail: dependencies.length > 0 ? t("mods.toastDeps", { count: dependencies.length }) : undefined,
+                state: "success",
+              }
+            : item,
+        ),
+      );
+      setModsRevision((value) => value + 1);
+      void loadPacks();
+    } catch (cause) {
+      await recordModHistory(operation, false, [...lines, errorText(cause)], [], []);
+      setToasts((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                id,
+                title: t("mods.toastError", { name: operation.modName ?? t("mods.title") }),
+                detail: errorText(cause).slice(0, 90),
+                state: "error",
+              }
+            : item,
+        ),
+      );
+    } finally {
+      unlisten?.();
+      window.setTimeout(() => dismissToast(id), 4200);
+    }
+  };
+
   const reloadAssets = async () => {
     if (!selectedPack) return;
     try {
@@ -464,7 +595,7 @@ export default function App() {
               exporting={exportTarget === selectedPack}
               onAssetsChanged={() => void reloadAssets()}
               modsRevision={modsRevision}
-              onModOperation={setModsOperation}
+              onModOperation={(operation) => void runModOperation(operation)}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (
@@ -510,10 +641,20 @@ export default function App() {
             onSuccess={() => {
               setModsRevision((value) => value + 1);
               void loadPacks();
+              const names = modsOperation?.names ?? (modsOperation?.name ? [modsOperation.name] : []);
+              void recordModHistory(
+                modsOperation!,
+                true,
+                [],
+                names.map((name) => ({ id: name, name: modsOperation?.modName ?? name, version: null })),
+                [],
+              );
             }}
           />,
           document.body,
         )}
+
+      <Toasts items={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

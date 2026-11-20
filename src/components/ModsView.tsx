@@ -12,6 +12,7 @@ import {
   Download,
   ExternalLink,
   Heart,
+  History,
   Image as ImageIcon,
   Loader2,
   Pin,
@@ -29,6 +30,7 @@ import type {
   ModAnalysis,
   ModCategory,
   ModHealth,
+  ModHistoryEntry,
   ModOperation,
   ModProject,
   ModSearchHit,
@@ -400,7 +402,9 @@ function ModDetail({
 
 export default function ModsView({ dir, minecraftVersion, loader, revision, onOperation }: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"discover" | "installed">("discover");
+  const [tab, setTab] = useState<"discover" | "installed" | "history">("discover");
+  const [history, setHistory] = useState<ModHistoryEntry[]>([]);
+  const [expandedHistory, setExpandedHistory] = useState<string[]>([]);
   const [projectType, setProjectType] = useState("mod");
   const [installed, setInstalled] = useState<InstalledMod[]>([]);
   const [health, setHealth] = useState<ModHealth | null>(null);
@@ -428,8 +432,15 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
     Promise.all([
       invoke<InstalledMod[]>("mods_list", { dir }),
       invoke<ModHealth>("mods_health", { dir }),
+      invoke<ModHistoryEntry[]>("mods_history", { dir }),
     ])
-      .then(([list, status]) => { if (!cancelled) { setInstalled(list); setHealth(status); } })
+      .then(([list, status, entries]) => {
+        if (!cancelled) {
+          setInstalled(list);
+          setHealth(status);
+          setHistory(entries);
+        }
+      })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [dir, revision]);
@@ -595,6 +606,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
         {([
           ["discover", t("mods.discover"), null],
           ["installed", t("mods.installed"), installed.length],
+          ["history", t("mods.history"), history.length],
         ] as const).map(([id, label, count]) => (
           <button
             key={id}
@@ -874,7 +886,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
             </div>
           )}
         </div>
-      ) : (
+      ) : tab === "installed" ? (
         <div className="mt-5">
           <div className="surface-soft flex flex-wrap items-center gap-2.5 p-2.5">
             <div className="relative min-w-[200px] flex-1">
@@ -976,6 +988,85 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                   </div>
                 </article>
               ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-5">
+          {history.length === 0 ? (
+            <div className="card grid place-items-center py-16">
+              <div className="text-center">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft text-accent">
+                  <History size={20} />
+                </div>
+                <p className="mt-4 text-sm font-medium">{t("mods.historyEmpty")}</p>
+                <p className="mt-1 text-xs text-muted">{t("mods.historyEmptyHint")}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {history.map((entry) => {
+                const open = expandedHistory.includes(entry.id);
+                const date = new Date(entry.at);
+                return (
+                  <article key={entry.id} className="card overflow-hidden">
+                    <button
+                      className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-subtle"
+                      onClick={() => setExpandedHistory((current) =>
+                        open ? current.filter((id) => id !== entry.id) : [...current, entry.id],
+                      )}
+                    >
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${entry.ok ? "bg-accent-soft text-accent" : "bg-bad/10 text-bad"}`}>
+                        {entry.action === "add" ? <Download size={14} /> : <RefreshCw size={14} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium">
+                          {entry.main.length > 0 ? entry.main.map((item) => item.name).join(", ") : t(`mods.action.${entry.action}` as TranslationKey)}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[10px] text-muted">
+                          {date.toLocaleString()} · {t(`mods.action.${entry.action}` as TranslationKey)}
+                          {entry.dependencies.length > 0 && ` · +${entry.dependencies.length} ${t("mods.depsShort").toLowerCase()}`}
+                        </p>
+                      </div>
+                      <span className={`chip ${entry.ok ? "" : "chip-issue"}`}>
+                        {entry.ok ? t("mods.historyOk") : t("mods.historyFailed")}
+                      </span>
+                      <ChevronDown size={14} className={`shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
+                    </button>
+                    {open && (
+                      <div className="border-t border-line px-4 py-3">
+                        {entry.main.length > 0 && (
+                          <div className="mb-2">
+                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">{t("mods.installedNow")}</p>
+                            {entry.main.map((item) => (
+                              <p key={item.id} className="text-[12px]">
+                                {item.name} <span className="font-mono text-[10px] text-muted">{item.version ?? ""}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        {entry.dependencies.length > 0 && (
+                          <div className="mb-2">
+                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">{t("mods.viewDependencies")}</p>
+                            {entry.dependencies.map((item) => (
+                              <p key={item.id} className="text-[12px]">
+                                {item.name} <span className="font-mono text-[10px] text-muted">{item.version ?? ""}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        {entry.output.length > 0 && (
+                          <div className="mt-2 rounded-lg bg-subtle p-2">
+                            {entry.output.slice(-6).map((line, index) => (
+                              <p key={index} className="output-line">{line}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
