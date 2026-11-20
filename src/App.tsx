@@ -15,6 +15,7 @@ import SettingsView from "./components/SettingsView";
 import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
 import DebugConsole from "./components/DebugConsole";
+import ImportModal from "./components/ImportModal";
 import { useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
@@ -86,6 +87,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [view, setView] = useState<SidebarView>("home");
@@ -813,6 +815,7 @@ export default function App() {
             onExport={setExportTarget}
             exporting={exportTarget}
             onNew={() => setView("create")}
+            onImport={() => setImportOpen(true)}
           />
         )}
       </main>
@@ -823,6 +826,18 @@ export default function App() {
             dir={exportTarget}
             packName={packs.find((pack) => pack.dir === exportTarget)?.name ?? exportTarget}
             onClose={() => setExportTarget(null)}
+          />,
+          document.body,
+        )}
+
+      {importOpen &&
+        createPortal(
+          <ImportModal
+            onClose={() => setImportOpen(false)}
+            onImported={() => {
+              setImportOpen(false);
+              void loadPacks();
+            }}
           />,
           document.body,
         )}

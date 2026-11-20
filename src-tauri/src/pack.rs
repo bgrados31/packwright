@@ -55,6 +55,17 @@ pub fn workspace_set(path: String) -> Result<AppConfig> {
 }
 
 #[tauri::command]
+pub fn pick_file(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog()
+        .file()
+        .add_filter("Modpack (.mrpack)", &["mrpack"])
+        .blocking_pick_file()
+        .and_then(|path| path.into_path().ok())
+        .map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn pick_folder(app: AppHandle) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
     app.dialog()

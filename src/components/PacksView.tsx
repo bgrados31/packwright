@@ -4,6 +4,7 @@ import {
   Boxes,
   Compass,
   Eye,
+  FileArchive,
   FolderOpen,
   LayoutGrid,
   Loader2,
@@ -29,6 +30,7 @@ type Props = {
   onExport: (dir: string) => void;
   exporting: string | null;
   onNew: () => void;
+  onImport: () => void;
 };
 
 type SortMode = "name" | "recent" | "mods";
@@ -42,7 +44,7 @@ const LOADER_TONES: Record<string, string> = {
   purpur: "tone-purpur",
 };
 
-export default function PacksView({ packs, workspace, onOpen, onReveal, onExport, exporting, onNew }: Props) {
+export default function PacksView({ packs, workspace, onOpen, onReveal, onExport, exporting, onNew, onImport }: Props) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortMode>("name");
@@ -108,7 +110,11 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
             <span className="hero-pill max-w-[280px] truncate font-mono text-[10px]">{workspace}</span>
           </div>
         </div>
-        <div className="hero-cta">
+        <div className="hero-cta flex items-center gap-2">
+          <button className="btn btn-secondary" onClick={onImport} title={t("import.title")}>
+            <FileArchive size={15} />
+            {t("import.start")}
+          </button>
           <button className="btn btn-primary" onClick={onNew}>
             <Plus size={15} strokeWidth={2} />
             {t("nav.newPack")}

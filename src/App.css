@@ -723,6 +723,17 @@ details summary::-webkit-details-marker { display: none; }
 
 /* --- Modal de exportación --- */
 .export-modal { max-width: 620px; }
+.serve-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--pw-line);
+  border-radius: 9px;
+  background: var(--pw-subtle);
+}
+.serve-status.on { border-color: color-mix(in srgb, var(--pw-ok) 35%, transparent); }
+
 .export-picker { padding: 16px 18px 0; }
 .export-platform {
   display: flex;

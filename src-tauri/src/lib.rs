@@ -1,11 +1,13 @@
 mod config;
 mod error;
 mod export;
+mod import;
 mod files;
 mod meta;
 mod mods;
 mod model;
 mod pack;
+mod serve;
 mod process;
 mod versions;
 
@@ -29,6 +31,7 @@ pub fn run() {
             app.manage(AppState {
                 runner: CommandRunner::new(app.handle().clone()),
             });
+            app.manage(serve::ServeState::new(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -41,10 +44,15 @@ pub fn run() {
             pack::pack_create,
             pack::pack_reveal,
             pack::pick_folder,
+            pack::pick_file,
             pack::launcher_defaults,
             pack::open_path,
             export::pack_export,
             export::export_validate,
+            import::pack_import,
+            serve::serve_start,
+            serve::serve_stop,
+            serve::serve_status,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,

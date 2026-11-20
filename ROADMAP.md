@@ -51,11 +51,11 @@
 - [x] Historial por pack con mods, dependencias y salida de cada operación
 - [x] Iconos de mods cacheados, tags con color y health checks (duplicados / sin fuente)
 
-### 1.5 Export / import (en curso)
-- [x] Export `.mrpack` (Modrinth) y `.zip` (CurseForge client/server) con modal animado
-- [x] Selector de formato y validación previa (metadata, índice, icono, duplicados) con opción de exportar de todos modos
-- [ ] Import `.mrpack` existente
-- [ ] `packwiz serve` + README de instalación por launcher
+### 1.5 Export / import ✅
+- [x] Export `.mrpack` (Modrinth) y `.zip` (CurseForge client/server) con modal simple y validación previa
+- [x] Consola flotante opcional (modo debug) para toda la salida de packwiz
+- [x] Import `.mrpack` existente (mods, overrides, metadata y packwiz refresh)
+- [x] `packwiz serve` con start/stop y URL para launchers
 
 ### 1.6 Dev Instance
 - [ ] Instancia de prueba con junction/symlink del `mods/`

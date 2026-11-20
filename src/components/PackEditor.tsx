@@ -1,6 +1,7 @@
 import { lazy, Suspense, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, ImagePlus, Loader2, PackageOpen, Settings2, Trash2, X } from "lucide-react";
+import { Copy, ImagePlus, Loader2, PackageOpen, Radio, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -16,6 +17,7 @@ import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
 import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
+import ServeModal from "./ServeModal";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -78,6 +80,7 @@ export default function PackEditor(props: Props) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [serveOpen, setServeOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -142,6 +145,9 @@ export default function PackEditor(props: Props) {
           <p className="mt-1 font-mono text-xs text-muted">{props.dir}</p>
         </div>
         <div className="flex gap-2">
+          <button className="btn btn-ghost" onClick={() => setServeOpen(true)} title={t("serve.title")}>
+            <Radio size={14} /> {t("serve.title")}
+          </button>
           <button
             className="btn btn-secondary"
             onClick={props.onExport}
@@ -598,6 +604,16 @@ export default function PackEditor(props: Props) {
           </div>
         </div>
       )}
+
+      {serveOpen &&
+        createPortal(
+          <ServeModal
+            dir={props.dir}
+            port={props.config.serve_port || 8080}
+            onClose={() => setServeOpen(false)}
+          />,
+          document.body,
+        )}
 
       {tabMenu && (
         <ContextMenu
