@@ -56,6 +56,7 @@
 - [x] Consola flotante opcional (modo debug) para toda la salida de packwiz
 - [x] Import `.mrpack` existente (mods, overrides, metadata y packwiz refresh)
 - [x] Import desde Modrinth (búsqueda, enlace de proyecto o URL directa al `.mrpack`, detección automática)
+- [x] Import CurseForge `.zip` (manifest + resolución de archivos con clave de API configurable en Settings)
 - [x] `packwiz serve` con start/stop y URL para launchers
 
 ### 1.6 Dev Instance ✅
@@ -95,4 +96,4 @@
 - Hosting 24/7 en la nube (la app es local-first)
 - Hot-replace de `.jar` en Minecraft en ejecución (limitación de la JVM)
 - Móvil como objetivo principal
-- Import CurseForge `.zip`: requiere `x-api-key` de CurseForge para resolver los archivos del manifest (no implementado)
+- Descarga anónima de archivos de CurseForge: su API exige `x-api-key`; se usa la clave configurada en Settings

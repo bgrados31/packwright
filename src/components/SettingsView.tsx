@@ -285,6 +285,18 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
                 spellCheck={false}
               />
             </div>
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <span className="text-xs text-muted">{t("settings.curseforgeKey")}</span>
+              <input
+                className="field font-mono text-xs"
+                type="password"
+                value={draft.curseforge_api_key ?? ""}
+                onChange={(event) => patch({ curseforge_api_key: event.target.value })}
+                placeholder="••••••••"
+                autoComplete="off"
+              />
+              <span className="text-[10px] text-muted">{t("settings.curseforgeKeyHint")}</span>
+            </div>
           </div>
         </Section>
 

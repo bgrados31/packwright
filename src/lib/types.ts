@@ -33,6 +33,7 @@ export type AppConfig = {
   debug_console: boolean;
   modrinth_token: string;
   modrinth_project_id: string;
+  curseforge_api_key: string;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };

@@ -64,6 +64,7 @@ pub fn run() {
             import::pack_import,
             import::modpack_search,
             import::modpack_import_source,
+            import::modpack_import_curseforge,
             serve::serve_start,
             serve::serve_stop,
             serve::serve_status,

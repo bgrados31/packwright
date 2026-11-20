@@ -53,6 +53,9 @@ pub struct AppConfig {
     pub modrinth_token: String,
     #[serde(default)]
     pub modrinth_project_id: String,
+    /// Clave para resolver los archivos de un manifest de CurseForge.
+    #[serde(default)]
+    pub curseforge_api_key: String,
 }
 
 fn default_tab_size() -> u32 { 2 }
@@ -104,6 +107,7 @@ impl Default for AppConfig {
             debug_console: false,
             modrinth_token: String::new(),
             modrinth_project_id: String::new(),
+            curseforge_api_key: String::new(),
         }
     }
 }

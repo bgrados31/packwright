@@ -12,6 +12,57 @@ use crate::meta;
 use crate::model;
 use crate::pack::AppState;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_curseforge_manifest() {
+        let json = r#"{
+            "name": "Test Pack",
+            "version": "1.0.0",
+            "minecraft": { "version": "1.20.1", "modLoaders": [{ "id": "fabric-0.15.0", "primary": true }] },
+            "files": [{ "projectID": 123, "fileID": 456, "required": true }]
+        }"#;
+        let manifest: CfManifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.name, "Test Pack");
+        assert_eq!(manifest.minecraft.version, "1.20.1");
+        assert_eq!(manifest.minecraft.mod_loaders[0].id, "fabric-0.15.0");
+        assert_eq!(manifest.files[0].project_id, 123);
+        assert_eq!(manifest.files[0].file_id, 456);
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CfManifest {
+    name: String,
+    #[serde(default)]
+    version: String,
+    minecraft: CfMinecraft,
+    #[serde(default)]
+    files: Vec<CfFile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CfMinecraft {
+    version: String,
+    #[serde(default, rename = "modLoaders")]
+    mod_loaders: Vec<CfLoader>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CfLoader {
+    id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CfFile {
+    #[serde(rename = "projectID")]
+    project_id: u64,
+    #[serde(rename = "fileID")]
+    file_id: u64,
+}
+
 #[derive(Debug, Deserialize)]
 struct ModrinthIndex {
     name: String,
@@ -341,4 +392,158 @@ pub async fn modpack_import_source(
         let _ = std::fs::remove_dir_all(folder);
     }
     result
+}
+
+/// Importa un modpack `.zip` de CurseForge resolviendo los archivos con la API oficial.
+#[tauri::command]
+pub async fn modpack_import_curseforge(
+    state: State<'_, AppState>,
+    source: String,
+    name: Option<String>,
+    id: Option<String>,
+) -> Result<model::PackInfo> {
+    let cfg = config::load()?;
+    let api_key = cfg.curseforge_api_key.trim();
+    if api_key.is_empty() {
+        return Err(AppError::Validation(
+            "Set your CurseForge API key in Settings before importing a .zip".into(),
+        ));
+    }
+
+    let source = source.trim();
+    let local = source.strip_prefix("file://").unwrap_or(source);
+    let (archive_path, temporary) = if local.starts_with("http://") || local.starts_with("https://") {
+        let client = crate::net::download_client()?;
+        let response = client.get(local).send().await
+            .map_err(|e| AppError::Process(format!("Modpack download failed: {e}")))?;
+        if !response.status().is_success() {
+            return Err(AppError::Process(format!("Modpack download returned HTTP {}", response.status())));
+        }
+        let bytes = response.bytes().await
+            .map_err(|e| AppError::Process(format!("Modpack read failed: {e}")))?;
+        let folder = std::env::temp_dir().join(format!(
+            "packwright-cf-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+        ));
+        std::fs::create_dir_all(&folder)?;
+        let file = folder.join("modpack.zip");
+        std::fs::write(&file, &bytes)?;
+        (file, Some(folder))
+    } else {
+        (PathBuf::from(local), None)
+    };
+
+    let result = import_curseforge_from_file(state, &cfg, &archive_path, api_key, name, id).await;
+    if let Some(folder) = temporary {
+        let _ = std::fs::remove_dir_all(folder);
+    }
+    result
+}
+
+async fn import_curseforge_from_file(
+    state: State<'_, AppState>,
+    cfg: &config::AppConfig,
+    source: &Path,
+    api_key: &str,
+    name: Option<String>,
+    id: Option<String>,
+) -> Result<model::PackInfo> {
+    if !source.is_file() {
+        return Err(AppError::NotFound(format!("Modpack not found: {}", source.display())));
+    }
+    let file = std::fs::File::open(source)?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| AppError::Parse(format!("Invalid CurseForge .zip: {e}")))?;
+    let manifest: CfManifest = {
+        let mut entry = archive.by_name("manifest.json")
+            .map_err(|_| AppError::Parse("The .zip has no manifest.json".into()))?;
+        let mut text = String::new();
+        entry.read_to_string(&mut text)?;
+        serde_json::from_str(&text)
+            .map_err(|e| AppError::Parse(format!("Invalid manifest.json: {e}")))?
+    };
+
+    let pack_name = name.filter(|value| !value.trim().is_empty()).unwrap_or(manifest.name.clone());
+    let base = model::slugify(&pack_name);
+    let mut target = cfg.workspace.join(&base);
+    let mut suffix = 2;
+    while target.exists() {
+        target = cfg.workspace.join(format!("{base}-{suffix}"));
+        suffix += 1;
+    }
+    std::fs::create_dir_all(target.join("mods"))?;
+    std::fs::create_dir_all(target.join(".packwright").join("assets"))?;
+
+    let mut pack_toml = format!(
+        "name = {}\nversion = {}\nauthor = \"Imported\"\ndescription = \"Imported from CurseForge\"\n\n[versions]\nminecraft = {}\n",
+        toml_quote(&pack_name),
+        toml_quote(&manifest.version),
+        toml_quote(&manifest.minecraft.version),
+    );
+    if let Some(loader) = manifest.minecraft.mod_loaders.first() {
+        if let Some((kind, version)) = loader.id.split_once('-') {
+            pack_toml.push_str(&format!("{} = {}\n", kind, toml_quote(version)));
+        }
+    }
+    std::fs::write(target.join("pack.toml"), pack_toml)?;
+
+    let client = http_client()?;
+    for entry in &manifest.files {
+        let url = format!(
+            "https://api.curseforge.com/v1/mods/{}/files/{}/download-url",
+            entry.project_id, entry.file_id
+        );
+        let response = client.get(&url).header("x-api-key", api_key).send().await
+            .map_err(|e| AppError::Process(format!("CurseForge API: {e}")))?;
+        if !response.status().is_success() {
+            return Err(AppError::Process(format!(
+                "CurseForge returned HTTP {} for mod {} file {}",
+                response.status(), entry.project_id, entry.file_id
+            )));
+        }
+        let body: Value = response.json().await
+            .map_err(|e| AppError::Parse(format!("Invalid CurseForge response: {e}")))?;
+        let download_url = body["data"].as_str()
+            .ok_or_else(|| AppError::NotFound("CurseForge did not return a download URL".into()))?;
+        let filename = download_url.split('?').next().unwrap_or(download_url)
+            .rsplit('/').next().unwrap_or("mod.jar");
+        let stem = filename.rsplit_once('.').map(|(value, _)| value).unwrap_or(filename);
+        let text = format!(
+            "name = {}\nfilename = {}\nside = \"both\"\n\n[download]\nurl = {}\n",
+            toml_quote(&format!("mod-{}", entry.project_id)),
+            toml_quote(stem),
+            toml_quote(download_url),
+        );
+        std::fs::write(target.join("mods").join(format!("{stem}.pw.toml")), text)?;
+    }
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)
+            .map_err(|e| AppError::Parse(format!("Could not read archive entry: {e}")))?;
+        let entry_name = entry.name().to_string();
+        if !entry_name.starts_with("overrides/") || entry_name.ends_with('/') {
+            continue;
+        }
+        let relative = safe_relative(entry_name.trim_start_matches("overrides/"))?;
+        let destination = target.join(relative);
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut buffer = Vec::new();
+        entry.read_to_end(&mut buffer)?;
+        std::fs::write(destination, buffer)?;
+    }
+
+    std::fs::write(target.join(".packwright").join("meta.toml"), format!(
+        "summary = \"Imported from CurseForge\"\nlicense = \"\"\nhomepage = \"\"\nsource = \"\"\ncategories = []\nicon = \".packwright/assets/icon.png\"\nbanner = \".packwright/assets/banner.png\"\nreadme = \"README.md\"\n",
+    ))?;
+    std::fs::write(target.join(".packwright").join("assets").join("icon.png"), meta::DEFAULT_ICON)?;
+
+    let runner_id = id.unwrap_or_else(|| format!("import-cf-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()));
+    let packwiz = config::resolve_packwiz(cfg)?;
+    let output = state.runner.run_with_id(Some(runner_id), &packwiz, &["refresh".to_string(), "-y".to_string()], &target).await?;
+    if !output.ok {
+        return Err(AppError::Process("packwiz refresh failed after CurseForge import".into()));
+    }
+    model::read_pack_info(&target)
 }

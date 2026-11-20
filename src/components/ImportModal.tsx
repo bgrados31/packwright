@@ -9,7 +9,7 @@ type Props = {
   onImported: (pack: PackInfo) => void;
 };
 
-type Mode = "file" | "modrinth" | "url";
+type Mode = "file" | "modrinth" | "url" | "curseforge";
 
 function messageOf(error: unknown): string {
   if (typeof error === "object" && error !== null && "message" in error) {
@@ -42,7 +42,7 @@ export default function ImportModal({ onClose, onImported }: Props) {
       if (path) {
         setSource(path);
         const file = path.split(/[\\/]/).pop() ?? "pack";
-        setName(file.replace(/\.mrpack$/i, ""));
+        setName(file.replace(/\.(mrpack|zip)$/i, ""));
       }
     } catch (cause) {
       setError(messageOf(cause));
@@ -80,7 +80,8 @@ export default function ImportModal({ onClose, onImported }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const pack = await invoke<PackInfo>("modpack_import_source", {
+      const command = mode === "curseforge" ? "modpack_import_curseforge" : "modpack_import_source";
+      const pack = await invoke<PackInfo>(command, {
         source,
         name: name.trim() || null,
         id: `import-${Date.now()}`,
@@ -97,6 +98,7 @@ export default function ImportModal({ onClose, onImported }: Props) {
     ["file", t("import.tabFile"), FileArchive],
     ["modrinth", t("import.tabModrinth"), Search],
     ["url", t("import.tabLink"), Globe2],
+    ["curseforge", t("import.tabCurseforge"), FileArchive],
   ];
 
   return (
@@ -184,6 +186,18 @@ export default function ImportModal({ onClose, onImported }: Props) {
               />
               <span className="text-[10px] text-muted">{t("import.linkHint")}</span>
             </label>
+          )}
+
+          {mode === "curseforge" && (
+            <div>
+              <button className="export-platform w-full" onClick={() => void chooseFile()} disabled={busy}>
+                <FileArchive size={17} className="shrink-0 text-accent" />
+                <span className="min-w-0 text-left">
+                  <span className="block truncate text-[12px] font-medium">{source ?? t("import.chooseZip")}</span>
+                  <span className="block truncate text-[10px] text-muted">{t("import.curseforgeHint")}</span>
+                </span>
+              </button>
+            </div>
           )}
 
           {source && (
