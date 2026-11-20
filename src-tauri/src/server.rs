@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
@@ -777,15 +778,14 @@ pub async fn server_stop(state: tauri::State<'_, ServerState>, name: String) -> 
     Ok(())
 }
 
-#[tauri::command]
-pub async fn server_send(state: tauri::State<'_, ServerState>, name: String, command: String) -> Result<()> {
+async fn write_command(state: &ServerState, name: &str, command: &str) -> Result<()> {
     let command = command.trim();
     if command.is_empty() {
         return Ok(());
     }
     let mut stdin_map = state.stdin.lock().await;
     let stdin = stdin_map
-        .get_mut(&name)
+        .get_mut(name)
         .ok_or_else(|| AppError::Validation("The server is not running".into()))?;
     stdin.write_all(format!("{command}\n").as_bytes()).await
         .map_err(|e| AppError::Process(format!("Could not send command: {e}")))?;
@@ -793,6 +793,27 @@ pub async fn server_send(state: tauri::State<'_, ServerState>, name: String, com
         .map_err(|e| AppError::Process(format!("Could not flush command: {e}")))?;
     emit(&state.app, &format!("server-{name}-command"), &format!("> {command}"), "command");
     Ok(())
+}
+
+#[tauri::command]
+pub async fn server_send(state: tauri::State<'_, ServerState>, name: String, command: String) -> Result<()> {
+    write_command(&state, &name, &command).await
+}
+
+#[tauri::command]
+pub async fn server_player_action(
+    state: tauri::State<'_, ServerState>,
+    name: String,
+    player: String,
+    action: String,
+) -> Result<()> {
+    let command = match action.as_str() {
+        "kick" => format!("kick {player}"),
+        "ban" => format!("ban {player}"),
+        "pardon" => format!("pardon {player}"),
+        _ => return Err(AppError::Validation("Invalid player action".into())),
+    };
+    write_command(&state, &name, &command).await
 }
 
 #[tauri::command]
@@ -858,22 +879,135 @@ pub fn server_players(name: String) -> Result<ServerPlayers> {
     })
 }
 
+fn players_file(dir: &Path, list: &str) -> Result<PathBuf> {
+    match list {
+        "ops" => Ok(dir.join("ops.json")),
+        "whitelist" => Ok(dir.join("whitelist.json")),
+        "bans" => Ok(dir.join("banned-players.json")),
+        _ => Err(AppError::Validation("Invalid player list".into())),
+    }
+}
+
+static UUID_CACHE: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static AVATAR_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+async fn resolve_uuid(client: &reqwest::Client, player: &str) -> Option<String> {
+    let safe: String = player.chars()
+        .filter(|value| value.is_ascii_alphanumeric() || *value == '_')
+        .collect();
+    if safe.is_empty() {
+        return None;
+    }
+    if let Some(cached) = UUID_CACHE.lock().await.get(&safe) {
+        return cached.clone();
+    }
+    let mut resolved = None;
+    for url in [
+        format!("https://api.minecraftservices.com/minecraft/profile/lookup/name/{safe}"),
+        format!("https://api.mojang.com/users/profiles/minecraft/{safe}"),
+    ] {
+        if let Ok(response) = client.get(&url).send().await {
+            if response.status().is_success() {
+                if let Ok(body) = response.json::<Value>().await {
+                    if let Some(id) = body["id"].as_str() {
+                        resolved = Some(id.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    UUID_CACHE.lock().await.insert(safe, resolved.clone());
+    resolved
+}
+
+/// Devuelve la cara del jugador como data URL (caché en memoria).
 #[tauri::command]
-pub fn server_player_add(name: String, list: String, player: String) -> Result<()> {
+pub async fn player_avatar(player: String) -> Result<String> {
+    let client = http_client()?;
+    let uuid = resolve_uuid(&client, &player).await
+        .ok_or_else(|| AppError::NotFound("Player UUID not found".into()))?;
+    if let Some(cached) = AVATAR_CACHE.lock().await.get(&uuid) {
+        return Ok(cached.clone());
+    }
+    let mut bytes = None;
+    for url in [
+        format!("https://minotar.net/helm/{uuid}/64.png"),
+        format!("https://crafatar.com/avatars/{uuid}?size=64&overlay"),
+    ] {
+        if let Ok(response) = client.get(&url).send().await {
+            if response.status().is_success() {
+                if let Ok(body) = response.bytes().await {
+                    bytes = Some(body);
+                    break;
+                }
+            }
+        }
+    }
+    let bytes = bytes.ok_or_else(|| AppError::NotFound("Avatar not available".into()))?;
+    let data = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    );
+    AVATAR_CACHE.lock().await.insert(uuid, data.clone());
+    Ok(data)
+}
+
+#[tauri::command]
+pub async fn server_player_add(name: String, list: String, player: String) -> Result<()> {
     let cfg = config::load()?;
     let dir = server_dir(&cfg, &name)?;
-    let file = match list.as_str() {
-        "ops" => dir.join("ops.json"),
-        "whitelist" => dir.join("whitelist.json"),
-        "bans" => dir.join("banned-players.json"),
-        _ => return Err(AppError::Validation("Invalid player list".into())),
-    };
+    let file = players_file(&dir, &list)?;
     let mut entries: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|_| "[]".into()))
         .unwrap_or_default();
-    entries.push(json!({ "uuid": "00000000-0000-0000-0000-000000000000", "name": player, "level": 4 }));
+    if entries.iter().any(|entry| entry["name"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&player))) {
+        return Ok(());
+    }
+    let uuid = resolve_uuid(&http_client()?, &player).await
+        .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string());
+    entries.push(json!({ "uuid": uuid, "name": player, "level": 4 }));
     std::fs::write(file, serde_json::to_string_pretty(&entries)
         .map_err(|e| AppError::Parse(format!("Could not serialize player list: {e}")))?)?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn server_player_remove(name: String, list: String, player: String) -> Result<()> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    let file = players_file(&dir, &list)?;
+    let entries: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|_| "[]".into()))
+        .unwrap_or_default();
+    let kept: Vec<Value> = entries.into_iter()
+        .filter(|entry| !entry["name"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&player)))
+        .collect();
+    std::fs::write(file, serde_json::to_string_pretty(&kept)
+        .map_err(|e| AppError::Parse(format!("Could not serialize player list: {e}")))?)?;
+    Ok(())
+}
+
+/// Nombres conocidos (usercache, listas y logs) para autocompletar la consola.
+#[tauri::command]
+pub fn server_known_players(name: String) -> Result<Vec<String>> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    let mut names: Vec<String> = Vec::new();
+    for file in ["usercache.json", "ops.json", "whitelist.json", "banned-players.json"] {
+        names.extend(read_names(&dir.join(file)));
+    }
+    if let Ok(text) = std::fs::read_to_string(dir.join("logs").join("latest.log")) {
+        for line in text.lines() {
+            if let Some((_, player, _)) = parse_player_event(line) {
+                names.push(player);
+            }
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    names.retain(|value| seen.insert(value.to_lowercase()));
+    names.sort_by_key(|value| value.to_lowercase());
+    Ok(names)
 }
 
 #[tauri::command]
@@ -973,6 +1107,15 @@ fn safe_component(name: &std::ffi::OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires network access to Minecraft services"]
+    async fn fetches_player_avatar() {
+        let avatar = player_avatar("TNOZamas".to_string()).await.unwrap();
+        assert!(avatar.starts_with("data:image/png;base64,"));
+        assert!(avatar.len() > 100);
+        println!("Avatar resuelto: {} bytes", avatar.len());
+    }
 
     #[test]
     fn parses_player_log_events() {

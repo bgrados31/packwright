@@ -68,6 +68,7 @@ export default function ServersView({ packs }: Props) {
   const [consoleServer, setConsoleServer] = useState<ServerInfo | null>(null);
   const [lines, setLines] = useState<OpLine[]>([]);
   const [consoleRunning, setConsoleRunning] = useState(false);
+  const [knownPlayers, setKnownPlayers] = useState<string[]>([]);
   const [propertiesServer, setPropertiesServer] = useState<ServerInfo | null>(null);
   const [properties, setProperties] = useState("");
   const [syncPack, setSyncPack] = useState("");
@@ -181,6 +182,9 @@ export default function ServersView({ packs }: Props) {
     invoke<ServerStats>("server_stats", { name: server.name })
       .then((stats) => setConsoleRunning(stats.running))
       .catch(() => setConsoleRunning(false));
+    invoke<string[]>("server_known_players", { name: server.name })
+      .then(setKnownPlayers)
+      .catch(() => setKnownPlayers([]));
   };
 
   const start = (server: ServerInfo) => {
@@ -384,6 +388,7 @@ export default function ServersView({ packs }: Props) {
                 lines={lines}
                 running={consoleRunning}
                 height={260}
+                playerNames={knownPlayers}
                 onClear={() => setLines([])}
                 onSend={async (command) => {
                   try {

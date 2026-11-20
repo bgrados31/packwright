@@ -1562,3 +1562,32 @@ details summary::-webkit-details-marker { display: none; }
 .console-suggest button { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; text-align: left; }
 .console-suggest button:hover { background: var(--pw-subtle); }
 @keyframes consolePulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pw-ok) 45%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+/* --- Jugadores --- */
+.player-avatar {
+  display: block;
+  flex: none;
+  image-rendering: pixelated;
+  border: 1px solid var(--pw-line);
+  border-radius: 5px;
+  background: var(--pw-subtle);
+  object-fit: cover;
+}
+.player-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--pw-accent);
+}
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  transition: background 140ms ease;
+}
+.player-row:hover { background: var(--pw-subtle); }
+.player-actions { display: flex; gap: 4px; opacity: 0.55; transition: opacity 140ms ease; }
+.player-row:hover .player-actions { opacity: 1; }

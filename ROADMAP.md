@@ -81,7 +81,8 @@
 - [x] start/stop/restart + consola en vivo con stdin interactivo, autocompletado e historial de comandos
 - [x] Sync cliente ↔ servidor (mods)
 - [x] Bedrock + GeyserMC (instalador del plugin)
-- [x] Backups, jugadores (ops/whitelist/bans)
+- [x] Backups, jugadores (ops/whitelist/bans) con avatar, roles y acciones rápidas (op/deop, whitelist, kick/ban/pardon)
+- [x] Consola con autocompletado de comandos y jugadores conocidos (usercache, listas y logs)
 - [x] Túnel playit.gg: agente `playitd` instalable, secret persistido, start/stop y consola en vivo
 - [ ] Agente remoto opcional (SSH) — fuera del alcance actual
 

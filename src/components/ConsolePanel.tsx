@@ -9,6 +9,7 @@ type Props = {
   running: boolean;
   height?: number;
   onClear: () => void;
+  playerNames?: string[];
 };
 
 const SUGGESTIONS: Array<[string, string]> = [
@@ -33,7 +34,7 @@ const SUGGESTIONS: Array<[string, string]> = [
   ["plugins", "List plugins"],
 ];
 
-export default function ConsolePanel({ lines, onSend, running, height = 320, onClear }: Props) {
+export default function ConsolePanel({ lines, onSend, running, height = 320, onClear, playerNames = [] }: Props) {
   const { t } = useI18n();
   const [command, setCommand] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -45,8 +46,23 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
   const hints = useMemo(() => {
     const term = command.trim().toLowerCase();
     if (!term) return [];
-    return SUGGESTIONS.filter(([name, hint]) => name.toLowerCase().includes(term) || hint.toLowerCase().includes(term)).slice(0, 6);
-  }, [command]);
+    const parts = command.split(/\s+/);
+    const last = parts[parts.length - 1] ?? "";
+    const players = playerNames
+      .filter((name) => name.toLowerCase().startsWith(last.toLowerCase()) && name.toLowerCase() !== last.toLowerCase())
+      .slice(0, 4)
+      .map((name) => ({
+        label: name,
+        hint: t("console.player"),
+        value: parts.length > 1 ? [...parts.slice(0, -1), name].join(" ") : name,
+        player: true,
+      }));
+    const commands = SUGGESTIONS
+      .filter(([name, hint]) => name.toLowerCase().includes(term) || hint.toLowerCase().includes(term))
+      .slice(0, 6)
+      .map(([name, hint]) => ({ label: name, hint, value: name, player: false }));
+    return [...players, ...commands].slice(0, 8);
+  }, [command, playerNames, t]);
 
   useEffect(() => {
     const element = boxRef.current;
@@ -69,7 +85,7 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
       void send();
     } else if (event.key === "Tab" && hints.length > 0) {
       event.preventDefault();
-      setCommand(hints[0][0]);
+      setCommand(hints[0].value);
       setShowHints(false);
     } else if (event.key === "ArrowUp" && history.length > 0) {
       event.preventDefault();
@@ -118,14 +134,14 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
       <div className="console-compose">
         {showHints && hints.length > 0 && (
           <div className="console-suggest">
-            {hints.map(([name, hint]) => (
+            {hints.map((suggestion) => (
               <button
-                key={name}
+                key={`${suggestion.player ? "p" : "c"}-${suggestion.label}`}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => { setCommand(name); setShowHints(false); inputRef.current?.focus(); }}
+                onClick={() => { setCommand(suggestion.value); setShowHints(false); inputRef.current?.focus(); }}
               >
-                <span className="font-mono text-[11px] text-accent">{name}</span>
-                <span className="text-[10px] text-muted">{hint}</span>
+                <span className={`font-mono text-[11px] ${suggestion.player ? "text-[var(--pw-ok)]" : "text-accent"}`}>{suggestion.label}</span>
+                <span className="text-[10px] text-muted">{suggestion.hint}</span>
               </button>
             ))}
           </div>

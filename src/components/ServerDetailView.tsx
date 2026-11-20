@@ -1,20 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   Activity,
   ArrowLeft,
+  Ban,
   ChevronRight,
   Copy,
   Database,
   FileCode2,
   Folder,
   FolderOpen,
+  Gavel,
   HardDrive,
   Play,
   RefreshCw,
   Save,
+  Shield,
+  ShieldOff,
   Square,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { useI18n } from "../i18n";
@@ -28,6 +33,7 @@ import type {
 } from "../lib/types";
 import { Checkbox } from "./ui";
 import ConsolePanel from "./ConsolePanel";
+import PlayerAvatar from "./PlayerAvatar";
 
 type Props = {
   server: ServerInfo;
@@ -78,6 +84,41 @@ function stringifyProperties(values: Properties): string {
   return `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
 }
 
+type PlayerAction = { key: string; title: string; icon: ReactNode; run: () => void };
+
+function PlayerRow({
+  name,
+  badge,
+  actions,
+  busy,
+}: {
+  name: string;
+  badge?: string;
+  actions: PlayerAction[];
+  busy: boolean;
+}) {
+  return (
+    <div className="player-row">
+      <PlayerAvatar name={name} size={28} />
+      <span className="min-w-0 flex-1 truncate text-[12px]">{name}</span>
+      {badge && <span className="ui-tag tag-2 !text-[9px]">{badge}</span>}
+      <span className="player-actions">
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            className="server-action-btn !h-7 !w-7"
+            title={action.title}
+            disabled={busy}
+            onClick={action.run}
+          >
+            {action.icon}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function PropField({
   label,
   value,
@@ -120,6 +161,7 @@ export default function ServerDetailView({ server, onBack }: Props) {
   const [nogui, setNogui] = useState(true);
   const [lines, setLines] = useState<OpLine[]>([]);
   const [playerName, setPlayerName] = useState("");
+  const [knownPlayers, setKnownPlayers] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +171,9 @@ export default function ServerDetailView({ server, onBack }: Props) {
       .catch((cause) => setError(messageOf(cause)));
     invoke<ServerActivity>("server_activity", { name: server.name })
       .then(setActivity)
+      .catch(() => undefined);
+    invoke<string[]>("server_known_players", { name: server.name })
+      .then(setKnownPlayers)
       .catch(() => undefined);
   };
 
@@ -216,12 +261,62 @@ export default function ServerDetailView({ server, onBack }: Props) {
     setProperties((current) => ({ ...current, [key]: value }));
   };
 
+  const reloadPlayers = () => {
+    invoke<ServerPlayers>("server_players", { name: server.name }).then(setPlayers).catch(() => undefined);
+    refresh();
+  };
+
   const addPlayer = async () => {
     if (!playerName.trim()) return;
     await run(() => invoke("server_player_add", { name: server.name, list: "whitelist", player: playerName.trim() }));
     setPlayerName("");
-    invoke<ServerPlayers>("server_players", { name: server.name }).then(setPlayers).catch(() => undefined);
+    reloadPlayers();
   };
+
+  const playerAction = async (
+    player: string,
+    action: "op" | "deop" | "whitelist-add" | "whitelist-remove" | "ban" | "pardon" | "kick",
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (action === "op" || action === "deop") {
+        const command = action === "op" ? "server_player_add" : "server_player_remove";
+        await invoke(command, { name: server.name, list: "ops", player });
+      } else if (action === "whitelist-add" || action === "whitelist-remove") {
+        const command = action === "whitelist-add" ? "server_player_add" : "server_player_remove";
+        await invoke(command, { name: server.name, list: "whitelist", player });
+      } else if (action === "ban" || action === "pardon") {
+        const command = action === "ban" ? "server_player_add" : "server_player_remove";
+        await invoke(command, { name: server.name, list: "bans", player });
+      } else {
+        await invoke("server_player_action", { name: server.name, player, action: "kick" });
+      }
+      reloadPlayers();
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const actionsFor = (player: string): PlayerAction[] => [
+    {
+      key: "kick",
+      title: t("player.kick"),
+      icon: <Gavel size={12} />,
+      run: () => void playerAction(player, "kick"),
+    },
+    players?.ops.some((value) => value === player)
+      ? { key: "deop", title: t("player.deop"), icon: <ShieldOff size={12} />, run: () => void playerAction(player, "deop") }
+      : { key: "op", title: t("player.op"), icon: <Shield size={12} />, run: () => void playerAction(player, "op") },
+    players?.whitelist.some((value) => value === player)
+      ? { key: "wl-remove", title: t("player.whitelistRemove"), icon: <Users size={12} />, run: () => void playerAction(player, "whitelist-remove") }
+      : { key: "wl-add", title: t("player.whitelistAdd"), icon: <UserPlus size={12} />, run: () => void playerAction(player, "whitelist-add") },
+    players?.banned.some((value) => value === player)
+      ? { key: "pardon", title: t("player.pardon"), icon: <Shield size={12} />, run: () => void playerAction(player, "pardon") }
+      : { key: "ban", title: t("player.ban"), icon: <Ban size={12} />, run: () => void playerAction(player, "ban") },
+  ];
 
   return (
     <div className="view-enter">
@@ -335,6 +430,7 @@ export default function ServerDetailView({ server, onBack }: Props) {
               lines={lines}
               running={stats?.running ?? false}
               height={380}
+              playerNames={knownPlayers}
               onClear={() => setLines([])}
               onSend={async (command) => {
                 try {
@@ -388,33 +484,71 @@ export default function ServerDetailView({ server, onBack }: Props) {
         )}
 
         {tab === "players" && (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="flex flex-col gap-3">
             <div className="card p-4">
               <div className="mb-3 flex items-center gap-2 text-xs font-medium"><Activity size={14} className="text-accent" /> {t("serverDetail.onlineNow")}</div>
               {activity?.online.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {activity.online.map((player) => <span key={player} className="chip chip-accent">{player}</span>)}
+                <div className="flex flex-col gap-0.5">
+                  {activity.online.map((player) => (
+                    <PlayerRow
+                      key={player}
+                      name={player}
+                      badge={players?.ops.some((value) => value === player) ? t("player.badgeOp") : undefined}
+                      actions={actionsFor(player)}
+                      busy={busy}
+                    />
+                  ))}
                 </div>
               ) : <p className="text-[12px] text-muted">{t("serverDetail.noActivity")}</p>}
               <div className="mt-4 flex gap-2">
-                <input className="field text-[11px]" value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="PlayerName" />
-                <button className="btn btn-secondary shrink-0" disabled={busy || !playerName.trim()} onClick={() => void addPlayer()}><Users size={13} /> {t("servers.players")}</button>
+                <input
+                  className="field text-[11px]"
+                  list="pw-known-players"
+                  value={playerName}
+                  onChange={(event) => setPlayerName(event.target.value)}
+                  placeholder="PlayerName"
+                />
+                <datalist id="pw-known-players">
+                  {knownPlayers.map((player) => <option key={player} value={player} />)}
+                </datalist>
+                <button className="btn btn-secondary shrink-0" disabled={busy || !playerName.trim()} onClick={() => void addPlayer()}>
+                  <UserPlus size={13} /> {t("player.whitelistAdd")}
+                </button>
               </div>
             </div>
-            {(["ops", "whitelist", "bans"] as const).map((list) => {
-              const key = list === "bans" ? "banned" : list;
-              return (
-                <div key={list} className="card p-4">
-                  <div className="mb-3 flex items-center gap-2 text-xs font-medium"><Database size={14} className="text-accent" /> {t(`servers.${list}`)}</div>
-                  <div className="flex flex-col gap-1.5">
-                    {(players?.[key] ?? []).map((player) => (
-                      <div key={player} className="server-player-row"><span className="flex-1">{player}</span></div>
-                    ))}
-                    {!players?.[key]?.length && <p className="text-[12px] text-muted">—</p>}
+            <div className="grid gap-3 lg:grid-cols-3">
+              {(["ops", "whitelist", "bans"] as const).map((list) => {
+                const key = list === "bans" ? "banned" : list;
+                const badge = list === "ops" ? t("player.badgeOp") : list === "whitelist" ? t("player.badgeWhitelist") : t("player.badgeBanned");
+                return (
+                  <div key={list} className="card p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="flex items-center gap-2 text-xs font-medium"><Database size={14} className="text-accent" /> {t(`servers.${list}`)}</span>
+                      <span className="font-mono text-[10px] text-muted">{players?.[key]?.length ?? 0}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {(players?.[key] ?? []).map((player) => (
+                        <PlayerRow
+                          key={player}
+                          name={player}
+                          badge={badge}
+                          actions={list === "bans" ? [
+                            {
+                              key: "pardon",
+                              title: t("player.pardon"),
+                              icon: <Shield size={12} />,
+                              run: () => void playerAction(player, "pardon"),
+                            },
+                          ] : actionsFor(player)}
+                          busy={busy}
+                        />
+                      ))}
+                      {!players?.[key]?.length && <p className="text-[12px] text-muted">—</p>}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
