@@ -149,6 +149,9 @@
   "home.recent": "Recent packs",
   "home.noPacks": "No packs yet. Create your first one to get started.",
   "home.noRecent": "Nothing here yet",
+  "home.heroBadge": "New · 0.1.0",
+  "home.explore": "Explore modpacks",
+  "home.whatsNew": "What's new in Packwright",
 
   "settings.subtitle": "Manage preferences, integrations and advanced options.",
   "settings.appearance": "Appearance",
@@ -165,6 +168,16 @@
   "settings.version": "Version",
   "settings.save": "Save changes",
   "settings.openFolder": "Open folder",
+  "settings.unsaved": "You have unsaved changes",
+  "settings.discard": "Discard",
+  "settings.reinstall": "Reinstall",
+  "settings.packwizMissingHint": "Packwiz isn't installed or couldn't be detected. Reinstall it to keep creating modpacks.",
+  "settings.packwizReinstallTitle": "Reinstalling Packwiz",
+  "settings.packwizReinstallSubtitle": "Downloading the official build — follow the live output below.",
+  "settings.packwizSuccess": "Packwiz installed successfully. You're ready to go.",
+  "settings.installing": "Installing…",
+  "settings.retry": "Retry",
+  "settings.packwizReady": "Installation finished",
 
   "common.close": "Close",
   "common.error": "Error"

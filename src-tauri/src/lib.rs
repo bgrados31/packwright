@@ -34,6 +34,7 @@ pub fn run() {
             pack::config_set,
             pack::workspace_set,
             pack::packwiz_status,
+            pack::packwiz_reinstall,
             pack::pack_list,
             pack::pack_create,
             pack::pack_reveal,

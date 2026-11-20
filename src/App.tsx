@@ -348,7 +348,7 @@ export default function App() {
   const inSetup = config === null || !config.setup_complete;
 
   return (
-    <div className={`min-h-screen bg-bg text-ink ${inSetup ? "" : "app-shell"}`}>
+    <div className={`min-h-screen bg-bg text-ink ${inSetup ? "" : "app-shell"} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       {!inSetup && (
         <Sidebar
           collapsed={sidebarCollapsed}
@@ -386,7 +386,7 @@ export default function App() {
               onThemeChange={setTheme}
               packwizFound={Boolean(packwiz?.found)}
               onSave={(next) => void saveConfig(next)}
-              onCancel={() => setView("home")}
+              onPackwizInstalled={(status) => { setPackwiz(status); void loadPacks(); }}
             />
           </div>
         ) : view === "home" ? (

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, Boxes, FolderOpen, LayoutGrid, Plus, Search, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Boxes, LayoutGrid, Plus, Search, TriangleAlert } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { PackInfo } from "../lib/types";
 import Select from "./Select";
@@ -34,15 +34,10 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
     return sorted;
   }, [packs, search, sort]);
 
-  const stats = useMemo(() => {
-    const mods = packs.reduce((total, pack) => total + pack.mod_count, 0);
-    const counts = new Map<string, number>();
-    packs.forEach((pack) => {
-      if (pack.loader) counts.set(pack.loader, (counts.get(pack.loader) ?? 0) + 1);
-    });
-    const loader = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-    return { mods, loader };
-  }, [packs]);
+  const totalMods = useMemo(
+    () => packs.reduce((total, pack) => total + pack.mod_count, 0),
+    [packs],
+  );
 
   return (
     <div>
@@ -59,11 +54,10 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
         </button>
       </div>
 
-      <div className="mt-7 grid grid-cols-3 gap-3">
+      <div className="mt-7 grid grid-cols-2 gap-3">
         {[
           { icon: LayoutGrid, label: t("packs.statPacks"), value: String(packs.length) },
-          { icon: Boxes, label: t("packs.statMods"), value: String(stats.mods) },
-          { icon: FolderOpen, label: t("packs.statLoader"), value: stats.loader },
+          { icon: Boxes, label: t("packs.statMods"), value: String(totalMods) },
         ].map((stat) => (
           <div key={stat.label} className="card flex items-center gap-3 p-4">
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-soft text-accent">
@@ -81,7 +75,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onNew }:
         <div className="relative min-w-[220px] flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
-            className="field pl-9"
+            className="field field-icon"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("packs.search")}

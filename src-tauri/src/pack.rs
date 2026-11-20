@@ -1,7 +1,10 @@
+use std::io::Read;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use serde_json::json;
+use tauri::{AppHandle, Emitter, State};
+use zip::ZipArchive;
 
 use crate::config::{self, AppConfig};
 use crate::error::{AppError, Result};
@@ -72,6 +75,159 @@ pub fn packwiz_status() -> PackwizStatus {
             found: false,
             path: None,
         },
+    }
+}
+
+/// URL del artifact de CI de packwiz para la plataforma actual (distribución oficial
+/// vía GitHub Actions / nightly.link, según la documentación de packwiz).
+fn packwiz_artifact_url() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "https://nightly.link/packwiz/packwiz/workflows/go/main/Windows%2064-bit.zip"
+    } else if cfg!(target_os = "macos") {
+        "https://nightly.link/packwiz/packwiz/workflows/go/main/macOS%2064-bit%20x86.zip"
+    } else {
+        "https://nightly.link/packwiz/packwiz/workflows/go/main/Linux%2064-bit%20x86.zip"
+    }
+}
+
+fn emit_op_line(app: &AppHandle, id: &str, stream: &str, line: &str) {
+    let _ = app.emit("operation://line", json!({ "id": id, "stream": stream, "line": line }));
+}
+
+async fn reinstall_packwiz(app: &AppHandle, id: &str) -> Result<PackwizStatus> {
+    let url = packwiz_artifact_url();
+    emit_op_line(app, id, "stdout", "Starting packwiz installer…");
+    emit_op_line(app, id, "stdout", &format!("Source: {url}"));
+
+    let client = reqwest::Client::builder()
+        .user_agent("Packwright/0.1")
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(|e| AppError::Process(format!("Could not create HTTP client: {e}")))?;
+
+    emit_op_line(app, id, "stdout", "Downloading…");
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Download failed: {e}")))?;
+    let status = response.status();
+    if !status.is_success() {
+        let message = format!("Download failed with HTTP {status}");
+        emit_op_line(app, id, "stderr", &message);
+        return Err(AppError::Process(message));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| AppError::Process(format!("Could not read the downloaded file: {e}")))?;
+    emit_op_line(app, id, "stdout", &format!("Downloaded {} bytes", bytes.len()));
+
+    let zip_path = std::env::temp_dir().join(format!("packwright-packwiz-{id}.zip"));
+    std::fs::write(&zip_path, &bytes)?;
+
+    emit_op_line(app, id, "stdout", "Extracting executable…");
+    let file = std::fs::File::open(&zip_path)?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| AppError::Process(format!("Invalid archive: {e}")))?;
+    let mut binary: Option<(String, Vec<u8>)> = None;
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|e| AppError::Process(format!("Could not read archive entry: {e}")))?;
+        if entry.is_dir() {
+            continue;
+        }
+        let name = entry.name().to_string();
+        let entry_path = PathBuf::from(&name);
+        let file_name = entry_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        let is_binary = if cfg!(windows) {
+            file_name.eq_ignore_ascii_case("packwiz.exe")
+        } else {
+            file_name.starts_with("packwiz") && !file_name.contains('.')
+        };
+        if is_binary {
+            let mut buffer = Vec::with_capacity(entry.size() as usize);
+            entry.read_to_end(&mut buffer)?;
+            binary = Some((name, buffer));
+            break;
+        }
+    }
+    let (entry_name, buffer) = binary.ok_or_else(|| {
+        AppError::Process("The archive does not contain a packwiz executable".into())
+    })?;
+    emit_op_line(app, id, "stdout", &format!("Found: {entry_name}"));
+
+    let base = dirs::data_local_dir()
+        .ok_or_else(|| AppError::Config("Could not resolve the local data directory".into()))?;
+    let install_dir = base.join("Programs").join("packwiz");
+    let exe_name = if cfg!(windows) { "packwiz.exe" } else { "packwiz" };
+    let target = install_dir.join(exe_name);
+    std::fs::create_dir_all(&install_dir)?;
+    std::fs::write(&target, &buffer)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))?;
+    }
+    emit_op_line(app, id, "stdout", &format!("Installed to: {}", target.display()));
+
+    emit_op_line(app, id, "stdout", "Verifying installation…");
+    match std::process::Command::new(&target).arg("--version").output() {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            emit_op_line(app, id, "stdout", &format!("packwiz {version}"));
+        }
+        Ok(output) => {
+            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            emit_op_line(app, id, "stderr", &format!("Verification warning: {detail}"));
+        }
+        Err(error) => {
+            emit_op_line(app, id, "stderr", &format!("Verification skipped: {error}"));
+        }
+    }
+
+    let _ = std::fs::remove_file(&zip_path);
+
+    // Apunta la configuración al binario recién instalado.
+    let mut cfg = config::load()?;
+    cfg.packwiz_path = Some(target.clone());
+    config::save(&cfg)?;
+
+    emit_op_line(app, id, "stdout", "Done. Packwiz is ready to use.");
+    Ok(PackwizStatus {
+        found: true,
+        path: Some(target.to_string_lossy().to_string()),
+    })
+}
+
+/// Reinstala packwiz descargando el artifact oficial y emitiendo la salida en vivo
+/// por `operation://line` para que la UI muestre una consola con el progreso.
+#[tauri::command]
+pub async fn packwiz_reinstall(app: AppHandle, id: String) -> Result<PackwizStatus> {
+    let _ = app.emit(
+        "operation://start",
+        json!({ "id": id, "command": "packwiz reinstall" }),
+    );
+    match reinstall_packwiz(&app, &id).await {
+        Ok(status) => {
+            let _ = app.emit(
+                "operation://done",
+                json!({ "id": id, "ok": true, "code": 0, "stdout": [], "stderr": [] }),
+            );
+            Ok(status)
+        }
+        Err(error) => {
+            emit_op_line(&app, &id, "stderr", &format!("Error: {error}"));
+            let _ = app.emit(
+                "operation://done",
+                json!({ "id": id, "ok": false, "code": 1, "stdout": [], "stderr": [error.to_string()] }),
+            );
+            Err(error)
+        }
     }
 }
 

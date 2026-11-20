@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, FolderOpen, Info, Moon, Sun } from "lucide-react";
+import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert } from "lucide-react";
 import { LOCALES, useI18n, type TranslationKey } from "../i18n";
-import { LOADERS, type AppConfig } from "../lib/types";
+import { LOADERS, type AppConfig, type PackwizStatus } from "../lib/types";
 import LauncherPicker from "./LauncherPicker";
+import PackwizReinstallModal from "./PackwizReinstallModal";
 import Select from "./Select";
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
   onThemeChange: (theme: "light" | "dark") => void;
   packwizFound: boolean;
   onSave: (next: AppConfig) => void;
-  onCancel: () => void;
+  onPackwizInstalled: (status: PackwizStatus) => void;
 };
 
 type SectionProps = {
@@ -35,17 +36,24 @@ function Section({ index, title, children }: SectionProps) {
   );
 }
 
-export default function SettingsView({ config, theme, onThemeChange, packwizFound, onSave, onCancel }: Props) {
+export default function SettingsView({ config, theme, onThemeChange, packwizFound, onSave, onPackwizInstalled }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<AppConfig>(config);
   const [defaults, setDefaults] = useState<Record<string, string>>(config.launcher_paths ?? {});
   const [picking, setPicking] = useState<string | null>(null);
+  const [showReinstall, setShowReinstall] = useState(false);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
 
   useEffect(() => {
     invoke<Record<string, string>>("launcher_defaults")
       .then((paths) => setDefaults((current) => ({ ...paths, ...current })))
       .catch(() => undefined);
   }, []);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(config);
 
   const patch = (values: Partial<AppConfig>) => setDraft((current) => ({ ...current, ...values }));
 
@@ -64,11 +72,10 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
 
   const changeLocale = (value: string) => {
     patch({ locale: value });
-    // The provider is updated on save to keep the whole app consistent.
   };
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={`mx-auto max-w-3xl ${dirty ? "pb-24" : ""}`}>
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">{t("nav.workspace")}</p>
       <h1 className="mt-2 text-[28px] font-semibold tracking-tight">{t("setup.settingsTitle")}</h1>
       <p className="mt-1 text-sm text-muted">{t("settings.subtitle")}</p>
@@ -130,10 +137,30 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
         </Section>
 
         <Section index="03" title={t("settings.packwiz")}>
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${packwizFound ? "bg-ok" : "bg-bad"}`} />
-            <span className="text-xs text-muted">{packwizFound ? t("workspace.ready") : t("workspace.notReady")}</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${packwizFound ? "bg-ok" : "bg-bad"}`} />
+              <span className="text-xs text-muted">{packwizFound ? t("workspace.ready") : t("workspace.notReady")}</span>
+            </div>
+            {packwizFound && (
+              <button className="btn btn-quiet text-[11px]" onClick={() => setShowReinstall(true)}>
+                <RotateCw size={12} /> {t("settings.reinstall")}
+              </button>
+            )}
           </div>
+
+          {!packwizFound && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad/25 bg-bad/5 px-4 py-3">
+              <div className="flex items-start gap-2 text-[12px] leading-5 text-bad">
+                <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+                <span>{t("settings.packwizMissingHint")}</span>
+              </div>
+              <button className="btn btn-primary shrink-0" onClick={() => setShowReinstall(true)}>
+                <Download size={14} /> {t("settings.reinstall")}
+              </button>
+            </div>
+          )}
+
           <div className="mt-4 flex flex-col gap-1.5">
             <span className="text-xs text-muted">{t("settings.packwizPath")}</span>
             <div className="flex gap-2">
@@ -193,13 +220,34 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
         </Section>
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
-        <button className="btn btn-secondary" onClick={onCancel}>{t("common.close")}</button>
-        <button className="btn btn-primary" onClick={() => onSave(draft)}>
-          <Check size={15} />
-          {t("settings.save")}
-        </button>
-      </div>
+      {dirty && (
+        <div className="save-bar">
+          <div className="save-bar-inner">
+            <div className="flex items-center gap-2 text-[12px]">
+              <span className="save-bar-dot" />
+              <span>{t("settings.unsaved")}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn btn-secondary" onClick={() => setDraft(config)}>
+                {t("settings.discard")}
+              </button>
+              <button className="btn btn-primary" onClick={() => onSave(draft)}>
+                <Check size={15} />
+                {t("settings.save")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReinstall && (
+        <PackwizReinstallModal
+          onClose={() => setShowReinstall(false)}
+          onInstalled={(status) => {
+            onPackwizInstalled(status);
+          }}
+        />
+      )}
     </div>
   );
 }

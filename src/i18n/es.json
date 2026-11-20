@@ -149,6 +149,9 @@
   "home.recent": "Packs recientes",
   "home.noPacks": "Aún no hay packs. Crea el primero para empezar.",
   "home.noRecent": "Todavía nada por aquí",
+  "home.heroBadge": "Nuevo · 0.1.0",
+  "home.explore": "Explorar modpacks",
+  "home.whatsNew": "Novedades de Packwright",
 
   "settings.subtitle": "Gestiona preferencias, integraciones y opciones avanzadas.",
   "settings.appearance": "Apariencia",
@@ -165,6 +168,16 @@
   "settings.version": "Versión",
   "settings.save": "Guardar cambios",
   "settings.openFolder": "Abrir carpeta",
+  "settings.unsaved": "Tienes cambios sin guardar",
+  "settings.discard": "Descartar",
+  "settings.reinstall": "Reinstalar",
+  "settings.packwizMissingHint": "Packwiz no está instalado o no se pudo detectar. Reinstálalo para seguir creando modpacks.",
+  "settings.packwizReinstallTitle": "Reinstalando Packwiz",
+  "settings.packwizReinstallSubtitle": "Descargando la compilación oficial — sigue la salida en vivo abajo.",
+  "settings.packwizSuccess": "Packwiz se instaló correctamente. Todo listo para crear packs.",
+  "settings.installing": "Instalando…",
+  "settings.retry": "Reintentar",
+  "settings.packwizReady": "Instalación finalizada",
 
   "common.close": "Cerrar",
   "common.error": "Error"

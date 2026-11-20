@@ -20,6 +20,21 @@
   --pw-grid: rgba(35, 44, 58, 0.028);
   --pw-btn-1: #d2552f;
   --pw-btn-2: #b8421f;
+  --sidebar-w: 236px;
+
+  /* Paleta del paisaje pixelado del inicio */
+  --mc-sky-top: #9fc4dd;
+  --mc-sky-bottom: #dbe9f1;
+  --mc-cloud: rgba(255, 255, 255, 0.85);
+  --mc-sun: #f2d489;
+  --mc-hill-far: #a8bfa2;
+  --mc-hill: #7d9a76;
+  --mc-grass: #6b9c5a;
+  --mc-grass-dark: #578247;
+  --mc-dirt: #8b6244;
+  --mc-dirt-dark: #6f4d35;
+  --mc-trunk: #7a5638;
+  --mc-leaf: #4f8a46;
 }
 
 .dark {
@@ -39,7 +54,22 @@
   --pw-grid: rgba(255, 255, 255, 0.022);
   --pw-btn-1: #e8704a;
   --pw-btn-2: #c74a2e;
+
+  --mc-sky-top: #223246;
+  --mc-sky-bottom: #3c5468;
+  --mc-cloud: rgba(220, 232, 240, 0.18);
+  --mc-sun: #c9a55f;
+  --mc-hill-far: #344a41;
+  --mc-hill: #40574a;
+  --mc-grass: #4e7a44;
+  --mc-grass-dark: #3e6337;
+  --mc-dirt: #5c4534;
+  --mc-dirt-dark: #473327;
+  --mc-trunk: #4a3828;
+  --mc-leaf: #3d6b38;
 }
+
+.app-shell.sidebar-collapsed { --sidebar-w: 68px; }
 
 @theme {
   --color-bg: var(--pw-bg);
@@ -388,3 +418,158 @@ details summary::-webkit-details-marker { display: none; }
 .monaco-editor, .monaco-editor .margin, .monaco-editor-background {
   background-color: var(--pw-surface) !important;
 }
+
+/* --- Búsqueda con icono (evita que el texto lo pise) --- */
+.field-icon { padding-left: 38px; }
+
+/* --- Home inmersivo --- */
+.mc-hero {
+  position: relative;
+  min-height: 252px;
+  overflow: hidden;
+  border: 1px solid var(--pw-line);
+  border-radius: 14px;
+  background: var(--pw-surface);
+  box-shadow: var(--pw-shadow);
+}
+.mc-scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  shape-rendering: crispEdges;
+}
+.mc-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--pw-bg) 0%,
+    color-mix(in srgb, var(--pw-bg) 88%, transparent) 38%,
+    transparent 82%
+  );
+}
+.mc-hero-content { position: relative; z-index: 1; max-width: 640px; padding: 32px; }
+.mc-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--pw-accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.chip-accent { background: var(--pw-accent-soft); color: var(--pw-accent); }
+
+/* --- Barra fija de cambios sin guardar (Settings) --- */
+.save-bar {
+  position: fixed;
+  left: var(--sidebar-w);
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  border-top: 1px solid var(--pw-line);
+  background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 -10px 28px -18px rgba(0, 0, 0, 0.35);
+  animation: fadeUp 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.save-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 28px;
+}
+.save-bar-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pw-accent);
+  box-shadow: 0 0 0 4px var(--pw-accent-soft);
+}
+
+/* --- Modal de consola (reinstalación de packwiz) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(14, 18, 26, 0.55);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 150ms ease both;
+}
+.modal-card {
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid var(--pw-line);
+  border-radius: 14px;
+  background: var(--pw-surface);
+  box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.45);
+  animation: dropIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--pw-line);
+}
+.modal-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+}
+.modal-icon.running { background: var(--pw-accent-soft); color: var(--pw-accent); }
+.modal-icon.success { background: color-mix(in srgb, var(--pw-ok) 16%, transparent); color: var(--pw-ok); }
+.modal-icon.error { background: color-mix(in srgb, var(--pw-bad) 14%, transparent); color: var(--pw-bad); }
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 7px;
+  color: var(--pw-muted);
+}
+.icon-btn:hover:not(:disabled) { background: var(--pw-subtle); color: var(--pw-ink); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.console-box {
+  height: 230px;
+  margin: 16px 20px 0;
+  overflow-y: auto;
+  border: 1px solid #263141;
+  border-radius: 10px;
+  background: #111821;
+  padding: 12px 14px;
+}
+.console-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: #b9c4d2;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-line.err { color: #ff8f7a; }
+.console-line.cursor { color: var(--pw-accent); }
+.console-placeholder { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #6e7d90; }
+.modal-message { margin: 12px 20px 0; padding: 9px 11px; border-radius: 8px; font-size: 11px; line-height: 1.5; }
+.modal-message.success { background: color-mix(in srgb, var(--pw-ok) 12%, transparent); color: var(--pw-ok); }
+.modal-message.error { background: color-mix(in srgb, var(--pw-bad) 12%, transparent); color: var(--pw-bad); }
+.modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 18px; }
+.spin { animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
