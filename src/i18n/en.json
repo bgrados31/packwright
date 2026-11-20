@@ -120,6 +120,23 @@
   "launcher.modrinth": "Modrinth App",
   "launcher.multimc": "MultiMC",
 
+  "nav.modpacks": "Modpacks",
+  "nav.workspace": "Workspace",
+  "nav.collapse": "Collapse sidebar",
+  "nav.expand": "Expand sidebar",
+  "nav.language": "Language",
+
+  "packs.subtitle": "Managing {count} packs in your workspace",
+  "packs.search": "Search packs…",
+  "packs.sort": "Sort by",
+  "packs.sortName": "Name",
+  "packs.sortRecent": "Recently added",
+  "packs.sortMods": "Mod count",
+  "packs.statPacks": "Modpacks",
+  "packs.statMods": "Mods installed",
+  "packs.statLoader": "Main loader",
+  "packs.noResults": "No packs match your search",
+
   "common.close": "Close",
   "common.error": "Error"
 }

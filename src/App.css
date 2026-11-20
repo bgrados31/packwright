@@ -56,6 +56,71 @@
   --font-mono: "Cascadia Code", "SF Mono", Consolas, monospace;
 }
 
+/* --- App shell --- */
+.app-shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 236px;
+  height: 100vh;
+  padding: 18px 12px;
+  border-right: 1px solid var(--pw-line);
+  background: color-mix(in srgb, var(--pw-surface) 72%, transparent);
+  transition: width 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sidebar.collapsed { width: 68px; align-items: center; }
+
+.sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px; }
+.sidebar.collapsed .sidebar-brand { padding-left: 0; padding-right: 0; }
+
+.sidebar-nav, .sidebar-footer { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.sidebar-footer { margin-top: auto; }
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--pw-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.sidebar.collapsed .sidebar-item { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar-item:hover { background: var(--pw-subtle); color: var(--pw-ink); }
+.sidebar-item.active { background: var(--pw-accent-soft); color: var(--pw-accent); font-weight: 500; }
+.sidebar-item-icon { flex: none; }
+.sidebar-badge {
+  margin-left: auto;
+  border-radius: 5px;
+  background: var(--pw-subtle);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.sidebar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 14px 10px 8px;
+  border-top: 1px solid var(--pw-line);
+  font-size: 11px;
+  color: var(--pw-muted);
+}
+.sidebar-status.collapsed { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar-collapse { margin-top: 2px; }
+
+.main-area { flex: 1; min-width: 0; }
+
 html, body, #root { min-height: 100%; }
 body {
   margin: 0;
