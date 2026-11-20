@@ -91,6 +91,7 @@ export type ModSearchResult = {
 export type ModCategory = {
   name: string;
   header: string;
+  project_type: string;
 };
 
 export type ModProject = {

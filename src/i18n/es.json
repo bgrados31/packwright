@@ -142,6 +142,10 @@
 
   "catalog.results": "{count} resultados",
   "catalog.types.mod": "Mod",
+  "catalog.types.resourcepack": "Resource pack",
+  "catalog.types.datapack": "Data pack",
+  "catalog.types.shader": "Shader",
+  "mods.projectTypeHint": "Las categorías y filtros se adaptan al tipo elegido",
   "catalog.installed": "Instalado",
   "catalog.server": "Servidor",
   "catalog.client": "Cliente",

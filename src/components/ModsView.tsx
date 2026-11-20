@@ -44,6 +44,13 @@ type Props = {
   onOperation: (operation: ModOperation) => void;
 };
 
+const PROJECT_TYPES = [
+  { value: "mod", labelKey: "catalog.types.mod" },
+  { value: "resourcepack", labelKey: "catalog.types.resourcepack" },
+  { value: "datapack", labelKey: "catalog.types.datapack" },
+  { value: "shader", labelKey: "catalog.types.shader" },
+] as const;
+
 const LOADER_TAGS = new Set([
   "fabric", "quilt", "forge", "neoforge", "liteloader", "rift",
   "datapack", "plugin", "mod", "minecraft", "client", "server",
@@ -82,6 +89,7 @@ function ModDetail({
   hit,
   minecraftVersion,
   loader,
+  projectType,
   installed,
   onClose,
   onInstall,
@@ -89,6 +97,7 @@ function ModDetail({
   hit: ModSearchHit;
   minecraftVersion: string | null;
   loader: string | null;
+  projectType: string;
   installed: boolean;
   onClose: () => void;
   onInstall: (version: ModVersion) => void;
@@ -110,6 +119,7 @@ function ModDetail({
         projectId: hit.project_id,
         mcVersion: minecraftVersion,
         loader,
+        projectType,
       }),
     ])
       .then(([details, list]) => {
@@ -122,7 +132,7 @@ function ModDetail({
       .catch((cause) => { if (!cancelled) setError(messageOf(cause)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [hit.project_id, minecraftVersion, loader]);
+  }, [hit.project_id, minecraftVersion, loader, projectType]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ModVersion[]>();
@@ -330,6 +340,7 @@ function ModDetail({
 export default function ModsView({ dir, minecraftVersion, loader, revision, onOperation }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<"discover" | "installed">("discover");
+  const [projectType, setProjectType] = useState("mod");
   const [installed, setInstalled] = useState<InstalledMod[]>([]);
   const [health, setHealth] = useState<ModHealth | null>(null);
   const [query, setQuery] = useState("");
@@ -362,10 +373,15 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   }, [dir, revision]);
 
   useEffect(() => {
-    invoke<ModCategory[]>("mods_categories", { projectType: "mod" })
+    invoke<ModCategory[]>("mods_categories", { projectType })
       .then(setCategories)
       .catch(() => setCategories([]));
-  }, []);
+  }, [projectType]);
+
+  useEffect(() => {
+    setOffset(0);
+    setSelectedCategories([]);
+  }, [projectType]);
 
   useEffect(() => {
     setOffset(0);
@@ -386,6 +402,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
           environment,
           limit: 24,
           offset,
+          projectType,
         });
         if (!cancelled) {
           setHits(result.hits);
@@ -398,7 +415,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
       }
     }, query ? 300 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query, sort, environment, selectedCategories, offset, minecraftVersion, loader]);
+  }, [query, sort, environment, selectedCategories, offset, minecraftVersion, loader, projectType]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -505,7 +522,24 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
 
       {tab === "discover" ? (
         <div className="mt-5">
-          <div className="surface-soft flex flex-wrap items-center gap-2.5 p-2.5">
+          <div className="flex flex-wrap items-center gap-1 border-b border-line pb-3">
+            {PROJECT_TYPES.map((type) => (
+              <button
+                key={type.value}
+                className={`px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                  projectType === type.value
+                    ? "rounded-lg bg-accent-soft text-accent"
+                    : "rounded-lg text-muted hover:bg-subtle hover:text-ink"
+                }`}
+                onClick={() => setProjectType(type.value)}
+              >
+                {t(type.labelKey as TranslationKey)}
+              </button>
+            ))}
+            <span className="ml-auto text-[11px] text-muted">{t("mods.projectTypeHint")}</span>
+          </div>
+
+          <div className="surface-soft mt-3 flex flex-wrap items-center gap-2.5 p-2.5">
             <div className="relative min-w-[220px] flex-1">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
@@ -656,7 +690,9 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                     <div className="mod-hit-banner">
                       {banner ? <img src={banner} alt="" loading="lazy" /> : <div className="mod-hit-banner-fallback" />}
                       <div className="mod-hit-banner-fade" />
-                      <span className="mod-hit-pill">{t("catalog.types.mod")}</span>
+                      <span className="mod-hit-pill">
+                        {t((PROJECT_TYPES.find((type) => type.value === projectType)?.labelKey ?? "catalog.types.mod") as TranslationKey)}
+                      </span>
                       {isInstalled && <span className="mod-hit-installed"><Check size={11} /> {t("catalog.installed")}</span>}
                     </div>
                     <div className="mod-hit-body">
@@ -845,6 +881,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
           hit={detail}
           minecraftVersion={minecraftVersion}
           loader={loader}
+          projectType={projectType}
           installed={installedIds.has(detail.project_id)}
           onClose={() => setDetail(null)}
           onInstall={(version) => {

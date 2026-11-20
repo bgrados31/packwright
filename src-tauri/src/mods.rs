@@ -58,6 +58,7 @@ pub struct ModSearchResult {
 pub struct ModCategory {
     pub name: String,
     pub header: String,
+    pub project_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -145,13 +146,18 @@ pub async fn mods_search(
     environment: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
+    project_type: Option<String>,
 ) -> Result<ModSearchResult> {
-    let mut facets: Vec<Vec<String>> = vec![vec!["project_type:mod".to_string()]];
+    let kind = project_type.unwrap_or_else(|| "mod".to_string());
+    let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{kind}")]];
     if let Some(version) = mc_version.filter(|value| !value.is_empty()) {
         facets.push(vec![format!("versions:{version}")]);
     }
-    if let Some(loader) = loader.filter(|value| !value.is_empty()) {
-        facets.push(vec![format!("categories:{loader}")]);
+    // Solo los mods tienen loader; resource packs, datapacks y shaders no.
+    if kind == "mod" {
+        if let Some(loader) = loader.filter(|value| !value.is_empty()) {
+            facets.push(vec![format!("categories:{loader}")]);
+        }
     }
     match environment.as_deref() {
         Some("client") => facets.push(vec![
@@ -265,7 +271,11 @@ pub async fn mods_categories(project_type: Option<String>) -> Result<Vec<ModCate
     if let Some(items) = body.as_array() {
         for item in items {
             let name = item["name"].as_str().unwrap_or("");
-            if name.is_empty() || excluded.contains(&name.to_ascii_lowercase().as_str()) {
+            let item_type = item["project_type"].as_str().unwrap_or("");
+            if name.is_empty()
+                || item_type != kind
+                || excluded.contains(&name.to_ascii_lowercase().as_str())
+            {
                 continue;
             }
             if !seen.insert(name.to_ascii_lowercase()) {
@@ -274,6 +284,7 @@ pub async fn mods_categories(project_type: Option<String>) -> Result<Vec<ModCate
             result.push(ModCategory {
                 name: name.to_string(),
                 header: item["header"].as_str().unwrap_or("").to_string(),
+                project_type: item_type.to_string(),
             });
         }
     }
@@ -287,13 +298,17 @@ pub async fn mods_versions(
     project_id: String,
     mc_version: Option<String>,
     loader: Option<String>,
+    project_type: Option<String>,
 ) -> Result<Vec<ModVersion>> {
+    let kind = project_type.unwrap_or_else(|| "mod".to_string());
     let mut query: Vec<(String, String)> = Vec::new();
     if let Some(version) = mc_version.filter(|value| !value.is_empty()) {
         query.push(("game_versions".into(), json!([version]).to_string()));
     }
-    if let Some(loader) = loader.filter(|value| !value.is_empty()) {
-        query.push(("loaders".into(), json!([loader]).to_string()));
+    if kind == "mod" {
+        if let Some(loader) = loader.filter(|value| !value.is_empty()) {
+            query.push(("loaders".into(), json!([loader]).to_string()));
+        }
     }
 
     let url = format!(
