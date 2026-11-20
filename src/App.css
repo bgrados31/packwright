@@ -231,11 +231,8 @@ details summary::-webkit-details-marker { display: none; }
 .select-chevron.open { transform: rotate(180deg); color: var(--pw-accent); }
 
 .select-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: 100;
   background: var(--pw-surface);
   border: 1px solid var(--pw-line);
   border-radius: 10px;

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type SelectOption = {
   value: string;
@@ -17,6 +18,8 @@ type Props = {
   emptyLabel?: string;
 };
 
+type Position = { top: number; left: number; width: number };
+
 export default function Select({
   id,
   options,
@@ -30,7 +33,10 @@ export default function Select({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [position, setPosition] = useState<Position>({ top: 0, left: 0, width: 0 });
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
@@ -44,15 +50,38 @@ export default function Select({
 
   const selected = options.find((option) => option.value === value);
 
+  const updatePosition = useCallback(() => {
+    const element = trigger.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    const estimatedHeight = searchable ? 296 : 250;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+    setPosition({
+      top: placeAbove ? Math.max(8, rect.top - estimatedHeight - 6) : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, [searchable]);
+
   useEffect(() => {
     if (!open) return;
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
     const onPointerDown = (event: MouseEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (root.current?.contains(target) || panel.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     if (searchable) searchInput.current?.focus();
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open, searchable]);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open, searchable, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +126,7 @@ export default function Select({
   return (
     <div className="select-root" ref={root}>
       <button
+        ref={trigger}
         type="button"
         id={id}
         className={`select-trigger ${open ? "open" : ""}`}
@@ -123,44 +153,51 @@ export default function Select({
         </svg>
       </button>
 
-      {open && (
-        <div className="select-panel" role="listbox">
-          {searchable && (
-            <div className="select-search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20l-4-4" />
-              </svg>
-              <input
-                ref={searchInput}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={onKeyDown}
-                placeholder={searchPlaceholder}
-              />
-            </div>
-          )}
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            className="select-panel"
+            style={{ top: position.top, left: position.left, width: position.width }}
+            role="listbox"
+          >
+            {searchable && (
+              <div className="select-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-4-4" />
+                </svg>
+                <input
+                  ref={searchInput}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={onKeyDown}
+                  placeholder={searchPlaceholder}
+                />
+              </div>
+            )}
 
-          <div className="select-list" ref={list} role="presentation">
-            {filtered.length === 0 && <div className="select-empty">{emptyLabel}</div>}
-            {filtered.map((option, index) => (
-              <button
-                type="button"
-                key={option.value}
-                data-index={index}
-                role="option"
-                aria-selected={option.value === value}
-                className={`select-option ${index === active ? "active" : ""} ${option.value === value ? "selected" : ""}`}
-                onMouseEnter={() => setActive(index)}
-                onClick={() => commit(option.value)}
-              >
-                <span className="truncate">{option.label}</span>
-                {option.badge && <span className="select-badge">{option.badge}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+            <div className="select-list" ref={list} role="presentation">
+              {filtered.length === 0 && <div className="select-empty">{emptyLabel}</div>}
+              {filtered.map((option, index) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  data-index={index}
+                  role="option"
+                  aria-selected={option.value === value}
+                  className={`select-option ${index === active ? "active" : ""} ${option.value === value ? "selected" : ""}`}
+                  onMouseEnter={() => setActive(index)}
+                  onClick={() => commit(option.value)}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {option.badge && <span className="select-badge">{option.badge}</span>}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

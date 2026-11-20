@@ -90,13 +90,13 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
         ))}
       </div>
 
-      <div className="card view-enter relative mt-4 overflow-hidden" key={step}>
-        <div className="h-1 w-full bg-gradient-to-r from-accent via-accent to-transparent" />
+      <div className="card view-enter relative mt-4" key={step}>
+        <div className="h-1 w-full rounded-t-xl bg-gradient-to-r from-accent via-accent to-transparent" />
         <div className="pointer-events-none absolute -right-4 -top-6 font-mono text-[110px] font-bold leading-none text-accent/5">
           {String(step + 1).padStart(2, "0")}
         </div>
 
-        <div className="relative p-7">
+        <div className="relative h-[420px] overflow-y-auto p-7">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
             {t("setup.step", { current: step + 1, total: STEPS.length })}
           </p>
