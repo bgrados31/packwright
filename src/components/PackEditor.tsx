@@ -2,7 +2,8 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ImagePlus, Loader2, PackageOpen, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { Diagnostic, FileEntry, HistoryEntry, PackMeta } from "../lib/types";
+import type { Diagnostic, FileEntry, HistoryEntry, ModOperation, PackMeta } from "../lib/types";
+import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
 
@@ -13,6 +14,7 @@ type Props = {
   dir: string;
   version: string | null;
   minecraftVersion: string | null;
+  loader: string | null;
   theme: "light" | "dark";
   files: FileEntry[];
   activeFile: string | null;
@@ -37,13 +39,16 @@ type Props = {
   onExport: () => void;
   exporting: boolean;
   onAssetsChanged: () => void;
+  modsRevision: number;
+  onModOperation: (operation: ModOperation) => void;
 };
 
 export default function PackEditor(props: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"files" | "details">("files");
+  const [tab, setTab] = useState<"files" | "mods" | "details">("files");
   const tabs = [
     { id: "files" as const, label: t("editor.files") },
+    { id: "mods" as const, label: t("mods.title") },
     { id: "details" as const, label: t("editor.details") },
   ];
 
@@ -119,11 +124,11 @@ export default function PackEditor(props: Props) {
                 {t("editor.save")}
               </button>
             </>
-          ) : (
+          ) : tab === "details" ? (
             <button className="btn btn-primary" onClick={props.onSaveMeta} disabled={!props.metaDirty}>
               {t("editor.saveDetails")}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -220,6 +225,16 @@ export default function PackEditor(props: Props) {
               </Suspense>
             </div>
           </div>
+        </div>
+      ) : tab === "mods" ? (
+        <div className="view-enter mt-6">
+          <ModsView
+            dir={props.dir}
+            minecraftVersion={props.minecraftVersion}
+            loader={props.loader}
+            revision={props.modsRevision}
+            onOperation={props.onModOperation}
+          />
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-[1fr_320px] gap-6">

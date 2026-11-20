@@ -12,6 +12,7 @@ import PacksView from "./components/PacksView";
 import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
 import ExportModal from "./components/ExportModal";
+import OperationModal from "./components/OperationModal";
 import { useI18n } from "./i18n";
 import {
   type AppConfig,
@@ -22,6 +23,7 @@ import {
   type HistoryEntry,
   type LoaderVersion,
   type McVersion,
+  type ModOperation,
   type PackInfo,
   type PackMeta,
   type PackwizStatus,
@@ -56,6 +58,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
+  const [modsOperation, setModsOperation] = useState<ModOperation | null>(null);
+  const [modsRevision, setModsRevision] = useState(0);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
@@ -433,6 +437,7 @@ export default function App() {
               dir={selectedPack ?? ""}
               version={activePack?.version ?? null}
               minecraftVersion={activePack?.minecraft_version ?? null}
+              loader={activePack?.loader ?? null}
               theme={theme}
               files={files}
               activeFile={activeFile}
@@ -457,6 +462,8 @@ export default function App() {
               onExport={() => setExportTarget(selectedPack)}
               exporting={exportTarget === selectedPack}
               onAssetsChanged={() => void reloadAssets()}
+              modsRevision={modsRevision}
+              onModOperation={setModsOperation}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (
@@ -490,6 +497,19 @@ export default function App() {
             dir={exportTarget}
             packName={packs.find((pack) => pack.dir === exportTarget)?.name ?? exportTarget}
             onClose={() => setExportTarget(null)}
+          />,
+          document.body,
+        )}
+
+      {modsOperation &&
+        createPortal(
+          <OperationModal
+            operation={modsOperation}
+            onClose={() => setModsOperation(null)}
+            onSuccess={() => {
+              setModsRevision((value) => value + 1);
+              void loadPacks();
+            }}
           />,
           document.body,
         )}

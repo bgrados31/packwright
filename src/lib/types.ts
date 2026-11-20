@@ -64,6 +64,55 @@ export type McVersion = {
 
 export type LoaderVersion = { id: string; stable: boolean };
 
+export type ModSearchHit = {
+  project_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon_url: string | null;
+  downloads: number;
+  categories: string[];
+};
+
+export type ModVersion = {
+  id: string;
+  name: string;
+  version_number: string;
+  game_versions: string[];
+  loaders: string[];
+  release_type: string;
+  date_published: string;
+};
+
+export type InstalledMod = {
+  id: string;
+  name: string;
+  filename: string;
+  side: string;
+  optional: boolean;
+  pinned: boolean;
+  project_id: string | null;
+  version_id: string | null;
+  source: string;
+};
+
+export type ModHealth = {
+  duplicates: string[];
+  unmanaged: number;
+  pinned: number;
+  total: number;
+};
+
+export type ModOperation = {
+  kind: "add" | "remove" | "pin" | "unpin" | "update" | "refresh";
+  label: string;
+  dir: string;
+  projectId?: string;
+  versionId?: string;
+  name?: string;
+  modName?: string;
+};
+
 export type PackMeta = {
   summary: string;
   license: string;

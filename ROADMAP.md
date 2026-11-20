@@ -38,14 +38,16 @@
 - [x] Generador de README con instrucciones por launcher
 - [x] Preview de la ficha + pestaña "Detalles" en el editor
 - [x] Banner y Open Graph conectados al README
+- [x] Icono, banner y galería de imágenes subibles, visibles en las cards del pack
 
-### 1.4 Catálogo e instalación de mods
-- [ ] Cliente Modrinth (búsqueda, filtros, versiones compatibles)
-- [ ] `modrinth add` / `curseforge add` / `remove` / `update` / `pin`
-- [ ] Health checks (duplicados, dependencias, conflictos)
+### 1.4 Catálogo e instalación de mods ✅
+- [x] Cliente Modrinth (búsqueda, filtros, versiones compatibles)
+- [x] `modrinth add` / `remove` / `update` / `pin` / `unpin` / `refresh`
+- [x] Health checks (duplicados, mods sin fuente de actualización)
+- [x] Pestaña Mods en el editor con modal de operaciones y consola en vivo
 
-### 1.5 Export / import
-- [ ] Export `.mrpack` (Modrinth)
+### 1.5 Export / import (en curso)
+- [x] Export `.mrpack` (Modrinth) con modal animado
 - [ ] Export `.zip` (CurseForge, client y server)
 - [ ] Import `.mrpack` existente
 - [ ] `packwiz serve` + README de instalación por launcher
@@ -61,7 +63,7 @@
 - [ ] Git: commit/tag por versión + changelog
 - [ ] Publicación directa a Modrinth (API)
 - [ ] Perfiles base de packs
-- [ ] i18n ES / EN
+- [x] i18n ES / EN
 - [ ] Command palette y atajos
 
 ## Fase 3 — Servidores (el plan original)

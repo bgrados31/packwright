@@ -3,6 +3,7 @@ mod error;
 mod export;
 mod files;
 mod meta;
+mod mods;
 mod model;
 mod pack;
 mod process;
@@ -43,6 +44,12 @@ pub fn run() {
             pack::launcher_defaults,
             pack::open_path,
             export::pack_export,
+            mods::mods_search,
+            mods::mods_versions,
+            mods::mods_list,
+            mods::mods_health,
+            mods::mods_add,
+            mods::mods_command,
             files::pack_files,
             files::file_read,
             files::file_write,
