@@ -231,7 +231,7 @@
   "debug.title": "Debug console",
   "debug.collapse": "Collapse",
 
-  "export.button": "Export .mrpack",
+  "export.button": "Export",
   "export.exporting": "Exporting…",
   "export.success": "Exported {name} successfully.",
   "export.viewFolder": "Open exports folder",
