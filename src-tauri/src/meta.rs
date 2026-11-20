@@ -1,3 +1,7 @@
+use std::path::{Component, Path, PathBuf};
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -15,6 +19,7 @@ pub struct PackMeta {
     pub categories: Vec<String>,
     pub icon: String,
     pub banner: String,
+    pub gallery: Vec<String>,
     pub readme: String,
 }
 
@@ -58,14 +63,24 @@ pub fn meta_get(dir: String) -> Result<PackMeta> {
         AppError::Parse(format!("Invalid meta.toml: {e}"))
     })?;
 
+    let icon = str_field(&doc, "icon");
+    let icon = if icon.is_empty() || !root.join(&icon).is_file() { String::new() } else { icon };
+    let banner = str_field(&doc, "banner");
+    let banner = if banner.is_empty() || !root.join(&banner).is_file() { String::new() } else { banner };
+    let gallery = array_field(&doc, "gallery")
+        .into_iter()
+        .filter(|path| root.join(path).is_file())
+        .collect();
+
     Ok(PackMeta {
         summary: str_field(&doc, "summary"),
         license: str_field(&doc, "license"),
         homepage: str_field(&doc, "homepage"),
         source: str_field(&doc, "source"),
         categories: array_field(&doc, "categories"),
-        icon: str_field(&doc, "icon"),
-        banner: str_field(&doc, "banner"),
+        icon,
+        banner,
+        gallery,
         readme: str_field(&doc, "readme"),
     })
 }
@@ -111,6 +126,12 @@ pub fn meta_set(dir: String, meta: PackMeta) -> Result<PackMeta> {
         categories.push(c.as_str());
     }
     doc["categories"] = toml_edit::Item::Value(toml_edit::Value::Array(categories));
+
+    let mut gallery = toml_edit::Array::new();
+    for image in &meta.gallery {
+        gallery.push(image.as_str());
+    }
+    doc["gallery"] = toml_edit::Item::Value(toml_edit::Value::Array(gallery));
 
     let tmp = path.with_extension("toml.tmp");
     std::fs::write(&tmp, doc.to_string())?;
@@ -175,4 +196,154 @@ pub fn pack_has_icon(dir: String, path: String) -> bool {
     let Ok(root) = pack_root(&dir) else { return false };
     let relative = path.trim_start_matches('/').replace('\\', "/");
     root.join(relative).is_file()
+}
+
+/// Resuelve una ruta relativa dentro del pack, rechazando escapes.
+fn resolve_image(root: &Path, relative: &str) -> Result<PathBuf> {
+    let clean = relative.trim_start_matches('/').replace('\\', "/");
+    let rel = Path::new(&clean);
+    for component in rel.components() {
+        if matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)) {
+            return Err(AppError::Validation(format!("Invalid image path: {relative}")));
+        }
+    }
+    let joined = root.join(rel);
+    let canonical_root = root.canonicalize()?;
+    let resolved = joined.canonicalize().unwrap_or_else(|_| joined.clone());
+    if !resolved.starts_with(&canonical_root) {
+        return Err(AppError::Validation(format!("Image path outside the pack: {relative}")));
+    }
+    Ok(resolved)
+}
+
+fn extension_of(name: &str) -> String {
+    Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .filter(|value| ["png", "jpg", "jpeg", "webp", "gif"].contains(&value.as_str()))
+        .unwrap_or_else(|| "png".to_string())
+}
+
+fn mime_of(path: &Path) -> &'static str {
+    match path.extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
+    }
+}
+
+fn edit_meta(root: &Path, change: impl FnOnce(&mut toml_edit::DocumentMut)) -> Result<()> {
+    let path = root.join(".packwright").join("meta.toml");
+    std::fs::create_dir_all(path.parent().unwrap_or(root))?;
+    let mut doc = if path.is_file() {
+        std::fs::read_to_string(&path)?
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap_or_else(|_| toml_edit::DocumentMut::new())
+    } else {
+        toml_edit::DocumentMut::new()
+    };
+    change(&mut doc);
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, doc.to_string())?;
+    std::fs::rename(tmp, path)?;
+    Ok(())
+}
+
+/// Guarda una imagen (icono, banner o galería) dentro de `.packwright/assets`.
+#[tauri::command]
+pub fn pack_image_set(dir: String, kind: String, name: Option<String>, bytes: Vec<u8>) -> Result<String> {
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(AppError::Validation("Image is too large (8 MB max)".into()));
+    }
+    let root = pack_root(&dir)?;
+    let ext = extension_of(name.as_deref().unwrap_or("image.png"));
+    let relative = match kind.as_str() {
+        "icon" => format!(".packwright/assets/icon.{ext}"),
+        "banner" => format!(".packwright/assets/banner.{ext}"),
+        "gallery" => {
+            let safe: String = name
+                .as_deref()
+                .unwrap_or("image")
+                .chars()
+                .map(|ch| if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' { ch } else { '-' })
+                .collect();
+            let safe = if safe.is_empty() { "image".to_string() } else { safe };
+            format!(".packwright/assets/gallery/{safe}.{ext}")
+        }
+        other => return Err(AppError::Validation(format!("Unknown image kind: {other}"))),
+    };
+
+    let target = resolve_image(&root, &relative)?;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&target, &bytes)?;
+
+    let rel = relative.clone();
+    edit_meta(&root, |doc| {
+        if kind == "gallery" {
+            if doc.get("gallery").and_then(|item| item.as_array()).is_none() {
+                doc["gallery"] = toml_edit::Item::Value(toml_edit::Value::Array(toml_edit::Array::new()));
+            }
+            if let Some(array) = doc["gallery"].as_array_mut() {
+                if !array.iter().any(|value| value.as_str() == Some(rel.as_str())) {
+                    array.push(rel.as_str());
+                }
+            }
+        } else if kind == "icon" {
+            doc["icon"] = toml_edit::value(&rel);
+        } else {
+            doc["banner"] = toml_edit::value(&rel);
+        }
+    })?;
+
+    Ok(relative)
+}
+
+/// Devuelve una imagen del pack como data URL para mostrarla en la UI.
+#[tauri::command]
+pub fn pack_image_get(dir: String, path: String) -> Result<String> {
+    let root = pack_root(&dir)?;
+    let resolved = resolve_image(&root, &path)?;
+    if !resolved.is_file() {
+        return Err(AppError::NotFound(format!("Image not found: {path}")));
+    }
+    let bytes = std::fs::read(&resolved)?;
+    Ok(format!("data:{};base64,{}", mime_of(&resolved), STANDARD.encode(&bytes)))
+}
+
+/// Elimina una imagen y la referencia asociada del meta.toml.
+#[tauri::command]
+pub fn pack_image_remove(dir: String, path: String) -> Result<()> {
+    let root = pack_root(&dir)?;
+    let resolved = resolve_image(&root, &path)?;
+    if resolved.is_file() {
+        std::fs::remove_file(&resolved)?;
+    }
+
+    let rel = path.clone();
+    edit_meta(&root, |doc| {
+        if let Some(item) = doc.get_mut("gallery") {
+            if let Some(array) = item.as_array_mut() {
+                let indexes: Vec<usize> = array
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, value)| value.as_str() == Some(rel.as_str()))
+                    .map(|(index, _)| index)
+                    .collect();
+                for index in indexes.into_iter().rev() {
+                    array.remove(index);
+                }
+            }
+        }
+        if doc.get("icon").and_then(|item| item.as_str()) == Some(rel.as_str()) {
+            doc["icon"] = toml_edit::value("");
+        }
+        if doc.get("banner").and_then(|item| item.as_str()) == Some(rel.as_str()) {
+            doc["banner"] = toml_edit::value("");
+        }
+    })?;
+    Ok(())
 }

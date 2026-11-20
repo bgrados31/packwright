@@ -1,7 +1,10 @@
-import { lazy, Suspense, useState } from "react";
-import { Loader2, PackageOpen } from "lucide-react";
+import { lazy, Suspense, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { ImagePlus, Loader2, PackageOpen, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { Diagnostic, FileEntry, HistoryEntry, PackMeta } from "../lib/types";
+import { clearImageCache } from "./PackImage";
+import PackImage from "./PackImage";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -33,6 +36,7 @@ type Props = {
   onGenerateReadme: () => void;
   onExport: () => void;
   exporting: boolean;
+  onAssetsChanged: () => void;
 };
 
 export default function PackEditor(props: Props) {
@@ -42,6 +46,50 @@ export default function PackEditor(props: Props) {
     { id: "files" as const, label: t("editor.files") },
     { id: "details" as const, label: t("editor.details") },
   ];
+
+  const iconInput = useRef<HTMLInputElement>(null);
+  const bannerInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const messageOf = (error: unknown) =>
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+
+  const upload = async (kind: "icon" | "banner" | "gallery", files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await invoke("pack_image_set", {
+          dir: props.dir,
+          kind,
+          name: file.name,
+          bytes: Array.from(bytes),
+        });
+      }
+      clearImageCache(props.dir);
+      props.onAssetsChanged();
+    } catch (error) {
+      setUploadError(messageOf(error));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = async (path: string) => {
+    try {
+      await invoke("pack_image_remove", { dir: props.dir, path });
+      clearImageCache(props.dir);
+      props.onAssetsChanged();
+    } catch (error) {
+      setUploadError(messageOf(error));
+    }
+  };
 
   return (
     <div>
@@ -244,6 +292,143 @@ export default function PackEditor(props: Props) {
                   <button className="btn btn-secondary" onClick={props.onGenerateReadme}>
                     {t("details.generateReadme")}
                   </button>
+                </div>
+
+                <div className="mt-6 border-t border-line pt-5">
+                  <h3 className="text-sm font-semibold">{t("editor.assetsTitle")}</h3>
+                  <p className="mt-1 text-[11px] leading-5 text-muted">{t("editor.assetsBody")}</p>
+
+                  <div className="mt-4 grid grid-cols-2 gap-5">
+                    <div>
+                      <span className="text-xs text-muted">{t("editor.iconSection")}</span>
+                      <div className="mt-2 flex items-center gap-3">
+                        <PackImage
+                          dir={props.dir}
+                          path={props.meta?.icon}
+                          className="h-14 w-14 rounded-xl object-cover ring-1 ring-line"
+                        />
+                        <div className="flex flex-col items-start gap-1">
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => iconInput.current?.click()}
+                            disabled={uploading}
+                          >
+                            <ImagePlus size={13} /> {t("editor.upload")}
+                          </button>
+                          {props.meta?.icon && (
+                            <button
+                              className="btn btn-quiet text-[10px]"
+                              onClick={() => void removeImage(props.meta!.icon)}
+                            >
+                              {t("editor.removeImage")}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        ref={iconInput}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          void upload("icon", event.target.files);
+                          event.target.value = "";
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-xs text-muted">{t("editor.bannerSection")}</span>
+                      <div className="mt-2">
+                        {props.meta?.banner ? (
+                          <PackImage
+                            dir={props.dir}
+                            path={props.meta.banner}
+                            className="h-16 w-full rounded-lg object-cover ring-1 ring-line"
+                          />
+                        ) : (
+                          <div className="grid h-16 w-full place-items-center rounded-lg border border-dashed border-line text-[10px] text-muted">
+                            {t("editor.noBanner")}
+                          </div>
+                        )}
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => bannerInput.current?.click()}
+                            disabled={uploading}
+                          >
+                            <ImagePlus size={13} /> {t("editor.upload")}
+                          </button>
+                          {props.meta?.banner && (
+                            <button
+                              className="btn btn-quiet text-[10px]"
+                              onClick={() => void removeImage(props.meta!.banner)}
+                            >
+                              {t("editor.removeImage")}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        ref={bannerInput}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          void upload("banner", event.target.files);
+                          event.target.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted">{t("editor.gallerySection")}</span>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => galleryInput.current?.click()}
+                        disabled={uploading}
+                      >
+                        <ImagePlus size={13} /> {t("editor.addImages")}
+                      </button>
+                    </div>
+                    <input
+                      ref={galleryInput}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        void upload("gallery", event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(props.meta?.gallery ?? []).length === 0 && (
+                        <span className="text-[11px] text-muted">{t("editor.noImages")}</span>
+                      )}
+                      {(props.meta?.gallery ?? []).map((path) => (
+                        <div key={path} className="group relative">
+                          <PackImage
+                            dir={props.dir}
+                            path={path}
+                            className="h-16 w-20 rounded-lg object-cover ring-1 ring-line"
+                          />
+                          <button
+                            className="remove-image-btn"
+                            onClick={() => void removeImage(path)}
+                            title={t("editor.removeImage")}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {uploading && <p className="mt-3 text-[11px] text-muted">{t("editor.uploading")}</p>}
+                  {uploadError && <p className="mt-3 text-[11px] text-bad">{uploadError}</p>}
                 </div>
               </div>
             )}

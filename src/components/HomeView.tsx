@@ -2,6 +2,7 @@ import { ArrowRight, Boxes, Compass, FolderOpen, LayoutGrid, Plus, Sparkles } fr
 import { useI18n } from "../i18n";
 import type { PackInfo } from "../lib/types";
 import MinecraftScene from "./MinecraftScene";
+import PackImage from "./PackImage";
 
 type Props = {
   packs: PackInfo[];
@@ -115,7 +116,7 @@ export default function HomeView({ packs, workspace, launchersCount, onNew, onGo
                 className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-subtle"
                 onClick={() => onOpenPack(pack.dir)}
               >
-                <img src="/packwright-mark.png" alt="" className="h-8 w-8 rounded-lg" />
+                <PackImage dir={pack.dir} path={pack.icon} className="h-8 w-8 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{pack.name}</p>
                   <p className="truncate font-mono text-[10px] text-muted">

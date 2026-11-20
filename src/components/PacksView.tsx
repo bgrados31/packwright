@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Boxes,
   Compass,
+  Eye,
   FolderOpen,
   LayoutGrid,
   List,
@@ -17,6 +18,7 @@ import {
 import { useI18n } from "../i18n";
 import type { PackInfo } from "../lib/types";
 import MinecraftScene from "./MinecraftScene";
+import PackImage from "./PackImage";
 import Select from "./Select";
 
 type Props = {
@@ -209,13 +211,33 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
           {visible.map((pack, index) => (
             <article
               key={pack.dir}
-              className="card pack-card-v2 stagger"
+              className="card pack-card-v2 stagger pack-clickable"
               style={{ animationDelay: `${index * 40}ms` }}
+              onClick={() => onOpen(pack.dir)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(pack.dir);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title={t("packs.view")}
             >
+              {pack.banner && (
+                <div className="pack-card-banner">
+                  <PackImage dir={pack.dir} path={pack.banner} className="h-full w-full object-cover" />
+                  <div className="pack-card-banner-fade" />
+                </div>
+              )}
               <div className="p-5">
-                <div className="flex items-start justify-between">
+                <div className={`flex items-start justify-between ${pack.banner ? "-mt-8" : ""}`}>
                   <div className="relative">
-                    <img src="/packwright-mark.png" alt="" className="pack-card-icon h-9 w-9 rounded-lg" />
+                    <PackImage
+                      dir={pack.dir}
+                      path={pack.icon}
+                      className="pack-card-icon h-9 w-9 rounded-lg object-cover"
+                    />
                     <span
                       className={`loader-dot absolute -bottom-0.5 -right-0.5 ring-2 ring-surface ${LOADER_TONES[pack.loader ?? ""] ?? ""}`}
                     />
@@ -268,12 +290,15 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                 )}
 
                 <div className="mt-5 flex items-center gap-2">
-                  <button className="btn btn-primary flex-1" onClick={() => onOpen(pack.dir)}>
-                    {t("packs.open")}
+                  <button
+                    className="btn btn-primary flex-1"
+                    onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
+                  >
+                    <Eye size={14} /> {t("packs.view")}
                   </button>
                   <button
                     className="btn btn-secondary px-3"
-                    onClick={() => onExport(pack.dir)}
+                    onClick={(event) => { event.stopPropagation(); onExport(pack.dir); }}
                     disabled={exporting === pack.dir}
                     title={t("export.button")}
                   >
@@ -281,7 +306,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                   </button>
                   <button
                     className="btn btn-secondary px-3"
-                    onClick={() => onReveal(pack.dir)}
+                    onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                     title={t("packs.folder")}
                   >
                     <ArrowUpRight size={15} />
@@ -296,10 +321,20 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
           {visible.map((pack, index) => (
             <article
               key={pack.dir}
-              className="pack-row stagger"
+              className="pack-row pack-clickable stagger"
               style={{ animationDelay: `${index * 25}ms` }}
+              onClick={() => onOpen(pack.dir)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(pack.dir);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              title={t("packs.view")}
             >
-              <img src="/packwright-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-lg" />
+              <PackImage dir={pack.dir} path={pack.icon} className="h-9 w-9 shrink-0 rounded-lg object-cover" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate text-sm font-medium">{pack.name}</h3>
@@ -316,7 +351,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
               <span className="w-16 text-right font-mono text-[11px] text-muted">{pack.mod_count} mods</span>
               <button
                 className="btn btn-secondary px-3"
-                onClick={() => onExport(pack.dir)}
+                onClick={(event) => { event.stopPropagation(); onExport(pack.dir); }}
                 disabled={exporting === pack.dir}
                 title={t("export.button")}
               >
@@ -324,13 +359,16 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
               </button>
               <button
                 className="btn btn-secondary px-3"
-                onClick={() => onReveal(pack.dir)}
+                onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                 title={t("packs.folder")}
               >
                 <FolderOpen size={14} />
               </button>
-              <button className="btn btn-primary px-3" onClick={() => onOpen(pack.dir)}>
-                {t("packs.open")}
+              <button
+                className="btn btn-primary px-3"
+                onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
+              >
+                <Eye size={14} /> {t("packs.view")}
               </button>
             </article>
           ))}

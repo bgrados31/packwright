@@ -345,6 +345,23 @@ export default function App() {
     }
   };
 
+  const reloadAssets = async () => {
+    if (!selectedPack) return;
+    try {
+      const details = await invoke<PackMeta>("meta_get", { dir: selectedPack });
+      setMeta(details);
+      setHasIcon(
+        await invoke<boolean>("pack_has_icon", {
+          dir: selectedPack,
+          path: details.icon || ".packwright/assets/icon.png",
+        }),
+      );
+      await loadPacks();
+    } catch (cause) {
+      setError(errorText(cause));
+    }
+  };
+
   const exportPack = async (dir: string) => {
     setExporting(dir);
     setError(null);
@@ -493,6 +510,7 @@ export default function App() {
               onGenerateReadme={() => void generateReadme()}
               onExport={() => void exportPack(selectedPack ?? "")}
               exporting={exporting === selectedPack}
+              onAssetsChanged={() => void reloadAssets()}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (

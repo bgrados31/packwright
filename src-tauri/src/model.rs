@@ -21,6 +21,9 @@ pub struct PackInfo {
     pub mod_count: usize,
     /// Problemas que bloquean una exportación correcta.
     pub issues: Vec<String>,
+    /// Rutas declaradas en `.packwright/meta.toml` para mostrarlas en las cards.
+    pub icon: Option<String>,
+    pub banner: Option<String>,
 }
 
 pub fn read_pack_info(dir: &Path) -> Result<PackInfo> {
@@ -109,7 +112,20 @@ pub fn read_pack_info(dir: &Path) -> Result<PackInfo> {
         loader_version,
         mod_count,
         issues,
+        icon: meta_field(dir, "icon"),
+        banner: meta_field(dir, "banner"),
     })
+}
+
+fn meta_field(dir: &Path, key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join(".packwright").join("meta.toml")).ok()?;
+    let doc = text.parse::<toml_edit::DocumentMut>().ok()?;
+    let value = doc.get(key)
+        .and_then(|item| item.as_str())
+        .map(str::to_string)
+        .filter(|value| !value.is_empty())?;
+    let relative = value.trim_start_matches('/').replace('\\', "/");
+    dir.join(relative).is_file().then_some(value)
 }
 
 pub fn slugify(input: &str) -> String {

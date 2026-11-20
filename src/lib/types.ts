@@ -10,6 +10,8 @@ export type PackInfo = {
   loader_version: string | null;
   mod_count: number;
   issues: string[];
+  icon: string | null;
+  banner: string | null;
 };
 
 export type AppConfig = {
@@ -70,6 +72,7 @@ export type PackMeta = {
   categories: string[];
   icon: string;
   banner: string;
+  gallery: string[];
   readme: string;
 };
 
