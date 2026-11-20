@@ -39,9 +39,20 @@ impl CommandRunner {
     }
 
     pub async fn run(&self, program: &Path, args: &[String], cwd: &Path) -> Result<CommandOutput> {
+        self.run_with_id(None, program, args, cwd).await
+    }
+
+    /// Igual que `run` pero permite que el frente elija el id para filtrar eventos.
+    pub async fn run_with_id(
+        &self,
+        id: Option<String>,
+        program: &Path,
+        args: &[String],
+        cwd: &Path,
+    ) -> Result<CommandOutput> {
         let _guard = self.queue.lock().await;
 
-        let id = format!("op-{}", NEXT_ID.fetch_add(1, Ordering::Relaxed));
+        let id = id.unwrap_or_else(|| format!("op-{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)));
         let label = format!(
             "{} {}",
             program.file_name().unwrap_or_default().to_string_lossy(),

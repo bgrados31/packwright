@@ -612,6 +612,64 @@ details summary::-webkit-details-marker { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* --- Modal de exportación --- */
+.export-modal { max-width: 620px; }
+.export-progress { padding: 18px 20px 0; }
+.export-blocks { display: flex; gap: 4px; }
+.export-block {
+  flex: 1;
+  height: 10px;
+  border: 1px solid var(--pw-line);
+  border-radius: 2px;
+  background: var(--pw-subtle);
+  transition: background 220ms ease, border-color 220ms ease;
+}
+.export-block.on {
+  background: var(--pw-accent);
+  border-color: color-mix(in srgb, var(--pw-accent) 70%, black);
+  animation: blockPop 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.export-block.next {
+  background: color-mix(in srgb, var(--pw-accent) 30%, var(--pw-subtle));
+  animation: blockPulse 1s ease-in-out infinite;
+}
+@keyframes blockPop {
+  from { transform: scaleY(0.3); opacity: 0.5; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+@keyframes blockPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.export-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--pw-muted);
+}
+.export-status.success { color: var(--pw-ok); }
+.export-status.error { color: var(--pw-bad); }
+.export-console-wrap { margin: 16px 20px 0; }
+.export-console-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: var(--pw-muted);
+}
+.export-console { height: 176px; margin: 0; }
+.export-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--pw-line);
+  border-radius: 10px;
+  background: var(--pw-subtle);
+  animation: dropIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* --- Modpacks: banner, filtros y tarjetas --- */
 .mc-hero-compact { min-height: 196px; }
 .mc-hero-compact .mc-hero-content { padding: 26px 30px; }

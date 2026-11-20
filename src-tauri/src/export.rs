@@ -35,7 +35,7 @@ fn safe_file_part(value: &str) -> String {
 /// Exporta un pack a `.mrpack` usando `packwiz modrinth export`.
 /// La salida en vivo se emite por `operation://line` a través de CommandRunner.
 #[tauri::command]
-pub async fn pack_export(state: State<'_, AppState>, dir: String) -> Result<ExportResult> {
+pub async fn pack_export(state: State<'_, AppState>, dir: String, id: Option<String>) -> Result<ExportResult> {
     let cfg = config::load()?;
     let root = cfg.workspace.join(&dir);
     if !root.is_dir() {
@@ -63,7 +63,7 @@ pub async fn pack_export(state: State<'_, AppState>, dir: String) -> Result<Expo
         "-y".to_string(),
     ];
 
-    let result = state.runner.run(&packwiz, &args, &root).await?;
+    let result = state.runner.run_with_id(id, &packwiz, &args, &root).await?;
     if !result.ok {
         let detail = result
             .stderr
