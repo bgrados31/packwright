@@ -1,4 +1,5 @@
-import type { ReactNode, RefObject } from "react";
+import { useEffect, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Check, LayoutGrid, List, Search, X } from "lucide-react";
 
 /** Campo de búsqueda con icono, botón limpiar y sugerencia de atajo. */
@@ -41,6 +42,67 @@ export function SearchField({
         </kbd>
       )}
     </div>
+  );
+}
+
+export type ContextMenuItem = {
+  label: string;
+  icon?: ReactNode;
+  shortcut?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+};
+
+/** Menú contextual reutilizable, anclado al cursor y cerrado al hacer clic fuera. */
+export function ContextMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const close = () => onClose();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", close);
+    };
+  }, [onClose]);
+
+  const left = Math.max(4, Math.min(x, window.innerWidth - 210));
+  const top = Math.max(4, Math.min(y, window.innerHeight - items.length * 34 - 16));
+
+  return createPortal(
+    <div className="context-menu" style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
+      {items.map((item, index) => (
+        <button
+          key={`${item.label}-${index}`}
+          className={`context-item ${item.danger ? "danger" : ""}`}
+          disabled={item.disabled}
+          onClick={() => {
+            item.onClick();
+            onClose();
+          }}
+        >
+          {item.icon}
+          <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+          {item.shortcut && <kbd>{item.shortcut}</kbd>}
+        </button>
+      ))}
+    </div>,
+    document.body,
   );
 }
 

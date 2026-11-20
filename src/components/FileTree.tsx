@@ -3,18 +3,23 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   ChevronDown,
   ChevronRight,
+  Copy,
   FileCode2,
   FileJson2,
+  FilePlus2,
   FileText,
   Folder,
   FolderOpen,
   FolderTree,
   Package,
+  Pencil,
   Search,
   Settings2,
+  Trash2,
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { TreeNode } from "../lib/types";
+import { ContextMenu, type ContextMenuItem } from "./ui";
 
 type Props = {
   dir: string;
@@ -24,6 +29,19 @@ type Props = {
   revision: number;
   onOpen: (root: string, path: string, name: string) => void;
   onToggleRoot: (root: string) => void;
+  onRename: (root: string, path: string, name: string) => void;
+  onDelete: (root: string, path: string) => void;
+  onNewFile: (root: string, parent: string, name: string) => void;
+};
+
+const isProtected = (path: string): boolean => {
+  const value = path.replace(/\\/g, "/");
+  return (
+    value === "pack.toml" ||
+    value === "index.toml" ||
+    (value.startsWith("mods/") && value.endsWith(".pw.toml")) ||
+    value.startsWith(".packwright/")
+  );
 };
 
 const ROOT_META: Record<string, { labelKey: "editor.root.pack" | "editor.root.packwiz" | "editor.root.packwright"; icon: typeof Folder }> = {
@@ -58,13 +76,16 @@ function filterNodes(nodes: TreeNode[], query: string): TreeNode[] {
   return result;
 }
 
-export default function FileTree({ dir, roots, allRoots, activeKey, revision, onOpen, onToggleRoot }: Props) {
+export default function FileTree({ dir, roots, allRoots, activeKey, revision, onOpen, onToggleRoot, onRename, onDelete, onNewFile }: Props) {
   const { t } = useI18n();
   const [trees, setTrees] = useState<Record<string, TreeNode[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["pack", "packwiz", "packwright"]));
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; root: string; path: string; name: string; isDir: boolean } | null>(null);
+  const [renaming, setRenaming] = useState<{ root: string; path: string; name: string } | null>(null);
+  const [creating, setCreating] = useState<{ root: string; parent: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,12 +112,37 @@ export default function FileTree({ dir, roots, allRoots, activeKey, revision, on
     nodes.map((node) => {
       const isDir = node.kind === "dir";
       const isOpen = expanded.has(node.path);
+      const isRenaming = renaming?.root === root && renaming.path === node.path;
+      if (isRenaming) {
+        return (
+          <div key={`${root}:${node.path}`} className="px-1.5 py-0.5" style={{ paddingLeft: 8 + depth * 14 }}>
+            <input
+              autoFocus
+              className="field !px-1.5 !py-1 text-[11px]"
+              defaultValue={renaming.name}
+              onBlur={(event) => {
+                const value = event.target.value.trim();
+                if (value && value !== renaming.name) onRename(root, node.path, value);
+                setRenaming(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") setRenaming(null);
+              }}
+            />
+          </div>
+        );
+      }
       return (
         <div key={`${root}:${node.path}`}>
           <button
             className={`tree-row ${activeKey === `${root}:${node.path}` ? "active" : ""}`}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => (isDir ? toggleDir(node.path) : onOpen(root, node.path, node.name))}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenu({ x: event.clientX, y: event.clientY, root, path: node.path, name: node.name, isDir });
+            }}
             title={node.path}
           >
             {isDir ? (
@@ -173,13 +219,71 @@ export default function FileTree({ dir, roots, allRoots, activeKey, revision, on
                 </div>
               )}
               {!isCollapsed && <div className="mt-0.5">{renderNodes(nodes, root, 0)}</div>}
-              {!isCollapsed && nodes.length === 0 && (
+              {!isCollapsed && nodes.length === 0 && !creating && (
                 <p className="px-3 py-1.5 text-[10px] text-muted">{t("editor.noFiles")}</p>
+              )}
+              {!isCollapsed && creating?.root === root && (
+                <div className="px-1.5 py-0.5">
+                  <input
+                    autoFocus
+                    className="field !px-1.5 !py-1 text-[11px]"
+                    placeholder={t("editor.newFileName")}
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (value) onNewFile(root, creating.parent, value);
+                      setCreating(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                      if (event.key === "Escape") setCreating(null);
+                    }}
+                  />
+                </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={(
+            [
+              !menu.isDir && {
+                label: t("editor.openFile"),
+                icon: <FileText size={13} />,
+                onClick: () => onOpen(menu.root, menu.path, menu.name),
+              },
+              menu.isDir && {
+                label: t("editor.newFile"),
+                icon: <FilePlus2 size={13} />,
+                onClick: () => setCreating({ root: menu.root, parent: menu.path }),
+              },
+              {
+                label: t("editor.rename"),
+                icon: <Pencil size={13} />,
+                disabled: isProtected(menu.path),
+                onClick: () => setRenaming({ root: menu.root, path: menu.path, name: menu.name }),
+              },
+              {
+                label: t("editor.copyPath"),
+                icon: <Copy size={13} />,
+                onClick: () => void navigator.clipboard.writeText(menu.path),
+              },
+              !menu.isDir && {
+                label: t("editor.delete"),
+                icon: <Trash2 size={13} />,
+                danger: true,
+                disabled: isProtected(menu.path),
+                onClick: () => onDelete(menu.root, menu.path),
+              },
+            ] as Array<ContextMenuItem | false>
+          ).filter((item): item is ContextMenuItem => Boolean(item))}
+        />
+      )}
     </aside>
   );
 }

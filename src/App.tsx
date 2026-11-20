@@ -394,6 +394,88 @@ export default function App() {
   const dismissToast = (id: string) =>
     setToasts((current) => current.filter((item) => item.id !== id));
 
+  const pushToast = (title: string, state: Toast["state"] = "success", detail?: string) => {
+    const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((current) => [...current, { id, title, detail, state }]);
+    window.setTimeout(() => dismissToast(id), 3200);
+  };
+
+  const refreshTree = () => {
+    setTreeRevision((value) => value + 1);
+    void loadPacks();
+  };
+
+  const renameFile = async (root: string, path: string, name: string) => {
+    if (!selectedPack) return;
+    try {
+      const updated = await invoke<string>("file_rename", { dir: selectedPack, path, newName: name });
+      const oldKey = fileKey(root, path);
+      const newRoot = rootForPath(updated);
+      const newKey = fileKey(newRoot, updated);
+      setOpenFiles((current) =>
+        current.map((file) =>
+          file.key === oldKey
+            ? { ...file, key: newKey, root: newRoot, path: updated, name: updated.split("/").pop() ?? updated }
+            : file,
+        ),
+      );
+      setActiveKey((current) => (current === oldKey ? newKey : current));
+      refreshTree();
+      pushToast(t("editor.renamed", { name }));
+    } catch (cause) {
+      pushToast(t("editor.renameFailed"), "error", errorText(cause));
+    }
+  };
+
+  const deleteFile = async (root: string, path: string) => {
+    if (!selectedPack) return;
+    try {
+      await invoke("file_delete", { dir: selectedPack, path });
+      const key = fileKey(root, path);
+      setOpenFiles((current) => current.filter((file) => file.key !== key));
+      setActiveKey((current) => (current === key ? null : current));
+      refreshTree();
+      pushToast(t("editor.deleted", { name: path.split("/").pop() ?? path }));
+    } catch (cause) {
+      pushToast(t("editor.deleteFailed"), "error", errorText(cause));
+    }
+  };
+
+  const newFile = async (_root: string, parent: string, name: string) => {
+    if (!selectedPack) return;
+    try {
+      const created = await invoke<string>("file_new", { dir: selectedPack, parent, name });
+      refreshTree();
+      await openFile(rootForPath(created), created, created.split("/").pop() ?? created);
+      pushToast(t("editor.created", { name }));
+    } catch (cause) {
+      pushToast(t("editor.createFailed"), "error", errorText(cause));
+    }
+  };
+
+  const reorderFiles = (keys: string[]) => {
+    setOpenFiles((current) =>
+      keys
+        .map((key) => current.find((file) => file.key === key))
+        .filter((file): file is OpenFile => Boolean(file)),
+    );
+  };
+
+  const closeOthers = (key: string) => {
+    setOpenFiles((current) => current.filter((file) => file.key === key));
+    setActiveKey(key);
+  };
+  const closeAll = () => {
+    setOpenFiles([]);
+    setActiveKey(null);
+  };
+  const closeToRight = (key: string) => {
+    setOpenFiles((current) => {
+      const index = current.findIndex((file) => file.key === key);
+      return index < 0 ? current : current.slice(0, index + 1);
+    });
+  };
+
   const recordModHistory = async (
     operation: ModOperation,
     ok: boolean,
@@ -683,6 +765,13 @@ export default function App() {
                   current.map((file) => (file.key === key ? { ...file, content: value } : file)),
                 );
               }}
+              onRenameFile={(root, path, name) => void renameFile(root, path, name)}
+              onDeleteFile={(root, path) => void deleteFile(root, path)}
+              onNewFile={(root, parent, name) => void newFile(root, parent, name)}
+              onReorderFiles={reorderFiles}
+              onCloseOthers={closeOthers}
+              onCloseAll={closeAll}
+              onCloseToRight={closeToRight}
               onEditorSettingsChange={(next) => void saveConfig({ ...config!, ...next })}
               onToggleRoot={(root) => {
                 const current = config!.editor_roots;

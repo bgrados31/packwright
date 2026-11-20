@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ImagePlus, Loader2, PackageOpen, Settings2, Trash2, X } from "lucide-react";
+import { Copy, ImagePlus, Loader2, PackageOpen, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -15,7 +15,7 @@ import FileTree from "./FileTree";
 import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
-import { Checkbox } from "./ui";
+import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -42,9 +42,16 @@ type Props = {
   onRestore: (id: string) => void;
   onOpenFile: (root: string, path: string, name: string) => void;
   onCloseFile: (key: string) => void;
+  onReorderFiles: (keys: string[]) => void;
+  onCloseOthers: (key: string) => void;
+  onCloseAll: () => void;
+  onCloseToRight: (key: string) => void;
   onContentChange: (value: string) => void;
   onEditorSettingsChange: (settings: Partial<AppConfig>) => void;
   onToggleRoot: (root: string) => void;
+  onRenameFile: (root: string, path: string, name: string) => void;
+  onDeleteFile: (root: string, path: string) => void;
+  onNewFile: (root: string, parent: string, name: string) => void;
   onMetaChange: (meta: PackMeta) => void;
   onSaveMeta: () => void;
   onUseIcon: () => void;
@@ -72,6 +79,9 @@ export default function PackEditor(props: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; key: string; path: string } | null>(null);
 
   const activeTab = props.openFiles.find((file) => file.key === props.activeKey) ?? null;
   const dirty = activeTab ? activeTab.content !== activeTab.saved : false;
@@ -180,6 +190,9 @@ export default function PackEditor(props: Props) {
             revision={props.treeRevision}
             onOpen={props.onOpenFile}
             onToggleRoot={props.onToggleRoot}
+            onRename={props.onRenameFile}
+            onDelete={props.onDeleteFile}
+            onNewFile={props.onNewFile}
           />
 
           <div className="editor-main">
@@ -187,8 +200,27 @@ export default function PackEditor(props: Props) {
               {props.openFiles.map((file) => (
                 <button
                   key={file.key}
-                  className={`editor-tab ${file.key === props.activeKey ? "active" : ""}`}
+                  draggable
+                  className={`editor-tab ${file.key === props.activeKey ? "active" : ""} ${dragKey === file.key ? "dragging" : ""} ${overKey === file.key ? "drop-target" : ""}`}
                   onClick={() => props.onOpenFile(file.root, file.path, file.name)}
+                  onDragStart={(event) => { setDragKey(file.key); event.dataTransfer.effectAllowed = "move"; }}
+                  onDragOver={(event) => { event.preventDefault(); setOverKey(file.key); }}
+                  onDragLeave={() => setOverKey((current) => (current === file.key ? null : current))}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (dragKey && dragKey !== file.key) {
+                      const keys = props.openFiles.map((item) => item.key).filter((key) => key !== dragKey);
+                      keys.splice(keys.indexOf(file.key), 0, dragKey);
+                      props.onReorderFiles(keys);
+                    }
+                    setDragKey(null);
+                    setOverKey(null);
+                  }}
+                  onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setTabMenu({ x: event.clientX, y: event.clientY, key: file.key, path: file.path });
+                  }}
                   title={file.path}
                 >
                   <span className="truncate">{file.name}</span>
@@ -565,6 +597,21 @@ export default function PackEditor(props: Props) {
             </p>
           </div>
         </div>
+      )}
+
+      {tabMenu && (
+        <ContextMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          onClose={() => setTabMenu(null)}
+          items={[
+            { label: t("editor.closeTab"), icon: <X size={13} />, onClick: () => props.onCloseFile(tabMenu.key) },
+            { label: t("editor.closeOthers"), onClick: () => props.onCloseOthers(tabMenu.key) },
+            { label: t("editor.closeToRight"), onClick: () => props.onCloseToRight(tabMenu.key) },
+            { label: t("editor.closeAll"), onClick: () => props.onCloseAll() },
+            { label: t("editor.copyPath"), icon: <Copy size={13} />, onClick: () => void navigator.clipboard.writeText(tabMenu.path) },
+          ] as ContextMenuItem[]}
+        />
       )}
     </div>
   );

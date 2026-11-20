@@ -192,6 +192,88 @@ pub fn pack_tree(dir: String, scope: String) -> Result<Vec<TreeNode>> {
     build_tree(&root, &root, &scope, 0)
 }
 
+/// Archivos que packwiz/packwright necesitan con su nombre exacto.
+fn is_protected(relative: &str) -> bool {
+    let value = relative.replace('\\', "/");
+    value == "pack.toml"
+        || value == "index.toml"
+        || (value.starts_with("mods/") && value.ends_with(".pw.toml"))
+        || value.starts_with(".packwright/meta.toml")
+        || value.starts_with(".packwright/history/")
+        || value.starts_with(".packwright/assets/")
+}
+
+fn safe_new_name(name: &str) -> Result<String> {
+    let value = name.trim();
+    if value.is_empty() || value.contains('/') || value.contains('\\') || value == "." || value == ".." {
+        return Err(AppError::Validation("Invalid file name".into()));
+    }
+    Ok(value.to_string())
+}
+
+#[tauri::command]
+pub fn file_rename(dir: String, path: String, new_name: String) -> Result<String> {
+    let root = pack_root(&dir)?;
+    if is_protected(&path) {
+        return Err(AppError::Validation("This file is managed by packwiz and cannot be renamed".into()));
+    }
+    let source = resolve(&root, &path)?;
+    if !source.is_file() {
+        return Err(AppError::NotFound(format!("File does not exist: {path}")));
+    }
+    let name = safe_new_name(&new_name)?;
+    let target = source.with_file_name(&name);
+    if target.exists() {
+        return Err(AppError::Validation("A file with that name already exists".into()));
+    }
+    std::fs::rename(&source, &target)?;
+    Ok(target
+        .strip_prefix(&root)
+        .unwrap_or(&target)
+        .to_string_lossy()
+        .replace('\\', "/"))
+}
+
+#[tauri::command]
+pub fn file_delete(dir: String, path: String) -> Result<()> {
+    let root = pack_root(&dir)?;
+    if is_protected(&path) {
+        return Err(AppError::Validation("This file is managed by packwiz and cannot be deleted".into()));
+    }
+    let source = resolve(&root, &path)?;
+    if !source.is_file() {
+        return Err(AppError::NotFound(format!("File does not exist: {path}")));
+    }
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let trash = root.join(".packwright").join("trash").join(stamp.to_string());
+    std::fs::create_dir_all(&trash)?;
+    std::fs::rename(&source, trash.join(source.file_name().unwrap_or_default()))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn file_new(dir: String, parent: String, name: String) -> Result<String> {
+    let root = pack_root(&dir)?;
+    let name = safe_new_name(&name)?;
+    let relative = if parent.trim().is_empty() {
+        name
+    } else {
+        format!("{}/{}", parent.trim().trim_end_matches('/'), name)
+    };
+    let target = resolve(&root, &relative)?;
+    if target.exists() {
+        return Err(AppError::Validation("A file with that name already exists".into()));
+    }
+    if let Some(folder) = target.parent() {
+        std::fs::create_dir_all(folder)?;
+    }
+    std::fs::write(&target, "")?;
+    Ok(relative)
+}
+
 #[tauri::command]
 pub fn file_read(dir: String, path: String) -> Result<String> {
     let root = pack_root(&dir)?;
