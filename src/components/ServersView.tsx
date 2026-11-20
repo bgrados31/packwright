@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -72,6 +72,7 @@ export default function ServersView({ packs }: Props) {
   const [syncPack, setSyncPack] = useState("");
   const [playitOpen, setPlayitOpen] = useState(false);
   const [detailServer, setDetailServer] = useState<ServerInfo | null>(null);
+  const consoleRef = useRef<HTMLDivElement>(null);
 
   const refresh = () => {
     invoke<ServerInfo[]>("server_list")
@@ -100,6 +101,11 @@ export default function ServersView({ packs }: Props) {
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
   }, []);
+
+  useEffect(() => {
+    const element = consoleRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [lines, consoleServer]);
 
   const run = async (action: () => Promise<unknown>): Promise<boolean> => {
     setBusy(true);
@@ -369,7 +375,7 @@ export default function ServersView({ packs }: Props) {
               <button className="icon-btn" onClick={() => setConsoleServer(null)}><X size={16} /></button>
             </div>
             <div className="p-4">
-              <div className="console-box" style={{ height: 260 }}>
+              <div className="console-box" style={{ height: 260 }} ref={consoleRef}>
                 {lines.length === 0 ? <p className="text-[11px] text-muted">{t("output.empty")}</p> : lines.map((line, index) => (
                   <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
                 ))}

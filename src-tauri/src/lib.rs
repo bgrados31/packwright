@@ -91,6 +91,7 @@ pub fn run() {
             server::server_properties_set,
             server::server_eula,
             server::server_eula_set,
+            server::server_set_nogui,
             server::server_players,
             server::server_player_add,
             server::server_backup,

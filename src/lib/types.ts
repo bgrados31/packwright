@@ -203,6 +203,7 @@ export type ServerInfo = {
   jar: string;
   java: string;
   memory?: number;
+  nogui?: boolean;
   path: string;
   running: boolean;
 };

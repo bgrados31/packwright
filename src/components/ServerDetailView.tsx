@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -58,6 +58,52 @@ function uptime(seconds: number): string {
   return hours < 24 ? `${hours}h ${minutes % 60}m` : `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
+type Properties = Record<string, string>;
+
+function parseProperties(text: string): Properties {
+  const values: Properties = {};
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator > 0) {
+      values[trimmed.slice(0, separator).trim()] = trimmed.slice(separator + 1).trim();
+    }
+  }
+  return values;
+}
+
+function stringifyProperties(values: Properties): string {
+  return `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
+}
+
+function PropField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  options?: string[];
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs text-muted">{label}</span>
+      {options ? (
+        <select className="field text-[12px]" value={value} onChange={(event) => onChange(event.target.value)}>
+          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      ) : (
+        <input className="field text-[12px]" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      )}
+    </label>
+  );
+}
+
 export default function ServerDetailView({ server, onBack }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("overview");
@@ -68,9 +114,11 @@ export default function ServerDetailView({ server, onBack }: Props) {
   const [folder, setFolder] = useState("");
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState("");
-  const [properties, setProperties] = useState("");
+  const [properties, setProperties] = useState<Properties>({});
   const [eula, setEula] = useState(false);
+  const [nogui, setNogui] = useState(true);
   const [lines, setLines] = useState<OpLine[]>([]);
+  const consoleRef = useRef<HTMLDivElement>(null);
   const [command, setCommand] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -102,6 +150,11 @@ export default function ServerDetailView({ server, onBack }: Props) {
     return () => { unlisten?.(); };
   }, [server.name]);
 
+  useEffect(() => {
+    const element = consoleRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [lines, tab]);
+
   const openTab = (next: Tab) => {
     setTab(next);
     setError(null);
@@ -110,7 +163,9 @@ export default function ServerDetailView({ server, onBack }: Props) {
       invoke<ServerPlayers>("server_players", { name: server.name }).then(setPlayers).catch(() => undefined);
     }
     if (next === "properties") {
-      invoke<string>("server_properties", { name: server.name }).then(setProperties).catch(() => undefined);
+      invoke<string>("server_properties", { name: server.name })
+        .then((text) => { setProperties(parseProperties(text)); setNogui(server.nogui ?? true); })
+        .catch(() => undefined);
       invoke<boolean>("server_eula", { name: server.name }).then(setEula).catch(() => undefined);
     }
   };
@@ -157,9 +212,14 @@ export default function ServerDetailView({ server, onBack }: Props) {
 
   const saveProperties = async () => {
     await run(async () => {
-      await invoke("server_properties_set", { name: server.name, content: properties });
+      await invoke("server_properties_set", { name: server.name, content: stringifyProperties(properties) });
       await invoke("server_eula_set", { name: server.name, accepted: eula });
+      await invoke("server_set_nogui", { name: server.name, enabled: nogui });
     });
+  };
+
+  const setProp = (key: string, value: string) => {
+    setProperties((current) => ({ ...current, [key]: value }));
   };
 
   const addPlayer = async () => {
@@ -277,7 +337,7 @@ export default function ServerDetailView({ server, onBack }: Props) {
 
         {tab === "console" && (
           <div className="card p-4">
-            <div className="console-box" style={{ height: 380 }}>
+            <div className="console-box" style={{ height: 380 }} ref={consoleRef}>
               {lines.length === 0 ? <p className="text-[11px] text-muted">{t("output.empty")}</p> : lines.map((line, index) => (
                 <div key={index} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</div>
               ))}
@@ -371,9 +431,37 @@ export default function ServerDetailView({ server, onBack }: Props) {
         )}
 
         {tab === "properties" && (
-          <div className="card flex flex-col gap-3 p-4">
-            <Checkbox checked={eula} onChange={setEula} label={t("serverDetail.eula")} />
-            <textarea className="field font-mono text-[11px]" rows={16} value={properties} onChange={(event) => setProperties(event.target.value)} />
+          <div className="flex flex-col gap-3">
+            <div className="card p-4">
+              <div className="flex flex-wrap gap-5">
+                <Checkbox checked={eula} onChange={setEula} label={t("serverDetail.eula")} />
+                <Checkbox checked={nogui} onChange={setNogui} label={t("serverDetail.nogui")} />
+              </div>
+              <p className="mt-3 text-[11px] text-muted">{t("serverDetail.propRawHint")}</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <PropField label={t("servers.port")} type="number" value={properties["server-port"] ?? "25565"} onChange={(value) => setProp("server-port", value)} />
+                <PropField label={t("servers.motd")} value={properties.motd ?? ""} onChange={(value) => setProp("motd", value)} />
+                <PropField label={t("serverDetail.propMaxPlayers")} type="number" value={properties["max-players"] ?? "20"} onChange={(value) => setProp("max-players", value)} />
+                <PropField label={t("serverDetail.propViewDistance")} type="number" value={properties["view-distance"] ?? "10"} onChange={(value) => setProp("view-distance", value)} />
+                <PropField label={t("serverDetail.propDifficulty")} value={properties.difficulty ?? "normal"} options={["peaceful", "easy", "normal", "hard"]} onChange={(value) => setProp("difficulty", value)} />
+                <PropField label={t("serverDetail.propGamemode")} value={properties.gamemode ?? "survival"} options={["survival", "creative", "adventure", "spectator"]} onChange={(value) => setProp("gamemode", value)} />
+                <PropField label={t("serverDetail.propLevelType")} value={properties["level-type"] ?? "minecraft:normal"} options={["minecraft:normal", "minecraft:flat", "minecraft:large_biomes", "minecraft:amplified"]} onChange={(value) => setProp("level-type", value)} />
+                <PropField label={t("serverDetail.propSeed")} value={properties["level-seed"] ?? ""} onChange={(value) => setProp("level-seed", value)} />
+                <PropField label={t("serverDetail.propSpawnProtection")} type="number" value={properties["spawn-protection"] ?? "16"} onChange={(value) => setProp("spawn-protection", value)} />
+              </div>
+            </div>
+            <div className="card p-4">
+              <p className="mb-4 text-xs font-medium">{t("serverDetail.propRules")}</p>
+              <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                <Checkbox checked={(properties["online-mode"] ?? "true") === "true"} onChange={(checked) => setProp("online-mode", String(checked))} label={t("servers.online")} size="sm" />
+                <Checkbox checked={(properties.pvp ?? "true") === "true"} onChange={(checked) => setProp("pvp", String(checked))} label={t("serverDetail.propPvp")} size="sm" />
+                <Checkbox checked={(properties["allow-flight"] ?? "false") === "true"} onChange={(checked) => setProp("allow-flight", String(checked))} label={t("serverDetail.propAllowFlight")} size="sm" />
+                <Checkbox checked={(properties["enable-command-block"] ?? "false") === "true"} onChange={(checked) => setProp("enable-command-block", String(checked))} label={t("serverDetail.propCommandBlock")} size="sm" />
+                <Checkbox checked={(properties["white-list"] ?? "false") === "true"} onChange={(checked) => setProp("white-list", String(checked))} label={t("serverDetail.propWhitelist")} size="sm" />
+                <Checkbox checked={(properties.hardcore ?? "false") === "true"} onChange={(checked) => setProp("hardcore", String(checked))} label={t("serverDetail.propHardcore")} size="sm" />
+                <Checkbox checked={(properties["generate-structures"] ?? "true") === "true"} onChange={(checked) => setProp("generate-structures", String(checked))} label={t("serverDetail.propStructures")} size="sm" />
+              </div>
+            </div>
             <div className="flex justify-end">
               <button className="btn btn-primary" disabled={busy} onClick={() => void saveProperties()}><Save size={13} /> {t("common.save")}</button>
             </div>

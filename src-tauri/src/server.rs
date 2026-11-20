@@ -24,12 +24,18 @@ pub struct ServerInfo {
     pub java: String,
     #[serde(default = "default_memory")]
     pub memory: u32,
+    #[serde(default = "default_nogui")]
+    pub nogui: bool,
     pub path: String,
     pub running: bool,
 }
 
 fn default_memory() -> u32 {
     2048
+}
+
+fn default_nogui() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize)]
@@ -431,6 +437,7 @@ pub async fn server_create(
         jar: jar_name,
         java: if java.is_empty() { "java".to_string() } else { java },
         memory: memory.unwrap_or(default_memory()).clamp(512, 16384),
+        nogui: true,
         path: dir.to_string_lossy().to_string(),
         running: false,
     };
@@ -708,10 +715,15 @@ pub async fn server_start(
     } else {
         config::resolve_java(&cfg)?.to_string_lossy().to_string()
     };
-    let mut child = Command::new(&java)
+    let mut command = Command::new(&java);
+    command
         .arg(format!("-Xmx{}M", info.memory))
         .arg("-jar")
-        .arg(&info.jar)
+        .arg(&info.jar);
+    if info.nogui {
+        command.arg("nogui");
+    }
+    let mut child = command
         .current_dir(&dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -790,6 +802,17 @@ pub fn server_eula_set(name: String, accepted: bool) -> Result<()> {
     let cfg = config::load()?;
     std::fs::write(server_dir(&cfg, &name)?.join("eula.txt"), format!("eula={accepted}\n"))?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn server_set_nogui(name: String, enabled: bool) -> Result<()> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    let text = std::fs::read_to_string(dir.join("server.toml"))?;
+    let mut info: ServerInfo = toml_edit::de::from_str(&text)
+        .map_err(|e| AppError::Parse(format!("Invalid server.toml: {e}")))?;
+    info.nogui = enabled;
+    write_info(&dir, &info)
 }
 
 fn read_names(path: &Path) -> Vec<String> {
