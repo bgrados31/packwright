@@ -106,7 +106,7 @@ function Nether() {
       />
 
       {/* portal nether */}
-      <g>
+      <g transform="translate(-150 0)">
         <rect x="742" y="104" width="112" height="132" style={{ fill: "var(--mcn-portal-frame)" }} />
         <rect x="758" y="120" width="80" height="100" style={{ fill: "var(--mcn-portal)" }} />
         <rect x="774" y="136" width="48" height="68" style={{ fill: "var(--mcn-portal-deep)" }} />

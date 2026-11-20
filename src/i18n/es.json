@@ -146,6 +146,7 @@
   "packs.statLoader": "Loader principal",
   "packs.noResults": "Ningún pack coincide con la búsqueda",
   "packs.heroBadge": "TU COLECCIÓN",
+  "packs.noModsYet": "Aún no hay mods añadidos",
   "packs.filterAll": "Todos",
   "packs.showing": "Mostrando {count}",
   "packs.noResultsHint": "Prueba otra búsqueda o filtro de loader.",

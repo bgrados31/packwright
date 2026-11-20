@@ -679,21 +679,13 @@ details summary::-webkit-details-marker { display: none; }
 .pack-card-v2 {
   position: relative;
   overflow: hidden;
+  border-color: color-mix(in srgb, var(--pw-ink) 24%, var(--pw-line));
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 .pack-card-v2:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--pw-accent) 45%, var(--pw-line));
+  border-color: color-mix(in srgb, var(--pw-accent) 55%, var(--pw-line));
   box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.3);
-}
-.pack-card-strip {
-  height: 4px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--pw-accent) 0 14px,
-    color-mix(in srgb, var(--pw-accent) 42%, var(--pw-surface)) 14px 28px
-  );
-  opacity: 0.8;
 }
 .pack-card-icon { transition: transform 180ms ease; }
 .pack-card-v2:hover .pack-card-icon { transform: scale(1.07) rotate(-4deg); }

@@ -209,10 +209,9 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
           {visible.map((pack, index) => (
             <article
               key={pack.dir}
-              className="pack-card pack-card-v2 stagger"
+              className="card pack-card-v2 stagger"
               style={{ animationDelay: `${index * 40}ms` }}
             >
-              <div className="pack-card-strip" />
               <div className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="relative">
@@ -245,15 +244,21 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                   )}
                 </div>
 
-                <div className="mt-4 flex items-center gap-1">
-                  {Array.from({ length: 8 }, (_, block) => (
-                    <span
-                      key={block}
-                      className={`pack-block ${block < Math.min(8, Math.ceil(pack.mod_count / 5)) ? "filled" : ""}`}
-                    />
-                  ))}
-                  <span className="ml-auto font-mono text-[9px] text-muted">{pack.mod_count} mods</span>
-                </div>
+                {pack.mod_count > 0 ? (
+                  <div className="mt-4 flex items-center gap-1">
+                    {Array.from({ length: 8 }, (_, block) => (
+                      <span
+                        key={block}
+                        className={`pack-block ${block < Math.min(8, Math.ceil(pack.mod_count / 5)) ? "filled" : ""}`}
+                      />
+                    ))}
+                    <span className="ml-auto font-mono text-[9px] text-muted">{pack.mod_count} mods</span>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center gap-2 text-[11px] text-muted">
+                    <Boxes size={12} /> {t("packs.noModsYet")}
+                  </div>
+                )}
 
                 {pack.issues.length > 0 && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-bad/5 px-3 py-2 text-[11px] text-bad">
