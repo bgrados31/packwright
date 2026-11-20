@@ -184,6 +184,12 @@
   "mods.depsShort": "dependencias",
   "mods.installedNow": "Instalado ahora",
   "mods.viewDependencies": "Dependencias añadidas",
+  "mods.version": "Versión",
+  "mods.noVersion": "Versión no registrada",
+  "mods.pinned": "Fijado",
+  "mods.pinnedHint": "Versión bloqueada",
+  "mods.manualHint": "Manual · sin actualización automática",
+  "mods.autoHintShort": "Actualización automática",
 
   "output.empty": "Esperando operaciones…",
 

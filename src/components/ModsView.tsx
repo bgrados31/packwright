@@ -107,6 +107,92 @@ function InstalledIcon({ mod }: { mod: InstalledMod }) {
   );
 }
 
+function InstalledCard({
+  mod,
+  selected,
+  onToggle,
+  onAction,
+}: {
+  mod: InstalledMod;
+  selected: boolean;
+  onToggle: () => void;
+  onAction: (kind: "pin" | "unpin" | "update" | "remove", mod: InstalledMod) => void;
+}) {
+  const { t } = useI18n();
+  const hint = mod.pinned
+    ? t("mods.pinnedHint")
+    : mod.source === "manual"
+      ? t("mods.manualHint")
+      : t("mods.autoHintShort");
+
+  return (
+    <article className="card mod-installed-card stagger">
+      <div className="p-4">
+        <div className="flex items-start gap-3">
+          <Checkbox checked={selected} onChange={onToggle} label={t("mods.selectAll")} />
+          <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-subtle text-muted">
+            <Box size={18} />
+            {cachedModIcon(mod.project_id) && (
+              <img
+                src={cachedModIcon(mod.project_id)}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={(event) => { event.currentTarget.style.display = "none"; }}
+              />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-[14px] font-semibold tracking-tight">{mod.name}</h3>
+              {mod.pinned && (
+                <span className="ui-tag tag-4">
+                  <Pin size={10} className="mr-1" /> {t("mods.pinned")}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 truncate font-mono text-[10px] text-muted">{mod.filename || mod.id}</p>
+            <p className="mt-0.5 text-[10px] text-muted">
+              {t("mods.version")} · {mod.version_id ? mod.version_id.slice(0, 8) : t("mods.noVersion")}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Tag seed={mod.side}>{mod.side}</Tag>
+          <Tag seed={mod.source}>{mod.source}</Tag>
+          {mod.optional && <Tag seed="optional">{t("mods.optional")}</Tag>}
+        </div>
+
+        <div className="mt-3 flex items-center gap-1.5 border-t border-line pt-3">
+          <span className="mr-auto truncate text-[10px] text-muted">{hint}</span>
+          <button
+            className="btn btn-ghost px-2"
+            onClick={() => onAction(mod.pinned ? "unpin" : "pin", mod)}
+            title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}
+          >
+            {mod.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+          </button>
+          <button className="btn btn-ghost px-2" onClick={() => onAction("update", mod)} title={t("mods.action.update")}>
+            <RefreshCw size={14} />
+          </button>
+          {mod.project_id && (
+            <button
+              className="btn btn-ghost px-2"
+              onClick={() => void openUrl(`https://modrinth.com/mod/${mod.project_id}`)}
+              title={t("mods.openModrinth")}
+            >
+              <ExternalLink size={14} />
+            </button>
+          )}
+          <button className="btn btn-ghost btn-danger px-2" onClick={() => onAction("remove", mod)} title={t("mods.action.remove")}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 /** Ficha de un mod: banner, galería, descripción, versiones agrupadas e instalación. */
 function ModDetail({
   dir,
@@ -1017,40 +1103,13 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
           ) : (
             <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-3">
               {visibleInstalled.map((mod) => (
-                <article key={mod.id} className="card mod-installed-card stagger">
-                  <div className="flex items-start gap-3 p-4">
-                    <Checkbox
-                      checked={selected.includes(mod.id)}
-                      onChange={() => toggle(mod.id)}
-                      label={t("mods.selectAll")}
-                    />
-                    <InstalledIcon mod={mod} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-[13px] font-semibold">{mod.name}</h3>
-                        {mod.pinned && <Pin size={11} className="shrink-0 text-accent" />}
-                      </div>
-                      <p className="mt-0.5 truncate font-mono text-[10px] text-muted">{mod.filename || mod.id}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 px-4">
-                    <Tag seed={mod.side}>{mod.side}</Tag>
-                    <Tag seed={mod.source}>{mod.source}</Tag>
-                    {mod.optional && <Tag seed="optional">{t("mods.optional")}</Tag>}
-                  </div>
-                  <div className="mt-3 flex items-center gap-1.5 border-t border-line px-3 py-2.5">
-                    <button className="btn btn-ghost px-2" onClick={() => run(mod.pinned ? "unpin" : "pin", mod)} title={t(mod.pinned ? "mods.action.unpin" : "mods.action.pin")}>
-                      {mod.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                    </button>
-                    <button className="btn btn-ghost px-2" onClick={() => run("update", mod)} title={t("mods.action.update")}><RefreshCw size={14} /></button>
-                    {mod.project_id && (
-                      <button className="btn btn-ghost px-2" onClick={() => void openUrl(`https://modrinth.com/mod/${mod.project_id}`)} title={t("mods.openModrinth")}>
-                        <ExternalLink size={14} />
-                      </button>
-                    )}
-                    <button className="btn btn-ghost btn-danger ml-auto px-2" onClick={() => run("remove", mod)} title={t("mods.action.remove")}><Trash2 size={14} /></button>
-                  </div>
-                </article>
+                <InstalledCard
+                  key={mod.id}
+                  mod={mod}
+                  selected={selected.includes(mod.id)}
+                  onToggle={() => toggle(mod.id)}
+                  onAction={(kind, target) => run(kind, target)}
+                />
               ))}
             </div>
           )}
