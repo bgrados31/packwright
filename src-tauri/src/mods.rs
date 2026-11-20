@@ -86,6 +86,26 @@ pub struct InstalledMod {
     pub source: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ModDep {
+    pub project_id: String,
+    pub name: String,
+    pub version_id: Option<String>,
+    pub kind: String,
+    pub installed: bool,
+    pub installed_version: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModAnalysis {
+    pub ok: bool,
+    pub duplicate: bool,
+    pub dependencies: Vec<ModDep>,
+    pub missing_required: Vec<ModDep>,
+    pub conflicts: Vec<ModDep>,
+    pub checked: usize,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ModHealth {
     pub duplicates: Vec<String>,
@@ -461,6 +481,113 @@ fn list_mods(root: &Path) -> Result<Vec<InstalledMod>> {
     }
     result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(result)
+}
+
+/// Analiza dependencias y conflictos de una versión antes de instalarla.
+#[tauri::command]
+pub async fn mods_analyze(
+    dir: String,
+    project_id: String,
+    version_id: String,
+) -> Result<ModAnalysis> {
+    let root = pack_root(&dir)?;
+    let installed = list_mods(&root)?;
+    let client = http_client()?;
+
+    let version: Value = client
+        .get(format!(
+            "https://api.modrinth.com/v2/version/{}",
+            version_id.trim()
+        ))
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Could not fetch version details: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Parse(format!("Invalid version response: {e}")))?;
+
+    let deps = version
+        .get("dependencies")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| AppError::Parse("Version response has no dependencies".into()))?;
+
+    let mut ids: Vec<String> = Vec::new();
+    for dep in deps {
+        let pid = dep["project_id"].as_str().unwrap_or("").to_string();
+        if !pid.is_empty() && !ids.contains(&pid) {
+            ids.push(pid);
+        }
+    }
+    let names: HashMap<String, String> = if ids.is_empty() {
+        HashMap::new()
+    } else {
+        let ids_json = serde_json::to_string(&ids)
+            .map_err(|e| AppError::Parse(format!("Could not build dependency ids: {e}")))?;
+        let projects: Value = client
+            .get("https://api.modrinth.com/v2/projects")
+            .query(&[("ids", ids_json.as_str())])
+            .send()
+            .await
+            .map_err(|e| AppError::Process(format!("Could not fetch dependency names: {e}")))?
+            .json()
+            .await
+            .unwrap_or(Value::Null);
+        projects
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|item| {
+                        (
+                            item["id"].as_str().unwrap_or("").to_string(),
+                            item["title"].as_str().unwrap_or("").to_string(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let mut dependencies = Vec::new();
+    let mut missing_required = Vec::new();
+    let mut conflicts = Vec::new();
+    for dep in deps {
+        let pid = dep["project_id"].as_str().unwrap_or("").to_string();
+        let kind = dep["dependency_type"].as_str().unwrap_or("optional").to_string();
+        let wanted = dep["version_id"].as_str().map(str::to_string);
+        let found = installed
+            .iter()
+            .find(|item| item.project_id.as_deref() == Some(pid.as_str()));
+        let entry = ModDep {
+            name: names.get(&pid).cloned().unwrap_or_else(|| pid.clone()),
+            project_id: pid,
+            version_id: wanted.clone(),
+            kind: kind.clone(),
+            installed: found.is_some(),
+            installed_version: found.and_then(|item| item.version_id.clone()),
+        };
+        if kind == "required" && found.is_none() {
+            missing_required.push(entry.clone());
+        }
+        if kind == "required" && wanted.is_some() && entry.installed_version != wanted {
+            conflicts.push(entry.clone());
+        }
+        if kind == "incompatible" && found.is_some() {
+            conflicts.push(entry.clone());
+        }
+        dependencies.push(entry);
+    }
+
+    Ok(ModAnalysis {
+        ok: missing_required.is_empty() && conflicts.is_empty(),
+        duplicate: installed
+            .iter()
+            .any(|item| item.project_id.as_deref() == Some(project_id.as_str())),
+        dependencies,
+        missing_required,
+        conflicts,
+        checked: deps.len(),
+    })
 }
 
 #[tauri::command]

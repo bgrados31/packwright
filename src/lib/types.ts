@@ -134,6 +134,24 @@ export type InstalledMod = {
   source: string;
 };
 
+export type ModDep = {
+  project_id: string;
+  name: string;
+  version_id: string | null;
+  kind: string;
+  installed: boolean;
+  installed_version: string | null;
+};
+
+export type ModAnalysis = {
+  ok: boolean;
+  duplicate: boolean;
+  dependencies: ModDep[];
+  missing_required: ModDep[];
+  conflicts: ModDep[];
+  checked: number;
+};
+
 export type ModHealth = {
   duplicates: string[];
   unmanaged: number;

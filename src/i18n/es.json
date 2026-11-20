@@ -160,6 +160,15 @@
   "mods.prev": "Anterior",
   "mods.next": "Siguiente",
   "mods.pageOf": "Página {page} de {pages}",
+  "mods.analyzing": "Comprobando compatibilidad…",
+  "mods.compatOk": "Compatible · {count} dependencia(s) verificadas",
+  "mods.compatIssues": "Revisa antes de instalar",
+  "mods.alreadyInstalled": "Este proyecto ya está en el pack",
+  "mods.conflictWith": "Conflicto de versión con {name}",
+  "mods.missingDep": "Falta la dependencia requerida: {name}",
+  "mods.autoDeps": "Packwiz añadirá {count} archivo(s) de dependencia automáticamente",
+  "mods.quickInstall": "Instalación rápida",
+  "mods.install": "Instalar",
 
   "output.empty": "Esperando operaciones…",
 

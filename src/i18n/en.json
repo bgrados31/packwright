@@ -160,6 +160,15 @@
   "mods.prev": "Previous",
   "mods.next": "Next",
   "mods.pageOf": "Page {page} of {pages}",
+  "mods.analyzing": "Checking compatibility…",
+  "mods.compatOk": "Compatible · {count} dependency check(s) passed",
+  "mods.compatIssues": "Review before installing",
+  "mods.alreadyInstalled": "This project is already in the pack",
+  "mods.conflictWith": "Version conflict with {name}",
+  "mods.missingDep": "Missing required dependency: {name}",
+  "mods.autoDeps": "Packwiz will add {count} dependency file(s) automatically",
+  "mods.quickInstall": "Quick install",
+  "mods.install": "Install",
 
   "output.empty": "Waiting for operations…",
 

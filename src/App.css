@@ -743,8 +743,44 @@ details summary::-webkit-details-marker { display: none; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 
 /* --- Mods: tarjetas del catálogo --- */
-.mod-hit { overflow: hidden; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.mod-hit { overflow: hidden; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease, opacity 180ms ease; }
 .mod-hit:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--pw-accent) 45%, var(--pw-line)); box-shadow: 0 14px 30px -18px rgba(0,0,0,.3); }
+.mod-hit.installed { filter: blur(0.7px) saturate(0.7); opacity: 0.72; }
+.mod-hit.installed:hover { filter: none; opacity: 1; }
+.mod-quick-install {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--pw-accent) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pw-surface) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--pw-accent);
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.75;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+.mod-hit:hover .mod-quick-install, .mod-quick-install:focus-visible { opacity: 1; }
+.mod-quick-install:hover { background: var(--pw-accent); color: #fff; }
+.mod-analysis {
+  display: flex;
+  align-items: flex-start;
+  margin: 0 18px 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--pw-line);
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.mod-analysis.analyzing { align-items: center; gap: 8px; color: var(--pw-muted); }
+.mod-analysis.ok { border-color: color-mix(in srgb, var(--pw-ok) 30%, transparent); background: color-mix(in srgb, var(--pw-ok) 8%, transparent); color: var(--pw-ok); }
+.mod-analysis.warn { border-color: color-mix(in srgb, var(--pw-bad) 30%, transparent); background: color-mix(in srgb, var(--pw-bad) 8%, transparent); color: var(--pw-bad); }
 .mod-hit-banner { position: relative; height: 96px; overflow: hidden; background: var(--pw-subtle); }
 .mod-hit-banner img { width: 100%; height: 100%; object-fit: cover; transition: transform 300ms ease; }
 .mod-hit:hover .mod-hit-banner img { transform: scale(1.04); }

@@ -26,6 +26,7 @@ import {
 import { useI18n, type TranslationKey } from "../i18n";
 import type {
   InstalledMod,
+  ModAnalysis,
   ModCategory,
   ModHealth,
   ModOperation,
@@ -87,6 +88,7 @@ function releaseChip(type: string) {
 
 /** Ficha de un mod: banner, galería, descripción, versiones agrupadas e instalación. */
 function ModDetail({
+  dir,
   hit,
   minecraftVersion,
   loader,
@@ -95,6 +97,7 @@ function ModDetail({
   onClose,
   onInstall,
 }: {
+  dir: string;
   hit: ModSearchHit;
   minecraftVersion: string | null;
   loader: string | null;
@@ -111,6 +114,8 @@ function ModDetail({
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<ModAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +139,25 @@ function ModDetail({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [hit.project_id, minecraftVersion, loader, projectType]);
+
+  useEffect(() => {
+    if (!selected) {
+      setAnalysis(null);
+      return;
+    }
+    let cancelled = false;
+    setAnalyzing(true);
+    setAnalysis(null);
+    invoke<ModAnalysis>("mods_analyze", {
+      dir,
+      projectId: hit.project_id,
+      versionId: selected,
+    })
+      .then((result) => { if (!cancelled) setAnalysis(result); })
+      .catch(() => { if (!cancelled) setAnalysis(null); })
+      .finally(() => { if (!cancelled) setAnalyzing(false); });
+    return () => { cancelled = true; };
+  }, [dir, hit.project_id, selected]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ModVersion[]>();
@@ -299,6 +323,42 @@ function ModDetail({
           )}
         </div>
 
+        {analyzing && (
+          <div className="mod-analysis analyzing">
+            <Loader2 size={13} className="spin" /> {t("mods.analyzing")}
+          </div>
+        )}
+        {!analyzing && analysis && (
+          <div className={`mod-analysis ${analysis.ok ? "ok" : "warn"}`}>
+            <div className="flex items-start gap-2">
+              {analysis.ok ? <ShieldCheck size={14} className="mt-0.5 shrink-0" /> : <TriangleAlert size={14} className="mt-0.5 shrink-0" />}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">
+                  {analysis.ok
+                    ? t("mods.compatOk", { count: analysis.checked })
+                    : t("mods.compatIssues")}
+                </p>
+                {analysis.duplicate && <p className="mt-1">{t("mods.alreadyInstalled")}</p>}
+                {analysis.conflicts.map((dep) => (
+                  <p key={`c-${dep.project_id}`} className="mt-1">
+                    {t("mods.conflictWith", { name: dep.name })}
+                  </p>
+                ))}
+                {analysis.missing_required.map((dep) => (
+                  <p key={`m-${dep.project_id}`} className="mt-1">
+                    {t("mods.missingDep", { name: dep.name })}
+                  </p>
+                ))}
+                {analysis.dependencies.length > 0 && (
+                  <p className="mt-1 text-[10px] opacity-70">
+                    {t("mods.autoDeps", { count: analysis.dependencies.length })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="modal-footer">
           <div className="min-w-0 flex-1">
             {chosen ? (
@@ -354,6 +414,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [categoryQuery, setCategoryQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [quickInstalling, setQuickInstalling] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModSearchHit | null>(null);
@@ -448,6 +509,33 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
     setSelectedCategories((current) =>
       current.includes(name) ? current.filter((value) => value !== name) : [...current, name],
     );
+
+  const quickInstall = async (hit: ModSearchHit) => {
+    if (installedIds.has(hit.project_id)) return;
+    setQuickInstalling(hit.project_id);
+    try {
+      const versions = await invoke<ModVersion[]>("mods_versions", {
+        projectId: hit.project_id,
+        mcVersion: minecraftVersion,
+        loader,
+        projectType,
+      });
+      const chosen = versions.find((version) => version.release_type === "release") ?? versions[0];
+      if (!chosen) return;
+      onOperation({
+        kind: "add",
+        dir,
+        label: t("mods.action.add"),
+        projectId: hit.project_id,
+        versionId: chosen.id,
+        modName: hit.name,
+      });
+    } catch {
+      // El modal de detalle permite elegir versión manualmente.
+    } finally {
+      setQuickInstalling(null);
+    }
+  };
 
   const visibleInstalled = useMemo(() => {
     const needle = installedQuery.trim().toLowerCase();
@@ -682,7 +770,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                 return (
                   <article
                     key={hit.project_id}
-                    className="card mod-hit stagger"
+                    className={`card mod-hit stagger ${isInstalled ? "installed" : ""}`}
                     onClick={() => setDetail(hit)}
                     role="button"
                     tabIndex={0}
@@ -694,7 +782,23 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
                       <span className="mod-hit-pill">
                         {t((PROJECT_TYPES.find((type) => type.value === projectType)?.labelKey ?? "catalog.types.mod") as TranslationKey)}
                       </span>
-                      {isInstalled && <span className="mod-hit-installed"><Check size={11} /> {t("catalog.installed")}</span>}
+                      {isInstalled ? (
+                        <span className="mod-hit-installed"><Check size={11} /> {t("catalog.installed")}</span>
+                      ) : (
+                        <button
+                          className="mod-quick-install"
+                          title={t("mods.quickInstall")}
+                          aria-label={t("mods.quickInstall")}
+                          disabled={quickInstalling === hit.project_id}
+                          onClick={(event) => { event.stopPropagation(); void quickInstall(hit); }}
+                        >
+                          {quickInstalling === hit.project_id ? (
+                            <Loader2 size={14} className="spin" />
+                          ) : (
+                            <><Download size={13} /> {t("mods.install")}</>
+                          )}
+                        </button>
+                      )}
                     </div>
                     <div className="mod-hit-body">
                       <div className="mod-hit-icon">
@@ -880,6 +984,7 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
       {detail &&
         createPortal(
           <ModDetail
+            dir={dir}
             hit={detail}
             minecraftVersion={minecraftVersion}
             loader={loader}
