@@ -7,9 +7,9 @@ export type Locale = "en" | "es";
 
 const dictionaries: Record<Locale, Record<TranslationKey, string>> = { en, es };
 
-export const LOCALES: Array<{ id: Locale; label: string; flag: string }> = [
-  { id: "en", label: "language.english", flag: "🇬🇧" },
-  { id: "es", label: "language.spanish", flag: "🇪🇸" },
+export const LOCALES: Array<{ id: Locale; label: string; code: "gb" | "es" }> = [
+  { id: "en", label: "language.english", code: "gb" },
+  { id: "es", label: "language.spanish", code: "es" },
 ];
 
 type I18nValue = {

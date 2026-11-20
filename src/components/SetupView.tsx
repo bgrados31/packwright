@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { LOCALES, useI18n, type Locale, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig } from "../lib/types";
+import Flag from "./Flag";
 import LauncherPicker, { LAUNCHERS } from "./LauncherPicker";
 import Select from "./Select";
 
@@ -139,7 +140,11 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
                   <Select
                     value={draft.locale || "en"}
                     onChange={(value) => changeLocale(value as Locale)}
-                    options={LOCALES.map((item) => ({ value: item.id, label: `${item.flag}  ${t(item.label as TranslationKey)}` }))}
+                    options={LOCALES.map((item) => ({
+                      value: item.id,
+                      label: t(item.label as TranslationKey),
+                      icon: <Flag code={item.code} />,
+                    }))}
                   />
                 </div>
               </div>
@@ -169,7 +174,12 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
                 ].map((row) => (
                   <div key={row.label} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-xs text-muted">{row.label}</span>
-                    <span className="max-w-full truncate font-mono text-xs">{row.label === t("setup.reviewLanguage") ? t(row.value as TranslationKey) : row.value}</span>
+                    <span className="flex max-w-full items-center gap-2 truncate font-mono text-xs">
+                      {row.label === t("setup.reviewLanguage") && (
+                        <Flag code={LOCALES.find((item) => item.id === draft.locale)?.code ?? "gb"} />
+                      )}
+                      {row.label === t("setup.reviewLanguage") ? t(row.value as TranslationKey) : row.value}
+                    </span>
                   </div>
                 ))}
               </div>

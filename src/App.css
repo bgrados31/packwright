@@ -422,6 +422,15 @@ details summary::-webkit-details-marker { display: none; }
 /* --- Búsqueda con icono (evita que el texto lo pise) --- */
 .field-icon { padding-left: 38px; }
 
+/* --- Banderas SVG de idioma --- */
+.flag-icon {
+  width: 19px;
+  height: 13px;
+  flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
 /* --- Home inmersivo --- */
 .mc-hero {
   position: relative;

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type SelectOption = {
   value: string;
   label: string;
   badge?: string;
+  icon?: ReactNode;
 };
 
 type Props = {
@@ -135,8 +136,9 @@ export default function Select({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={selected ? "truncate" : "select-placeholder truncate"}>
-          {selected?.label ?? placeholder}
+        <span className={`flex min-w-0 items-center gap-2 ${selected ? "" : "select-placeholder"}`}>
+          {selected?.icon}
+          <span className="truncate">{selected?.label ?? placeholder}</span>
         </span>
         <svg
           className={`select-chevron ${open ? "open" : ""}`}
@@ -190,7 +192,10 @@ export default function Select({
                   onMouseEnter={() => setActive(index)}
                   onClick={() => commit(option.value)}
                 >
-                  <span className="truncate">{option.label}</span>
+                  <span className="flex min-w-0 items-center gap-2 truncate">
+                    {option.icon}
+                    <span className="truncate">{option.label}</span>
+                  </span>
                   {option.badge && <span className="select-badge">{option.badge}</span>}
                 </button>
               ))}

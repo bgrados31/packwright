@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { createPortal } from "react-dom";
 import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert } from "lucide-react";
 import { LOCALES, useI18n, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig, type PackwizStatus } from "../lib/types";
+import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
 import PackwizReinstallModal from "./PackwizReinstallModal";
 import Select from "./Select";
@@ -108,7 +110,11 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
               <Select
                 value={draft.locale || "en"}
                 onChange={changeLocale}
-                options={LOCALES.map((item) => ({ value: item.id, label: `${item.flag}  ${t(item.label as TranslationKey)}` }))}
+                options={LOCALES.map((item) => ({
+                  value: item.id,
+                  label: t(item.label as TranslationKey),
+                  icon: <Flag code={item.code} />,
+                }))}
               />
             </div>
           </div>
@@ -220,34 +226,38 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
         </Section>
       </div>
 
-      {dirty && (
-        <div className="save-bar">
-          <div className="save-bar-inner">
-            <div className="flex items-center gap-2 text-[12px]">
-              <span className="save-bar-dot" />
-              <span>{t("settings.unsaved")}</span>
+      {dirty &&
+        createPortal(
+          <div className="save-bar">
+            <div className="save-bar-inner">
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="save-bar-dot" />
+                <span>{t("settings.unsaved")}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="btn btn-secondary" onClick={() => setDraft(config)}>
+                  {t("settings.discard")}
+                </button>
+                <button className="btn btn-primary" onClick={() => onSave(draft)}>
+                  <Check size={15} />
+                  {t("settings.save")}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="btn btn-secondary" onClick={() => setDraft(config)}>
-                {t("settings.discard")}
-              </button>
-              <button className="btn btn-primary" onClick={() => onSave(draft)}>
-                <Check size={15} />
-                {t("settings.save")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {showReinstall && (
-        <PackwizReinstallModal
-          onClose={() => setShowReinstall(false)}
-          onInstalled={(status) => {
-            onPackwizInstalled(status);
-          }}
-        />
-      )}
+      {showReinstall &&
+        createPortal(
+          <PackwizReinstallModal
+            onClose={() => setShowReinstall(false)}
+            onInstalled={(status) => {
+              onPackwizInstalled(status);
+            }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
