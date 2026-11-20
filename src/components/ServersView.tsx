@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import PlayitModal from "./PlayitModal";
 import {
   Box,
   Copy,
@@ -60,6 +61,7 @@ export default function ServersView({ packs }: Props) {
   const [playerName, setPlayerName] = useState("");
   const [playerList, setPlayerList] = useState("whitelist");
   const [syncPack, setSyncPack] = useState("");
+  const [playitOpen, setPlayitOpen] = useState(false);
 
   const refresh = () => {
     invoke<ServerInfo[]>("server_list")
@@ -163,7 +165,7 @@ export default function ServersView({ packs }: Props) {
                   <button className="btn btn-ghost px-2" onClick={() => void run(() => invoke("server_backup", { name: server.name }))} title={t("servers.backup")}><Copy size={14} /></button>
                   <button className="btn btn-ghost px-2" onClick={() => void run(() => invoke("server_install_geyser", { name: server.name }))} title={t("servers.geyser")}><Globe2 size={14} /></button>
                   <button className="btn btn-ghost px-2" onClick={() => void invoke("server_open_folder", { name: server.name })} title={t("packs.folder")}><FolderOpen size={14} /></button>
-                  <button className="btn btn-ghost px-2" onClick={() => void openUrl("https://playit.gg")} title={t("servers.tunnel")}><Wifi size={14} /></button>
+                  <button className="btn btn-ghost px-2" onClick={() => setPlayitOpen(true)} title={t("servers.tunnel")}><Wifi size={14} /></button>
                 </div>
                 <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
                   <select className="field !py-1.5 text-[11px]" value={syncPack} onChange={(event) => setSyncPack(event.target.value)}>
@@ -295,6 +297,8 @@ export default function ServersView({ packs }: Props) {
           </div>
         </div>
       )}
+
+      {playitOpen && <PlayitModal onClose={() => setPlayitOpen(false)} />}
     </div>
   );
 }

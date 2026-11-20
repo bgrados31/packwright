@@ -78,10 +78,11 @@
 - [x] Sync cliente ↔ servidor (mods)
 - [x] Bedrock + GeyserMC (instalador del plugin)
 - [x] Backups, jugadores (ops/whitelist/bans)
-- [~] Túnel playit.gg: acceso rápido al servicio (sin agente integrado)
+- [x] Túnel playit.gg: agente `playitd` instalable, secret persistido, start/stop y consola en vivo
 - [ ] Agente remoto opcional (SSH) — fuera del alcance actual
 
 ## Fuera de alcance
+- Agente remoto SSH (opcional en el plan original; no implementado)
 - Hosting 24/7 en la nube (la app es local-first)
 - Hot-replace de `.jar` en Minecraft en ejecución (limitación de la JVM)
 - Móvil como objetivo principal

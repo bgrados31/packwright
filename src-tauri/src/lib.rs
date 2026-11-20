@@ -9,6 +9,7 @@ mod meta;
 mod mods;
 mod model;
 mod pack;
+mod playit;
 mod publish;
 mod serve;
 mod server;
@@ -38,6 +39,7 @@ pub fn run() {
             app.manage(serve::ServeState::new(app.handle().clone()));
             app.manage(dev::DevState::new(app.handle().clone()));
             app.manage(server::ServerState::new(app.handle().clone()));
+            app.manage(playit::PlayitState::new(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -86,6 +88,12 @@ pub fn run() {
             server::server_sync,
             server::server_install_geyser,
             server::server_open_folder,
+            playit::playit_install_agent,
+            playit::playit_set_secret,
+            playit::playit_get_secret,
+            playit::playit_status,
+            playit::playit_start,
+            playit::playit_stop,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,

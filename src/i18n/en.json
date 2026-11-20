@@ -461,5 +461,17 @@
   "servers.tunnel": "Set up playit.gg tunnel",
   "servers.jarUrl": "Custom jar URL (required for Paper/Velocity)",
   "servers.getJar": "Get the jar from the official site",
+  "playit.title": "playit.gg tunnel",
+  "playit.subtitle": "Expose your server without port forwarding.",
+  "playit.agentReady": "Agent installed",
+  "playit.agentMissing": "Agent not installed",
+  "playit.secretReady": "Secret saved",
+  "playit.secretMissing": "No secret",
+  "playit.running": "Tunnel online",
+  "playit.stopped": "Tunnel offline",
+  "playit.secret": "Agent secret key",
+  "playit.getSecret": "Get your secret from playit.gg",
+  "playit.install": "Install agent",
+  "playit.installed": "Agent installed",
   "common.error": "Error"
 }

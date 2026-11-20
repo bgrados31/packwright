@@ -32,6 +32,10 @@ base64 = "0.22"
 notify = "6"
 
 
+[target.'cfg(target_os = "macos")'.dependencies]
+flate2 = "1"
+tar = "0.4"
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
