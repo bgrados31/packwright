@@ -28,9 +28,9 @@ export default function Toasts({ items, onDismiss }: Props) {
               <XCircle size={15} />
             )}
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-medium">{item.title}</p>
-            {item.detail && <p className="truncate text-[10px] opacity-70">{item.detail}</p>}
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[12px] font-medium leading-4">{item.title}</p>
+            {item.detail && <p className="mt-0.5 truncate text-[10px] leading-3 opacity-70">{item.detail}</p>}
           </div>
           {item.state !== "running" && (
             <button className="icon-btn" onClick={() => onDismiss(item.id)} title="Close">

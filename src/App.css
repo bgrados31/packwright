@@ -776,7 +776,7 @@ details summary::-webkit-details-marker { display: none; }
 }
 .toast {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--pw-line);
@@ -786,7 +786,7 @@ details summary::-webkit-details-marker { display: none; }
   pointer-events: auto;
   animation: dropIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.toast-icon { display: grid; place-items: center; flex: none; margin-top: 1px; }
+.toast-icon { display: grid; place-items: center; width: 18px; height: 18px; flex: none; }
 .toast.running .toast-icon { color: var(--pw-accent); }
 .toast.success { border-color: color-mix(in srgb, var(--pw-ok) 35%, transparent); }
 .toast.success .toast-icon { color: var(--pw-ok); }
