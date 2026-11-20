@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, ImagePlus, Loader2, PackageOpen, Radio, Settings2, Trash2, X } from "lucide-react";
+import { Copy, ImagePlus, Loader2, PackageOpen, Play, Radio, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -18,6 +18,7 @@ import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
 import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
 import ServeModal from "./ServeModal";
+import DevInstanceModal from "./DevInstanceModal";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -81,6 +82,7 @@ export default function PackEditor(props: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [serveOpen, setServeOpen] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -145,6 +147,9 @@ export default function PackEditor(props: Props) {
           <p className="mt-1 font-mono text-xs text-muted">{props.dir}</p>
         </div>
         <div className="flex gap-2">
+          <button className="btn btn-ghost" onClick={() => setDevOpen(true)} title={t("dev.title")}>
+            <Play size={14} /> {t("dev.title")}
+          </button>
           <button className="btn btn-ghost" onClick={() => setServeOpen(true)} title={t("serve.title")}>
             <Radio size={14} /> {t("serve.title")}
           </button>
@@ -604,6 +609,16 @@ export default function PackEditor(props: Props) {
           </div>
         </div>
       )}
+
+      {devOpen &&
+        createPortal(
+          <DevInstanceModal
+            dir={props.dir}
+            launcherPaths={props.config.launcher_paths ?? {}}
+            onClose={() => setDevOpen(false)}
+          />,
+          document.body,
+        )}
 
       {serveOpen &&
         createPortal(

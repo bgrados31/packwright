@@ -57,11 +57,11 @@
 - [x] Import `.mrpack` existente (mods, overrides, metadata y packwiz refresh)
 - [x] `packwiz serve` con start/stop y URL para launchers
 
-### 1.6 Dev Instance
-- [ ] Instancia de prueba con junction/symlink del `mods/`
-- [ ] File watcher (`notify`) y sync de `overrides/`
-- [ ] Consola de logs en vivo y detección de errores
-- [ ] Restart & rejoin en un clic
+### 1.6 Dev Instance ✅
+- [x] Instancia de prueba con symlink/junction del `mods/` (fallback a copia)
+- [x] File watcher (`notify`) y sync automático de `overrides/`
+- [x] Logs en vivo con detección de errores (marcados como stderr)
+- [x] Launch / restart & rejoin / stop desde la app
 
 ## Fase 2 — Calidad y publicación
 - [ ] Git: commit/tag por versión + changelog

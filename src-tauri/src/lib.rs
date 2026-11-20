@@ -1,4 +1,5 @@
 mod config;
+mod dev;
 mod error;
 mod export;
 mod import;
@@ -32,6 +33,7 @@ pub fn run() {
                 runner: CommandRunner::new(app.handle().clone()),
             });
             app.manage(serve::ServeState::new(app.handle().clone()));
+            app.manage(dev::DevState::new(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,6 +55,12 @@ pub fn run() {
             serve::serve_start,
             serve::serve_stop,
             serve::serve_status,
+            dev::dev_instance_prepare,
+            dev::dev_watch_start,
+            dev::dev_watch_stop,
+            dev::dev_launch,
+            dev::dev_stop,
+            dev::dev_status,
             mods::mods_search,
             mods::mods_project,
             mods::mods_categories,
