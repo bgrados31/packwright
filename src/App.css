@@ -270,6 +270,18 @@ body {
 .btn-quiet { background: transparent; color: var(--pw-muted); padding: 6px 8px; }
 .btn-quiet:hover { color: var(--pw-ink); background: var(--pw-subtle); }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--pw-muted);
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--pw-accent-soft);
+  border-color: color-mix(in srgb, var(--pw-accent) 28%, transparent);
+  color: var(--pw-accent);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

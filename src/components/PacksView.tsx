@@ -291,7 +291,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
 
                 <div className="mt-5 flex items-center gap-2">
                   <button
-                    className="btn btn-primary px-3 mr-auto"
+                    className="btn btn-ghost px-3 mr-auto"
                     onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
                     title={t("packs.view")}
                     aria-label={t("packs.view")}
@@ -299,7 +299,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                     <Eye size={15} />
                   </button>
                   <button
-                    className="btn btn-secondary px-3"
+                    className="btn btn-ghost px-3"
                     onClick={(event) => { event.stopPropagation(); onExport(pack.dir); }}
                     disabled={exporting === pack.dir}
                     title={t("export.button")}
@@ -307,7 +307,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                     {exporting === pack.dir ? <Loader2 size={15} className="spin" /> : <PackageOpen size={15} />}
                   </button>
                   <button
-                    className="btn btn-secondary px-3"
+                    className="btn btn-ghost px-3"
                     onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                     title={t("packs.folder")}
                   >
@@ -352,7 +352,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
               </span>
               <span className="w-16 text-right font-mono text-[11px] text-muted">{pack.mod_count} mods</span>
               <button
-                className="btn btn-secondary px-3"
+                className="btn btn-ghost px-3"
                 onClick={(event) => { event.stopPropagation(); onExport(pack.dir); }}
                 disabled={exporting === pack.dir}
                 title={t("export.button")}
@@ -360,14 +360,14 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                 {exporting === pack.dir ? <Loader2 size={14} className="spin" /> : <PackageOpen size={14} />}
               </button>
               <button
-                className="btn btn-secondary px-3"
+                className="btn btn-ghost px-3"
                 onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                 title={t("packs.folder")}
               >
                 <FolderOpen size={14} />
               </button>
               <button
-                className="btn btn-primary px-3"
+                className="btn btn-ghost px-3"
                 onClick={(event) => { event.stopPropagation(); onOpen(pack.dir); }}
                 title={t("packs.view")}
                 aria-label={t("packs.view")}
