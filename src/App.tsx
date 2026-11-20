@@ -5,6 +5,7 @@ import "./App.css";
 
 import CreatePackForm from "./components/CreatePackForm";
 import OutputPanel from "./components/OutputPanel";
+import WelcomeView from "./components/WelcomeView";
 import PackEditor from "./components/PackEditor";
 import { useI18n } from "./i18n";
 import {
@@ -25,7 +26,7 @@ import {
 const emptyForm: CreatePackInput = {
   name: "",
   author: "",
-  minecraft_version: "1.21.1",
+  minecraft_version: "",
   loader: "neoforge",
   loaderVersion: null,
   version: "1.0.0",
@@ -121,8 +122,19 @@ export default function App() {
   useEffect(() => {
     invoke<McVersion[]>("versions_minecraft", { includeSnapshots: false })
       .then(setMcVersions)
-      .catch(() => setMcVersions([]));
+      .catch(() => {
+        setMcVersions([]);
+        setForm((previous) => previous.minecraft_version ? previous : { ...previous, minecraft_version: "1.21.1" });
+      });
   }, []);
+
+  // The newest release from Mojang becomes the default selection.
+  useEffect(() => {
+    if (mcVersions.length === 0) return;
+    setForm((previous) =>
+      previous.minecraft_version ? previous : { ...previous, minecraft_version: mcVersions[0].id },
+    );
+  }, [mcVersions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -352,34 +364,23 @@ export default function App() {
 
       <main className="mx-auto max-w-5xl px-6 py-10">
         {!showCreate && !selectedPack && packs.length === 0 ? (
-          <div className="mx-auto max-w-lg py-8">
-            <div className="text-center">
-              <img src="/packwright-mark.png" alt="" className="mx-auto h-14 w-14" />
-              <h1 className="mt-6 text-[26px] font-semibold tracking-tight">{t("first.title")}</h1>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">{t("first.subtitle")}</p>
-            </div>
-            <div className="card mt-8 p-6">
-              <CreatePackForm
-                form={form}
-                onChange={setForm}
-                onSubmit={createPack}
-                mcVersions={mcVersions}
-                loaderVersions={loaderVersions}
-                packwizFound={Boolean(packwiz?.found)}
-                busy={busy}
-              />
-            </div>
-            <p className="mt-5 text-center text-xs text-muted">
-              {t("first.local", { path: config?.workspace ?? "—" })}
-            </p>
-          </div>
+          <WelcomeView
+            form={form}
+            onChange={setForm}
+            onSubmit={createPack}
+            mcVersions={mcVersions}
+            loaderVersions={loaderVersions}
+            packwizFound={Boolean(packwiz?.found)}
+            busy={busy}
+            workspace={config?.workspace ?? "—"}
+          />
         ) : showCreate ? (
           <div className="mx-auto max-w-lg">
             <button className="mb-5 text-sm text-muted hover:text-ink" onClick={() => setShowCreate(false)}>
               ← {t("editor.back")}
             </button>
             <h1 className="text-2xl font-semibold tracking-tight">{t("nav.newPack")}</h1>
-            <p className="mt-1 text-sm text-muted">{t("first.subtitle")}</p>
+            <p className="mt-1 text-sm text-muted">{t("welcome.subtitle")}</p>
             <div className="card mt-6 p-6">
               <CreatePackForm
                 form={form}
