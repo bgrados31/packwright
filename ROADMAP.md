@@ -14,11 +14,13 @@
 
 ## Fase 1 — Modpacks (en curso)
 
-### 1.1 Núcleo
-- [ ] Modelo de dominio: `Workspace`, `Pack`, `Metadata`, `Index`, `Mod`
-- [ ] Config persistente `.packwright/config.json`
-- [ ] `CommandRunner`: cola serializada, stdout/stderr separados, eventos en vivo
-- [ ] Crear pack (`packwiz init`) y abrir/importar existente
+### 1.1 Núcleo ✅
+- [x] Modelo de dominio `PackInfo` + parser de `pack.toml` con `toml_edit`
+- [x] Config persistente en `%APPDATA%\packwright\config.json` + workspace por defecto
+- [x] `CommandRunner`: cola serializada, stdout/stderr separados, eventos `operation://*`
+- [x] Crear pack (`packwiz init`) con metadata, loader automático y `meta.toml`
+- [x] Listar packs, detectar issues y abrir carpeta
+- [x] UI inicial: formulario, tarjetas de pack y consola en vivo
 
 ### 1.2 Editor de archivos
 - [ ] Árbol de archivos del pack + Monaco/CodeMirror
