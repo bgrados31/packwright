@@ -75,12 +75,19 @@ export default function OperationModal({ operation, onClose, onSuccess }: Props)
           versionId: operation.versionId,
           id,
         })
-      : invoke("mods_command", {
-          dir: operation.dir,
-          action: operation.kind,
-          name: operation.name,
-          id,
-        });
+      : operation.names
+        ? invoke("mods_command_bulk", {
+            dir: operation.dir,
+            action: operation.kind,
+            names: operation.names,
+            id,
+          })
+        : invoke("mods_command", {
+            dir: operation.dir,
+            action: operation.kind,
+            name: operation.name,
+            id,
+          });
 
     call
       .then(() => {

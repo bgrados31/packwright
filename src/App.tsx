@@ -433,6 +433,7 @@ export default function App() {
         ) : view === "editor" ? (
           <div className="view-enter">
             <PackEditor
+              key={selectedPack}
               packName={activePack?.name ?? selectedPack ?? ""}
               dir={selectedPack ?? ""}
               version={activePack?.version ?? null}

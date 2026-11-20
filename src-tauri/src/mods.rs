@@ -17,7 +17,33 @@ pub struct ModSearchHit {
     pub description: String,
     pub icon_url: Option<String>,
     pub downloads: u64,
+    pub follows: u64,
+    pub author: String,
+    pub date_modified: String,
+    pub featured_gallery: Option<String>,
+    pub gallery: Vec<String>,
+    pub client_side: String,
+    pub server_side: String,
     pub categories: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModProject {
+    pub name: String,
+    pub description: String,
+    pub body: String,
+    pub icon_url: Option<String>,
+    pub gallery: Vec<String>,
+    pub author: String,
+    pub downloads: u64,
+    pub followers: u64,
+    pub categories: Vec<String>,
+    pub client_side: String,
+    pub server_side: String,
+    pub license: String,
+    pub source_url: Option<String>,
+    pub issues_url: Option<String>,
+    pub website_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -146,6 +172,13 @@ pub async fn mods_search(
             description: hit["description"].as_str().unwrap_or("").to_string(),
             icon_url: hit["icon_url"].as_str().map(str::to_string),
             downloads: hit["downloads"].as_u64().unwrap_or(0),
+            follows: hit["follows"].as_u64().unwrap_or(0),
+            author: hit["author"].as_str().unwrap_or("").to_string(),
+            date_modified: hit["date_modified"].as_str().unwrap_or("").to_string(),
+            featured_gallery: hit["featured_gallery"].as_str().map(str::to_string),
+            gallery: strings(hit, "gallery"),
+            client_side: hit["client_side"].as_str().unwrap_or("").to_string(),
+            server_side: hit["server_side"].as_str().unwrap_or("").to_string(),
             categories: strings(hit, "categories"),
         })
         .collect())
@@ -202,6 +235,46 @@ pub async fn mods_versions(
             date_published: version["date_published"].as_str().unwrap_or("").to_string(),
         })
         .collect())
+}
+
+/// Ficha completa de un proyecto de Modrinth para el modal de detalle.
+#[tauri::command]
+pub async fn mods_project(project_id: String) -> Result<ModProject> {
+    let url = format!("https://api.modrinth.com/v2/project/{}", project_id.trim());
+    let response = http_client()?
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Could not fetch mod details: {e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::Process(format!(
+            "Modrinth project returned HTTP {}",
+            response.status()
+        )));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Parse(format!("Invalid project response: {e}")))?;
+    let link = |key: &str| body.get(key).and_then(|value| value.as_str()).map(str::to_string);
+
+    Ok(ModProject {
+        name: body["title"].as_str().unwrap_or("").to_string(),
+        description: body["description"].as_str().unwrap_or("").to_string(),
+        body: body["body"].as_str().unwrap_or("").to_string(),
+        icon_url: body["icon_url"].as_str().map(str::to_string),
+        gallery: strings(&body, "gallery"),
+        author: body["author"].as_str().unwrap_or("").to_string(),
+        downloads: body["downloads"].as_u64().unwrap_or(0),
+        followers: body["followers"].as_u64().unwrap_or(0),
+        categories: strings(&body, "categories"),
+        client_side: body["client_side"].as_str().unwrap_or("").to_string(),
+        server_side: body["server_side"].as_str().unwrap_or("").to_string(),
+        license: body["license"].get("id").and_then(|value| value.as_str()).unwrap_or("").to_string(),
+        source_url: link("source_url"),
+        issues_url: link("issues_url"),
+        website_url: link("website_url"),
+    })
 }
 
 fn list_mods(root: &Path) -> Result<Vec<InstalledMod>> {
@@ -346,11 +419,19 @@ pub async fn mods_command(
     let cfg = config::load()?;
     let packwiz = config::resolve_packwiz(&cfg)?;
 
-    let args: Vec<String> = match action.as_str() {
+    let args = mod_command_args(&action, name)?;
+    let output = state.runner.run_with_id(id, &packwiz, &args, &root).await?;
+    if !output.ok {
+        return Err(output_error(&output, &action));
+    }
+    Ok(())
+}
+
+fn mod_command_args(action: &str, name: Option<String>) -> Result<Vec<String>> {
+    let args = match action {
         "remove" | "pin" | "unpin" => vec![
-            action.clone(),
-            name.clone()
-                .filter(|value| !value.is_empty())
+            action.to_string(),
+            name.filter(|value| !value.is_empty())
                 .ok_or_else(|| AppError::Validation("Mod name is required".into()))?,
             "-y".to_string(),
         ],
@@ -360,15 +441,36 @@ pub async fn mods_command(
         },
         "refresh" => vec!["refresh".to_string(), "-y".to_string()],
         other => {
-            return Err(AppError::Validation(format!(
-                "Unknown mod action: {other}"
-            )));
+            return Err(AppError::Validation(format!("Unknown mod action: {other}")));
         }
     };
+    Ok(args)
+}
 
-    let output = state.runner.run_with_id(id, &packwiz, &args, &root).await?;
-    if !output.ok {
-        return Err(output_error(&output, &action));
+/// Aplica una acción a varios mods dentro de una sola operación con consola en vivo.
+#[tauri::command]
+pub async fn mods_command_bulk(
+    state: State<'_, AppState>,
+    dir: String,
+    action: String,
+    names: Vec<String>,
+    id: Option<String>,
+) -> Result<()> {
+    if names.is_empty() {
+        return Err(AppError::Validation("No mods selected".into()));
+    }
+    let root = pack_root(&dir)?;
+    let cfg = config::load()?;
+    let packwiz = config::resolve_packwiz(&cfg)?;
+    for name in names {
+        let args = mod_command_args(&action, Some(name.clone()))?;
+        let output = state
+            .runner
+            .run_with_id(id.clone(), &packwiz, &args, &root)
+            .await?;
+        if !output.ok {
+            return Err(output_error(&output, &action));
+        }
     }
     Ok(())
 }

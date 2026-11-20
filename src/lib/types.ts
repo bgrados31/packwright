@@ -71,7 +71,32 @@ export type ModSearchHit = {
   description: string;
   icon_url: string | null;
   downloads: number;
+  follows: number;
+  author: string;
+  date_modified: string;
+  featured_gallery: string | null;
+  gallery: string[];
+  client_side: string;
+  server_side: string;
   categories: string[];
+};
+
+export type ModProject = {
+  name: string;
+  description: string;
+  body: string;
+  icon_url: string | null;
+  gallery: string[];
+  author: string;
+  downloads: number;
+  followers: number;
+  categories: string[];
+  client_side: string;
+  server_side: string;
+  license: string;
+  source_url: string | null;
+  issues_url: string | null;
+  website_url: string | null;
 };
 
 export type ModVersion = {
@@ -110,6 +135,7 @@ export type ModOperation = {
   projectId?: string;
   versionId?: string;
   name?: string;
+  names?: string[];
   modName?: string;
 };
 

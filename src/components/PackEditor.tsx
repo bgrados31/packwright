@@ -45,10 +45,10 @@ type Props = {
 
 export default function PackEditor(props: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"files" | "mods" | "details">("files");
+  const [tab, setTab] = useState<"mods" | "files" | "details">("mods");
   const tabs = [
-    { id: "files" as const, label: t("editor.files") },
     { id: "mods" as const, label: t("mods.title") },
+    { id: "files" as const, label: t("editor.files") },
     { id: "details" as const, label: t("editor.details") },
   ];
 
