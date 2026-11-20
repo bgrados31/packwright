@@ -57,16 +57,16 @@ impl CommandRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| AppError::Process(format!("No se pudo ejecutar packwiz: {e}")))?;
+            .map_err(|e| AppError::Process(format!("Could not run packwiz: {e}")))?;
 
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| AppError::Process("No se pudo capturar stdout".into()))?;
+            .ok_or_else(|| AppError::Process("Could not capture stdout".into()))?;
         let stderr = child
             .stderr
             .take()
-            .ok_or_else(|| AppError::Process("No se pudo capturar stderr".into()))?;
+            .ok_or_else(|| AppError::Process("Could not capture stderr".into()))?;
 
         let app_out = self.app.clone();
         let id_out = id.clone();
@@ -102,7 +102,7 @@ impl CommandRunner {
 
         let (out_lines, err_lines, status) = tokio::join!(read_out, read_err, child.wait());
         let status =
-            status.map_err(|e| AppError::Process(format!("Error esperando al proceso: {e}")))?;
+            status.map_err(|e| AppError::Process(format!("Error waiting for the process: {e}")))?;
 
         let output = CommandOutput {
             id: id.clone(),

@@ -14,6 +14,8 @@ pub struct McVersion {
     pub id: String,
     pub kind: String,
     pub release_time: String,
+    #[serde(default)]
+    pub latest: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +33,7 @@ fn client() -> Result<reqwest::Client> {
         .timeout(Duration::from_secs(12))
         .user_agent("Packwright/0.1")
         .build()
-        .map_err(|e| AppError::Process(format!("No se pudo crear el cliente HTTP: {e}")))
+        .map_err(|e| AppError::Process(format!("Could not create HTTP client: {e}")))
 }
 
 fn cache_dir() -> Option<PathBuf> {
@@ -111,27 +113,35 @@ async fn fetch_minecraft(http: &reqwest::Client) -> Result<Vec<McVersion>> {
         .get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         .send()
         .await
-        .map_err(|e| AppError::Process(format!("Error consultando Mojang: {e}")))?
+        .map_err(|e| AppError::Process(format!("Failed to query Mojang: {e}")))?
         .json()
         .await
-        .map_err(|e| AppError::Parse(format!("Manifest de Mojang inválido: {e}")))?;
+        .map_err(|e| AppError::Parse(format!("Invalid Mojang manifest: {e}")))?;
 
-    Ok(manifest
+    let mut versions: Vec<McVersion> = manifest
         .versions
         .into_iter()
         .map(|v| McVersion {
             id: v.id,
             kind: v.kind,
             release_time: v.release_time,
+            latest: false,
         })
-        .collect())
+        .collect();
+    versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
+    Ok(versions)
 }
 
 fn filtered_versions(all: &[McVersion], include_snapshots: bool) -> Vec<McVersion> {
-    all.iter()
+    let mut versions: Vec<McVersion> = all
+        .iter()
         .filter(|v| include_snapshots || v.kind == "release")
         .cloned()
-        .collect()
+        .collect();
+    if let Some(first) = versions.first_mut() {
+        first.latest = true;
+    }
+    versions
 }
 
 #[tauri::command]
@@ -155,7 +165,7 @@ pub async fn versions_minecraft(include_snapshots: Option<bool>) -> Result<Vec<M
             versions
         }
         Err(_) => disk_read::<Vec<McVersion>>("minecraft.json")
-            .ok_or_else(|| AppError::NotFound("No hay versiones cached y falló la conexión".into()))?,
+            .ok_or_else(|| AppError::NotFound("No cached versions available and the connection failed".into()))?,
     };
 
     Ok(filtered_versions(&all, include))
@@ -171,10 +181,10 @@ async fn fetch_loader(http: &reqwest::Client, loader: &str, mc: &str) -> Result<
                 .get(&url)
                 .send()
                 .await
-                .map_err(|e| AppError::Process(format!("Error consultando Fabric: {e}")))?
+                .map_err(|e| AppError::Process(format!("Failed to query Fabric: {e}")))?
                 .json()
                 .await
-                .map_err(|e| AppError::Parse(format!("Respuesta de Fabric inválida: {e}")))?;
+                .map_err(|e| AppError::Parse(format!("Invalid Fabric response: {e}")))?;
             versions = entries
                 .into_iter()
                 .map(|e| LoaderVersion {
@@ -188,10 +198,10 @@ async fn fetch_loader(http: &reqwest::Client, loader: &str, mc: &str) -> Result<
                 .get("https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml")
                 .send()
                 .await
-                .map_err(|e| AppError::Process(format!("Error consultando Forge: {e}")))?
+                .map_err(|e| AppError::Process(format!("Failed to query Forge: {e}")))?
                 .text()
                 .await
-                .map_err(|e| AppError::Process(format!("Error leyendo Forge: {e}")))?;
+                .map_err(|e| AppError::Process(format!("Failed to read Forge: {e}")))?;
             let prefix = format!("{mc}-");
             versions = xml_versions(&xml)
                 .into_iter()
@@ -204,10 +214,10 @@ async fn fetch_loader(http: &reqwest::Client, loader: &str, mc: &str) -> Result<
                 .get("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml")
                 .send()
                 .await
-                .map_err(|e| AppError::Process(format!("Error consultando NeoForge: {e}")))?
+                .map_err(|e| AppError::Process(format!("Failed to query NeoForge: {e}")))?
                 .text()
                 .await
-                .map_err(|e| AppError::Process(format!("Error leyendo NeoForge: {e}")))?;
+                .map_err(|e| AppError::Process(format!("Failed to read NeoForge: {e}")))?;
             let prefix = if let Some(rest) = mc.strip_prefix("1.") {
                 format!("{rest}.")
             } else {
@@ -266,11 +276,11 @@ pub async fn versions_loader(loader: String, mc_version: String) -> Result<Vec<L
         }
         Ok(_v) => {
             disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
-                .ok_or_else(|| AppError::NotFound(format!("No hay versiones de {loader} para {mc_version}")))?
+                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} para {mc_version}")))?
         }
         Err(e) => {
             disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
-                .ok_or_else(|| AppError::NotFound(format!("No hay versiones de {loader} para {mc_version}: {e}")))?
+                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} para {mc_version}: {e}")))?
         }
     };
 

@@ -90,10 +90,10 @@ pub async fn pack_create(
     let loader = loader.trim().to_lowercase();
 
     if name.is_empty() {
-        return Err(AppError::Validation("El nombre no puede estar vacío".into()));
+        return Err(AppError::Validation("Name cannot be empty".into()));
     }
     if minecraft_version.is_empty() {
-        return Err(AppError::Validation("Indica la versión de Minecraft".into()));
+        return Err(AppError::Validation("Select a Minecraft version".into()));
     }
     const ALLOWED_LOADERS: &[&str] = &["forge", "neoforge", "fabric", "quilt", "purpur"];
     if !ALLOWED_LOADERS.contains(&loader.as_str()) {
@@ -149,8 +149,8 @@ pub async fn pack_create(
     if !output.ok {
         let detail = output.stderr.last().or_else(|| output.stdout.last());
         return Err(AppError::Process(format!(
-            "packwiz init falló: {}",
-            detail.cloned().unwrap_or_else(|| "error desconocido".into())
+            "packwiz init failed: {}",
+            detail.cloned().unwrap_or_else(|| "unknown error".into())
         )));
     }
 
@@ -159,7 +159,7 @@ pub async fn pack_create(
         let pack_file = target.join("pack.toml");
         let text = std::fs::read_to_string(&pack_file)?;
         let mut doc = text.parse::<toml_edit::DocumentMut>().map_err(|e| {
-            AppError::Parse(format!("No se pudo leer pack.toml tras init: {e}"))
+            AppError::Parse(format!("Could not read pack.toml after init: {e}"))
         })?;
         doc["description"] = toml_edit::value(desc);
         std::fs::write(&pack_file, doc.to_string())?;
@@ -182,8 +182,8 @@ pub fn pack_reveal(dir: String) -> Result<()> {
     let cfg = config::load()?;
     let path = cfg.workspace.join(&dir);
     if !path.is_dir() {
-        return Err(AppError::NotFound(format!("No existe el pack: {dir}")));
+        return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
     tauri_plugin_opener::open_path(path, None::<&str>)
-        .map_err(|e| AppError::Io(format!("No se pudo abrir la carpeta: {e}")))
+        .map_err(|e| AppError::Io(format!("Could not open the folder: {e}")))
 }

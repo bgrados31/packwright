@@ -37,7 +37,7 @@ fn pack_root(dir: &str) -> Result<PathBuf> {
     let cfg = config::load()?;
     let root = cfg.workspace.join(dir);
     if !root.is_dir() {
-        return Err(AppError::NotFound(format!("No existe el pack: {dir}")));
+        return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
     Ok(root.canonicalize()?)
 }
@@ -48,7 +48,7 @@ fn resolve(root: &Path, relative: &str) -> Result<PathBuf> {
     for component in rel.components() {
         match component {
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(AppError::Validation(format!("Ruta no permitida: {relative}")))
+                return Err(AppError::Validation(format!("Path not allowed: {relative}")))
             }
             _ => {}
         }
@@ -62,16 +62,16 @@ fn resolve(root: &Path, relative: &str) -> Result<PathBuf> {
             .parent()
             .unwrap_or(root)
             .canonicalize()
-            .map_err(|_| AppError::Validation(format!("La carpeta padre no existe: {relative}")))?;
+            .map_err(|_| AppError::Validation(format!("Parent folder does not exist: {relative}")))?;
         parent.join(
             joined
                 .file_name()
-                .ok_or_else(|| AppError::Validation("Ruta vacía".into()))?,
+                .ok_or_else(|| AppError::Validation("Empty path".into()))?,
         )
     };
 
     if !resolved.starts_with(root) {
-        return Err(AppError::Validation(format!("Ruta fuera del pack: {relative}")));
+        return Err(AppError::Validation(format!("Path outside the pack: {relative}")));
     }
     Ok(resolved)
 }
@@ -130,7 +130,7 @@ pub fn file_read(dir: String, path: String) -> Result<String> {
     let root = pack_root(&dir)?;
     let full = resolve(&root, &path)?;
     if !full.is_file() {
-        return Err(AppError::NotFound(format!("No existe el archivo: {path}")));
+        return Err(AppError::NotFound(format!("File does not exist: {path}")));
     }
     Ok(std::fs::read_to_string(full)?)
 }
@@ -241,7 +241,7 @@ pub fn file_restore(dir: String, path: String, id: String) -> Result<String> {
         .join(&id)
         .join(&path);
     if !backup.is_file() {
-        return Err(AppError::NotFound("No existe esa versión del archivo".into()));
+        return Err(AppError::NotFound("That file version does not exist".into()));
     }
     Ok(std::fs::read_to_string(backup)?)
 }

@@ -28,7 +28,7 @@ pub fn read_pack_info(dir: &Path) -> Result<PackInfo> {
     let text = std::fs::read_to_string(&pack_file)?;
     let doc = text.parse::<toml_edit::DocumentMut>().map_err(|e| {
         AppError::Parse(format!(
-            "pack.toml inválido en {}: {e}",
+            "Invalid pack.toml in {}: {e}",
             dir.display()
         ))
     })?;
@@ -78,19 +78,19 @@ pub fn read_pack_info(dir: &Path) -> Result<PackInfo> {
 
     let mut issues = Vec::new();
     if name == "(sin nombre)" {
-        issues.push("Falta el nombre del pack".to_string());
+        issues.push("Pack name is missing".to_string());
     }
     if version.is_none() {
-        issues.push("Falta la versión (obligatoria para exportar .mrpack)".to_string());
+        issues.push("Version is missing (required to export .mrpack)".to_string());
     }
     if minecraft_version.is_none() {
-        issues.push("Falta la versión de Minecraft".to_string());
+        issues.push("Minecraft version is missing".to_string());
     }
     if loader.is_none() {
-        issues.push("No se definió ningún mod loader".to_string());
+        issues.push("No mod loader selected".to_string());
     }
     if !dir.join("index.toml").is_file() {
-        issues.push("Falta index.toml".to_string());
+        issues.push("index.toml is missing".to_string());
     }
 
     Ok(PackInfo {

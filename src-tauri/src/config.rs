@@ -37,7 +37,7 @@ impl Default for AppConfig {
 
 fn config_path() -> Result<PathBuf> {
     let base = dirs::config_dir()
-        .ok_or_else(|| AppError::Config("No se pudo resolver la carpeta de configuración".into()))?;
+        .ok_or_else(|| AppError::Config("Could not resolve the config directory".into()))?;
     Ok(base.join("packwright").join("config.json"))
 }
 
@@ -50,7 +50,7 @@ pub fn load() -> Result<AppConfig> {
     }
     let text = std::fs::read_to_string(&path)?;
     let cfg: AppConfig = serde_json::from_str(&text)
-        .map_err(|e| AppError::Config(format!("config.json inválido: {e}")))?;
+        .map_err(|e| AppError::Config(format!("Invalid config.json: {e}")))?;
     Ok(cfg)
 }
 
@@ -60,7 +60,7 @@ pub fn save(cfg: &AppConfig) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let text = serde_json::to_string_pretty(cfg)
-        .map_err(|e| AppError::Config(format!("No se pudo serializar la configuración: {e}")))?;
+        .map_err(|e| AppError::Config(format!("Could not serialize the configuration: {e}")))?;
     std::fs::write(&path, text)?;
     Ok(())
 }
@@ -104,6 +104,6 @@ pub fn resolve_packwiz(cfg: &AppConfig) -> Result<PathBuf> {
     }
 
     Err(AppError::NotFound(
-        "No se encontró packwiz. Instálalo o indica su ruta en la configuración.".into(),
+        "Packwiz was not found. Install it or set its path in settings.".into(),
     ))
 }

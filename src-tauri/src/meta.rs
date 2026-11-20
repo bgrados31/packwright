@@ -22,7 +22,7 @@ fn pack_root(dir: &str) -> Result<std::path::PathBuf> {
     let cfg = config::load()?;
     let root = cfg.workspace.join(dir);
     if !root.is_dir() {
-        return Err(AppError::NotFound(format!("No existe el pack: {dir}")));
+        return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
     Ok(root.canonicalize()?)
 }
@@ -55,7 +55,7 @@ pub fn meta_get(dir: String) -> Result<PackMeta> {
     }
     let text = std::fs::read_to_string(path)?;
     let doc = text.parse::<toml_edit::DocumentMut>().map_err(|e| {
-        AppError::Parse(format!("meta.toml inválido: {e}"))
+        AppError::Parse(format!("Invalid meta.toml: {e}"))
     })?;
 
     Ok(PackMeta {
@@ -74,11 +74,11 @@ pub fn meta_get(dir: String) -> Result<PackMeta> {
 pub fn meta_set(dir: String, meta: PackMeta) -> Result<PackMeta> {
     if meta.summary.chars().count() > 200 {
         return Err(AppError::Validation(
-            "El resumen no puede superar los 200 caracteres".into(),
+            "Summary cannot exceed 200 characters".into(),
         ));
     }
     if meta.categories.len() > 6 {
-        return Err(AppError::Validation("Máximo 6 categorías".into()));
+        return Err(AppError::Validation("Maximum 6 categories".into()));
     }
 
     let root = pack_root(&dir)?;
@@ -143,12 +143,12 @@ pub fn pack_generate_readme(dir: String) -> Result<String> {
         text.push_str(&format!("{}\n\n", description));
     }
     text.push_str("## Instalación\n\n");
-    text.push_str("1. Descarga el archivo `.mrpack` de este pack.\n");
-    text.push_str("2. En tu launcher (ATLauncher, Prism, Modrinth App o MultiMC), elige **Importar modpack** y selecciona el archivo.\n");
-    text.push_str("3. Arranca el juego. El launcher descargará los mods automáticamente.\n\n");
-    text.push_str("## Versión\n\n");
+    text.push_str("1. Download the `.mrpack` file for this pack.\n");
+    text.push_str("2. In your launcher (ATLauncher, Prism, Modrinth App or MultiMC), choose **Import modpack** and select the file.\n");
+    text.push_str("3. Launch the game. The launcher will download the mods automatically.\n\n");
+    text.push_str("## Version\n\n");
     text.push_str(&format!(
-        "- Minecraft: `{}`\n- Loader: `{} {}`\n- Versión del pack: `{}`\n",
+        "- Minecraft: `{}`\n- Loader: `{} {}`\n- Pack version: `{}`\n",
         info.minecraft_version.unwrap_or_else(|| "—".into()),
         info.loader.unwrap_or_else(|| "—".into()),
         info.loader_version.unwrap_or_default(),
@@ -161,7 +161,7 @@ pub fn pack_generate_readme(dir: String) -> Result<String> {
         text.push_str(&format!("- Código: {}\n", meta.source));
     }
     if !meta.license.is_empty() {
-        text.push_str(&format!("\nLicencia: {}\n", meta.license));
+        text.push_str(&format!("\nLicense: {}\n", meta.license));
     }
 
     let path = root.join("README.md");

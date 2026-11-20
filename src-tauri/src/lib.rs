@@ -18,7 +18,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
-                if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png")) {
+                // ICO con capa de 32px primero (recomendado por Tauri para desarrollo).
+                if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.ico")) {
                     let _ = window.set_icon(icon);
                 }
             }
