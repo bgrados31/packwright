@@ -26,6 +26,7 @@ import {
   type LoaderVersion,
   type McVersion,
   type ModHistoryEntry,
+  type OpenFile,
   type ModHistoryItem,
   type ModOperation,
   type OpLine,
@@ -55,6 +56,23 @@ function toHistoryItem(mod: InstalledMod): ModHistoryItem {
   return { id: mod.id, name: mod.name, version: mod.version_id };
 }
 
+function rootForPath(path: string): string {
+  const value = path.replace(/\\/g, "/");
+  if (value.startsWith(".packwright/")) return "packwright";
+  if (
+    value === "pack.toml" ||
+    value === "index.toml" ||
+    (value.startsWith("mods/") && value.endsWith(".pw.toml"))
+  ) {
+    return "packwiz";
+  }
+  return "pack";
+}
+
+function fileKey(root: string, path: string): string {
+  return `${root}:${path}`;
+}
+
 export default function App() {
   const { t, setLocale } = useI18n();
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -76,15 +94,16 @@ export default function App() {
 
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [content, setContent] = useState("");
-  const [dirty, setDirty] = useState(false);
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [treeRevision, setTreeRevision] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [meta, setMeta] = useState<PackMeta | null>(null);
   const [metaDirty, setMetaDirty] = useState(false);
   const [hasIcon, setHasIcon] = useState(false);
+
+  const activeTab = openFiles.find((file) => file.key === activeKey) ?? null;
 
   const [mcVersions, setMcVersions] = useState<McVersion[]>([]);
   const [loaderVersions, setLoaderVersions] = useState<LoaderVersion[]>([]);
@@ -175,22 +194,24 @@ export default function App() {
   }, [form.loader, form.minecraft_version, mcVersions]);
 
   useEffect(() => {
-    if (!selectedPack || !activeFile) return;
+    if (!selectedPack || !activeTab) return;
+    const key = activeTab.key;
     const timer = setTimeout(async () => {
       try {
-        setDiagnostics(
-          await invoke<Diagnostic[]>("file_validate", {
-            dir: selectedPack,
-            path: activeFile,
-            content,
-          }),
+        const found = await invoke<Diagnostic[]>("file_validate", {
+          dir: selectedPack,
+          path: activeTab.path,
+          content: activeTab.content,
+        });
+        setOpenFiles((current) =>
+          current.map((file) => (file.key === key ? { ...file, diagnostics: found } : file)),
         );
       } catch {
         // The file may not be indexed yet; ignore transient validation errors.
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [content, activeFile, selectedPack]);
+  }, [activeTab?.key, activeTab?.path, activeTab?.content, selectedPack]);
 
   const createPack = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -223,44 +244,70 @@ export default function App() {
       setFiles(list);
       setSelectedPack(dir);
       setView("editor");
-      setDiagnostics([]);
       setShowHistory(false);
       setMeta(details);
       setMetaDirty(false);
       setHasIcon(
         await invoke<boolean>("pack_has_icon", { dir, path: details.icon || ".packwright/assets/icon.png" }),
       );
+      setOpenFiles([]);
+      setActiveKey(null);
+      setTreeRevision((value) => value + 1);
       const first = list.find((file) => file.path === "pack.toml") ?? list[0];
-      setActiveFile(first?.path ?? null);
-      setContent(first ? await invoke<string>("file_read", { dir, path: first.path }) : "");
-      setDirty(false);
+      if (first) {
+        const root = rootForPath(first.path);
+        const text = await invoke<string>("file_read", { dir, path: first.path });
+        const tab: OpenFile = {
+          key: fileKey(root, first.path),
+          root,
+          path: first.path,
+          name: first.path.split("/").pop() ?? first.path,
+          content: text,
+          saved: text,
+          diagnostics: [],
+        };
+        setOpenFiles([tab]);
+        setActiveKey(tab.key);
+      }
     } catch (cause) {
       setError(errorText(cause));
     }
   };
 
-  const openFile = async (path: string) => {
-    if (!selectedPack || path === activeFile) return;
+  const openFile = async (root: string, path: string, name: string) => {
+    if (!selectedPack) return;
+    const key = fileKey(root, path);
+    setActiveKey(key);
+    if (openFiles.some((file) => file.key === key)) return;
     try {
-      setActiveFile(path);
-      setContent(await invoke<string>("file_read", { dir: selectedPack, path }));
-      setDirty(false);
-      setDiagnostics([]);
+      const text = await invoke<string>("file_read", { dir: selectedPack, path });
+      setOpenFiles((current) => [
+        ...current,
+        { key, root, path, name, content: text, saved: text, diagnostics: [] },
+      ]);
     } catch (cause) {
       setError(errorText(cause));
     }
+  };
+
+  const closeFile = (key: string) => {
+    setOpenFiles((current) => current.filter((file) => file.key !== key));
+    setActiveKey((current) => (current === key ? openFiles.find((file) => file.key !== key)?.key ?? null : current));
   };
 
   const saveFile = useCallback(async () => {
-    if (!selectedPack || !activeFile || !dirty) return;
+    if (!selectedPack || !activeTab || activeTab.content === activeTab.saved) return;
     try {
-      await invoke("file_write", { dir: selectedPack, path: activeFile, content });
-      setDirty(false);
+      await invoke("file_write", { dir: selectedPack, path: activeTab.path, content: activeTab.content });
+      setOpenFiles((current) =>
+        current.map((file) => (file.key === activeTab.key ? { ...file, saved: file.content } : file)),
+      );
+      setTreeRevision((value) => value + 1);
       await loadPacks();
     } catch (cause) {
       setError(errorText(cause));
     }
-  }, [selectedPack, activeFile, dirty, content, loadPacks]);
+  }, [selectedPack, activeTab, loadPacks]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -274,9 +321,9 @@ export default function App() {
   }, [saveFile]);
 
   const loadHistory = async () => {
-    if (!selectedPack || !activeFile) return;
+    if (!selectedPack || !activeTab) return;
     try {
-      setHistory(await invoke<HistoryEntry[]>("file_history", { dir: selectedPack, path: activeFile }));
+      setHistory(await invoke<HistoryEntry[]>("file_history", { dir: selectedPack, path: activeTab.path }));
       setShowHistory(true);
     } catch (cause) {
       setError(errorText(cause));
@@ -284,10 +331,13 @@ export default function App() {
   };
 
   const restoreVersion = async (id: string) => {
-    if (!selectedPack || !activeFile) return;
+    if (!selectedPack || !activeTab) return;
     try {
-      setContent(await invoke<string>("file_restore", { dir: selectedPack, path: activeFile, id }));
-      setDirty(true);
+      const restored = await invoke<string>("file_restore", { dir: selectedPack, path: activeTab.path, id });
+      const key = activeTab.key;
+      setOpenFiles((current) =>
+        current.map((file) => (file.key === key ? { ...file, content: restored } : file)),
+      );
       setShowHistory(false);
     } catch (cause) {
       setError(errorText(cause));
@@ -326,9 +376,8 @@ export default function App() {
       const list = await invoke<FileEntry[]>("pack_files", { dir: selectedPack });
       setFiles(list);
       const readme = list.find((file) => file.path === "README.md");
-      setActiveFile(readme?.path ?? null);
-      setContent(readme ? await invoke<string>("file_read", { dir: selectedPack, path: readme.path }) : "");
-      setDirty(false);
+      if (readme) await openFile("pack", readme.path, "README.md");
+      setTreeRevision((value) => value + 1);
     } catch (cause) {
       setError(errorText(cause));
     }
@@ -612,21 +661,36 @@ export default function App() {
               loader={activePack?.loader ?? null}
               theme={theme}
               files={files}
-              activeFile={activeFile}
-              content={content}
-              dirty={dirty}
-              diagnostics={diagnostics}
+              openFiles={openFiles}
+              activeKey={activeKey}
+              config={config!}
+              treeRevision={treeRevision}
               history={history}
               showHistory={showHistory}
               meta={meta}
               metaDirty={metaDirty}
               hasIcon={hasIcon}
-              onBack={() => { setSelectedPack(null); setActiveFile(null); setView("packs"); }}
+              onBack={() => { setSelectedPack(null); setOpenFiles([]); setActiveKey(null); setView("packs"); }}
               onSaveFile={() => void saveFile()}
               onHistory={() => void loadHistory()}
               onRestore={(id) => void restoreVersion(id)}
-              onOpenFile={(path) => void openFile(path)}
-              onContentChange={(value) => { setContent(value); setDirty(true); }}
+              onOpenFile={(root, path, name) => void openFile(root, path, name)}
+              onCloseFile={closeFile}
+              onContentChange={(value) => {
+                if (!activeTab) return;
+                const key = activeTab.key;
+                setOpenFiles((current) =>
+                  current.map((file) => (file.key === key ? { ...file, content: value } : file)),
+                );
+              }}
+              onEditorSettingsChange={(next) => void saveConfig({ ...config!, ...next })}
+              onToggleRoot={(root) => {
+                const current = config!.editor_roots;
+                const roots = current.includes(root)
+                  ? current.filter((item) => item !== root)
+                  : [...current, root];
+                void saveConfig({ ...config!, editor_roots: roots });
+              }}
               onMetaChange={(next) => { setMeta(next); setMetaDirty(true); }}
               onSaveMeta={() => void saveDetails()}
               onUseIcon={() => void useDefaultIcon()}

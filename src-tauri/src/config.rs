@@ -30,6 +30,24 @@ pub struct AppConfig {
     /// Detected/custom folder for each launcher.
     #[serde(default)]
     pub launcher_paths: HashMap<String, String>,
+    /// Preferencias del editor de archivos.
+    #[serde(default)]
+    pub editor_font_size: u32,
+    #[serde(default = "default_tab_size")]
+    pub editor_tab_size: u32,
+    #[serde(default = "default_true")]
+    pub editor_minimap: bool,
+    #[serde(default = "default_true")]
+    pub editor_word_wrap: bool,
+    /// Raíces visibles en el árbol de archivos.
+    #[serde(default = "default_editor_roots")]
+    pub editor_roots: Vec<String>,
+}
+
+fn default_tab_size() -> u32 { 2 }
+fn default_true() -> bool { true }
+fn default_editor_roots() -> Vec<String> {
+    vec!["pack".into(), "packwiz".into(), "packwright".into()]
 }
 
 /// Sensible default folders for each supported launcher.
@@ -66,6 +84,11 @@ impl Default for AppConfig {
             default_loader: default_loader(),
             launchers: Vec::new(),
             launcher_paths: default_launcher_paths(),
+            editor_font_size: 12,
+            editor_tab_size: default_tab_size(),
+            editor_minimap: default_true(),
+            editor_word_wrap: default_true(),
+            editor_roots: default_editor_roots(),
         }
     }
 }

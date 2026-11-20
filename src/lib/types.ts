@@ -24,6 +24,11 @@ export type AppConfig = {
   default_loader: string;
   launchers: string[];
   launcher_paths: Record<string, string>;
+  editor_font_size: number;
+  editor_tab_size: number;
+  editor_minimap: boolean;
+  editor_word_wrap: boolean;
+  editor_roots: string[];
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };
@@ -44,6 +49,24 @@ export type OpLine = {
 export type ErrorInfo = { message: string; kind: string };
 
 export type FileEntry = { path: string; name: string; size: number };
+
+export type TreeNode = {
+  path: string;
+  name: string;
+  kind: "dir" | "file";
+  children: TreeNode[];
+  size: number;
+};
+
+export type OpenFile = {
+  key: string;
+  root: string;
+  path: string;
+  name: string;
+  content: string;
+  saved: string;
+  diagnostics: Diagnostic[];
+};
 
 export type Diagnostic = {
   line: number;

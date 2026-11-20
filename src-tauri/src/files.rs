@@ -23,6 +23,15 @@ pub struct Diagnostic {
 }
 
 #[derive(Debug, Serialize)]
+pub struct TreeNode {
+    pub path: String,
+    pub name: String,
+    pub kind: String,
+    pub children: Vec<TreeNode>,
+    pub size: u64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct HistoryEntry {
     pub id: String,
     pub path: String,
@@ -123,6 +132,64 @@ pub fn pack_files(dir: String) -> Result<Vec<FileEntry>> {
     walk(&root, &root, &mut files, 0)?;
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
+}
+
+/// Clasifica un archivo del pack en una de las raíces lógicas del editor.
+fn scope_of(relative: &str) -> &str {
+    let value = relative.replace('\\', "/");
+    if value.starts_with(".packwright/") {
+        "packwright"
+    } else if value == "pack.toml"
+        || value == "index.toml"
+        || (value.starts_with("mods/") && value.ends_with(".pw.toml"))
+    {
+        "packwiz"
+    } else {
+        "pack"
+    }
+}
+
+fn build_tree(root: &Path, current: &Path, scope: &str, depth: usize) -> Result<Vec<TreeNode>> {
+    let mut nodes = Vec::new();
+    if depth > 10 || !current.is_dir() {
+        return Ok(nodes);
+    }
+    let mut entries: Vec<_> = std::fs::read_dir(current)?.filter_map(std::result::Result::ok).collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == ".git" || name == "node_modules" || name == "history" {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if path.is_dir() {
+            let children = build_tree(root, &path, scope, depth + 1)?;
+            if !children.is_empty() {
+                nodes.push(TreeNode { path: relative, name, kind: "dir".into(), children, size: 0 });
+            }
+        } else if is_text_file(&path) && scope_of(&relative) == scope {
+            nodes.push(TreeNode {
+                path: relative,
+                name,
+                kind: "file".into(),
+                children: Vec::new(),
+                size: entry.metadata().map(|meta| meta.len()).unwrap_or(0),
+            });
+        }
+    }
+    Ok(nodes)
+}
+
+/// Árbol jerárquico por raíz lógica: pack, packwiz o packwright.
+#[tauri::command]
+pub fn pack_tree(dir: String, scope: String) -> Result<Vec<TreeNode>> {
+    let root = pack_root(&dir)?;
+    build_tree(&root, &root, &scope, 0)
 }
 
 #[tauri::command]

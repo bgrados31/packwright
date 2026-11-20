@@ -1,11 +1,21 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ImagePlus, Loader2, PackageOpen, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, PackageOpen, Settings2, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import type { Diagnostic, FileEntry, HistoryEntry, ModOperation, PackMeta } from "../lib/types";
+import type {
+  AppConfig,
+  FileEntry,
+  HistoryEntry,
+  ModOperation,
+  OpenFile,
+  PackMeta,
+} from "../lib/types";
+import type { EditorSettings } from "./CodeEditor";
+import FileTree from "./FileTree";
 import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
+import { Checkbox } from "./ui";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
 
@@ -17,10 +27,10 @@ type Props = {
   loader: string | null;
   theme: "light" | "dark";
   files: FileEntry[];
-  activeFile: string | null;
-  content: string;
-  dirty: boolean;
-  diagnostics: Diagnostic[];
+  openFiles: OpenFile[];
+  activeKey: string | null;
+  config: AppConfig;
+  treeRevision: number;
   history: HistoryEntry[];
   showHistory: boolean;
   meta: PackMeta | null;
@@ -30,8 +40,11 @@ type Props = {
   onSaveFile: () => void;
   onHistory: () => void;
   onRestore: (id: string) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (root: string, path: string, name: string) => void;
+  onCloseFile: (key: string) => void;
   onContentChange: (value: string) => void;
+  onEditorSettingsChange: (settings: Partial<AppConfig>) => void;
+  onToggleRoot: (root: string) => void;
   onMetaChange: (meta: PackMeta) => void;
   onSaveMeta: () => void;
   onUseIcon: () => void;
@@ -57,6 +70,17 @@ export default function PackEditor(props: Props) {
   const galleryInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cursor, setCursor] = useState({ line: 1, column: 1 });
+
+  const activeTab = props.openFiles.find((file) => file.key === props.activeKey) ?? null;
+  const dirty = activeTab ? activeTab.content !== activeTab.saved : false;
+  const settings: EditorSettings = {
+    fontSize: props.config.editor_font_size || 12,
+    tabSize: props.config.editor_tab_size || 2,
+    minimap: props.config.editor_minimap ?? true,
+    wordWrap: props.config.editor_word_wrap ?? true,
+  };
 
   const messageOf = (error: unknown) =>
     typeof error === "object" && error !== null && "message" in error
@@ -120,7 +144,7 @@ export default function PackEditor(props: Props) {
           {tab === "files" ? (
             <>
               <button className="btn btn-secondary" onClick={props.onHistory}>{t("editor.history")}</button>
-              <button className="btn btn-primary" onClick={props.onSaveFile} disabled={!props.dirty}>
+              <button className="btn btn-primary" onClick={props.onSaveFile} disabled={!dirty}>
                 {t("editor.save")}
               </button>
             </>
@@ -147,83 +171,148 @@ export default function PackEditor(props: Props) {
       </div>
 
       {tab === "files" ? (
-        <div className="card mt-6 overflow-hidden">
-          <div className="grid grid-cols-[210px_1fr]">
-            <aside className="max-h-[600px] overflow-auto border-r border-line p-2">
-              <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                {t("editor.files")}
-              </div>
-              {props.files.map((file) => (
+        <div className="editor-shell mt-6">
+          <FileTree
+            dir={props.dir}
+            roots={props.config.editor_roots}
+            allRoots={["pack", "packwiz", "packwright"]}
+            activeKey={props.activeKey}
+            revision={props.treeRevision}
+            onOpen={props.onOpenFile}
+            onToggleRoot={props.onToggleRoot}
+          />
+
+          <div className="editor-main">
+            <div className="editor-tabs">
+              {props.openFiles.map((file) => (
                 <button
-                  key={file.path}
-                  className={`file-row ${file.path === props.activeFile ? "active" : ""}`}
-                  onClick={() => props.onOpenFile(file.path)}
+                  key={file.key}
+                  className={`editor-tab ${file.key === props.activeKey ? "active" : ""}`}
+                  onClick={() => props.onOpenFile(file.root, file.path, file.name)}
                   title={file.path}
                 >
-                  {file.path}
+                  <span className="truncate">{file.name}</span>
+                  {file.content !== file.saved && <span className="editor-dirty-dot" />}
+                  <span
+                    className="editor-tab-close"
+                    onClick={(event) => { event.stopPropagation(); props.onCloseFile(file.key); }}
+                  >
+                    <X size={11} />
+                  </span>
                 </button>
               ))}
-            </aside>
+              <button className="icon-btn ml-auto !h-6 !w-6" onClick={() => setSettingsOpen((value) => !value)} title={t("editor.settings")}>
+                <Settings2 size={13} />
+              </button>
+            </div>
 
-            <div className="min-w-0">
-              <div className="flex h-10 items-center justify-between border-b border-line px-4 text-xs">
-                <span className="font-mono text-muted">{props.activeFile ?? "—"}</span>
-                <div className="flex items-center gap-3">
-                  {props.dirty && <span className="text-muted">{t("editor.unsaved")}</span>}
-                  {props.diagnostics.length > 0 ? (
-                    <span className="text-bad">{t("editor.errors", { count: props.diagnostics.length })}</span>
-                  ) : (
-                    <span className="text-ok">{t("editor.noErrors")}</span>
-                  )}
-                </div>
+            {settingsOpen && (
+              <div className="editor-settings">
+                <label className="flex items-center gap-2">
+                  <span>{t("editor.fontSize")}</span>
+                  <input
+                    className="field !w-14 !px-2 !py-1"
+                    type="number"
+                    min={10}
+                    max={22}
+                    value={settings.fontSize}
+                    onChange={(event) => props.onEditorSettingsChange({ editor_font_size: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span>{t("editor.tabSize")}</span>
+                  <input
+                    className="field !w-14 !px-2 !py-1"
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={settings.tabSize}
+                    onChange={(event) => props.onEditorSettingsChange({ editor_tab_size: Number(event.target.value) })}
+                  />
+                </label>
+                <Checkbox
+                  size="sm"
+                  checked={settings.minimap}
+                  onChange={(checked) => props.onEditorSettingsChange({ editor_minimap: checked })}
+                  label={t("editor.minimap")}
+                />
+                <Checkbox
+                  size="sm"
+                  checked={settings.wordWrap}
+                  onChange={(checked) => props.onEditorSettingsChange({ editor_word_wrap: checked })}
+                  label={t("editor.wordWrap")}
+                />
               </div>
+            )}
 
-              {props.showHistory && (
-                <div className="border-b border-line bg-subtle px-4 py-3">
-                  <div className="mb-2 text-xs font-medium text-muted">{t("editor.previousVersions")}</div>
-                  <div className="flex flex-wrap gap-2">
-                    {props.history.length === 0 && (
-                      <span className="text-xs text-muted">{t("editor.noPrevious")}</span>
+            {activeTab ? (
+              <>
+                <div className="editor-info">
+                  <span className="truncate font-mono text-muted">{activeTab.path}</span>
+                  <div className="flex items-center gap-3">
+                    {dirty && <span className="text-muted">{t("editor.unsaved")}</span>}
+                    {activeTab.diagnostics.length > 0 ? (
+                      <span className="text-bad">{t("editor.errors", { count: activeTab.diagnostics.length })}</span>
+                    ) : (
+                      <span className="text-ok">{t("editor.noErrors")}</span>
                     )}
-                    {props.history.map((entry) => (
-                      <button
-                        key={entry.id}
-                        className="btn btn-secondary text-xs"
-                        onClick={() => props.onRestore(entry.id)}
-                      >
-                        {new Date(Number(entry.id) * 1000).toLocaleString()}
-                      </button>
+                  </div>
+                </div>
+
+                {props.showHistory && (
+                  <div className="border-b border-line bg-subtle px-4 py-3">
+                    <div className="mb-2 text-xs font-medium text-muted">{t("editor.previousVersions")}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {props.history.length === 0 && (
+                        <span className="text-xs text-muted">{t("editor.noPrevious")}</span>
+                      )}
+                      {props.history.map((entry) => (
+                        <button key={entry.id} className="btn btn-secondary text-xs" onClick={() => props.onRestore(entry.id)}>
+                          {new Date(Number(entry.id) * 1000).toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab.diagnostics.length > 0 && (
+                  <div className="border-b border-bad/30 bg-bad/5 px-4 py-2">
+                    {activeTab.diagnostics.slice(0, 3).map((diagnostic, index) => (
+                      <div key={index} className="output-line err">
+                        {diagnostic.line}:{diagnostic.column} — {diagnostic.message.split("\n")[0]}
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
 
-              {props.diagnostics.length > 0 && (
-                <div className="border-b border-bad/30 bg-bad/5 px-4 py-2">
-                  {props.diagnostics.slice(0, 3).map((diagnostic, index) => (
-                    <div key={index} className="output-line err">
-                      {diagnostic.line}:{diagnostic.column} — {diagnostic.message.split("\n")[0]}
+                <Suspense
+                  fallback={
+                    <div className="grid h-[520px] place-items-center text-sm text-muted">
+                      {t("editor.loading")}
                     </div>
-                  ))}
-                </div>
-              )}
+                  }
+                >
+                  <CodeEditor
+                    theme={props.theme}
+                    path={activeTab.path}
+                    value={activeTab.content}
+                    diagnostics={activeTab.diagnostics}
+                    settings={settings}
+                    onCursor={(line, column) => setCursor({ line, column })}
+                    onChange={props.onContentChange}
+                  />
+                </Suspense>
 
-              <Suspense
-                fallback={
-                  <div className="grid h-[520px] place-items-center text-sm text-muted">
-                    {t("editor.loading")}
-                  </div>
-                }
-              >
-                <CodeEditor
-                  theme={props.theme}
-                  path={props.activeFile ?? "pack.toml"}
-                  value={props.content}
-                  diagnostics={props.diagnostics}
-                  onChange={props.onContentChange}
-                />
-              </Suspense>
-            </div>
+                <div className="editor-statusbar">
+                  <span>Ln {cursor.line}, Col {cursor.column}</span>
+                  <span>{settings.tabSize} {t("editor.spaces")}</span>
+                  <span>UTF-8</span>
+                  <span>{activeTab.path.split(".").pop()?.toUpperCase() ?? "TXT"}</span>
+                </div>
+              </>
+            ) : (
+              <div className="grid flex-1 place-items-center text-sm text-muted">{t("editor.noFileOpen")}</div>
+            )}
           </div>
         </div>
       ) : tab === "mods" ? (

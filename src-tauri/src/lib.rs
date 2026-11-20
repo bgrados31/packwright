@@ -58,6 +58,7 @@ pub fn run() {
             mods::mods_command,
             mods::mods_command_bulk,
             files::pack_files,
+            files::pack_tree,
             files::file_read,
             files::file_write,
             files::file_validate,
