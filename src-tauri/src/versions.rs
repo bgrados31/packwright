@@ -435,8 +435,9 @@ fn neoforge_game_version(version: &str) -> Option<String> {
     if major == "1" {
         return None;
     }
-    if major.parse::<u32>().is_ok_and(|value| value >= 20) {
-        return Some(format!("1.{major}.{minor}"));
+    // NeoForge 21.1.x -> Minecraft 1.21.1; 26.3.x -> Minecraft 26.3.
+    if major.parse::<u32>().is_ok_and(|value| value >= 26) {
+        return Some(format!("{major}.{minor}"));
     }
-    Some(format!("{major}.{minor}"))
+    Some(format!("1.{major}.{minor}"))
 }
