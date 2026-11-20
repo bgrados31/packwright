@@ -11,6 +11,7 @@ type Props = {
   packwizFound: boolean;
   busy: boolean;
   workspace: string;
+  availableLoaders: string[];
 };
 
 export default function WelcomeView(props: Props) {
@@ -83,6 +84,7 @@ export default function WelcomeView(props: Props) {
               loaderVersions={props.loaderVersions}
               packwizFound={props.packwizFound}
               busy={props.busy}
+              availableLoaders={props.availableLoaders}
               compact
             />
           </div>

@@ -16,6 +16,7 @@ use process::CommandRunner;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 // ICO con capa de 32px primero (recomendado por Tauri para desarrollo).
@@ -36,6 +37,7 @@ pub fn run() {
             pack::pack_list,
             pack::pack_create,
             pack::pack_reveal,
+            pack::pick_folder,
             files::pack_files,
             files::file_read,
             files::file_write,
@@ -49,6 +51,7 @@ pub fn run() {
             meta::pack_has_icon,
             versions::versions_minecraft,
             versions::versions_loader,
+            versions::versions_catalog,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -16,6 +16,8 @@ pub struct McVersion {
     pub release_time: String,
     #[serde(default)]
     pub latest: bool,
+    #[serde(default)]
+    pub loaders: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +128,7 @@ async fn fetch_minecraft(http: &reqwest::Client) -> Result<Vec<McVersion>> {
             kind: v.kind,
             release_time: v.release_time,
             latest: false,
+            loaders: Vec::new(),
         })
         .collect();
     versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
@@ -276,13 +279,164 @@ pub async fn versions_loader(loader: String, mc_version: String) -> Result<Vec<L
         }
         Ok(_v) => {
             disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
-                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} para {mc_version}")))?
+                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} on {mc_version}")))?
         }
         Err(e) => {
             disk_read::<Vec<LoaderVersion>>(&format!("loader-{}.json", key.replace('@', "_")))
-                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} para {mc_version}: {e}")))?
+                .ok_or_else(|| AppError::NotFound(format!("No versions available for {loader} on {mc_version}: {e}")))?
         }
     };
 
     Ok(versions)
+}
+
+static CATALOG_CACHE: Mutex<Option<(Instant, Vec<McVersion>)>> = Mutex::new(None);
+
+#[derive(Deserialize)]
+struct FabricGameEntry {
+    version: String,
+}
+
+#[derive(Deserialize)]
+struct PurpurList {
+    versions: Vec<String>,
+}
+
+/// MC versions supported by at least one mod loader, with the list of loaders.
+#[tauri::command]
+pub async fn versions_catalog() -> Result<Vec<McVersion>> {
+    {
+        let guard = CATALOG_CACHE.lock().unwrap();
+        if let Some((time, catalog)) = guard.as_ref() {
+            if time.elapsed() < TTL {
+                return Ok(catalog.clone());
+            }
+        }
+    }
+
+    let http = client()?;
+    let catalog = match build_catalog(&http).await {
+        Ok(value) => {
+            disk_write("catalog.json", &value);
+            *CATALOG_CACHE.lock().unwrap() = Some((Instant::now(), value.clone()));
+            value
+        }
+        Err(_) => disk_read::<Vec<McVersion>>("catalog.json")
+            .ok_or_else(|| AppError::NotFound("No cached version catalog is available".into()))?,
+    };
+
+    Ok(catalog)
+}
+
+async fn build_catalog(http: &reqwest::Client) -> Result<Vec<McVersion>> {
+    let manifest: Manifest = http
+        .get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
+        .send()
+        .await
+        .map_err(|e| AppError::Process(format!("Failed to query Mojang: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Parse(format!("Invalid Mojang manifest: {e}")))?;
+
+    let mut supported: HashMap<String, Vec<String>> = HashMap::new();
+    let mut add = |mc: String, loader: &str| {
+        let entry = supported.entry(mc).or_default();
+        if !entry.iter().any(|item| item == loader) {
+            entry.push(loader.to_string());
+        }
+    };
+
+    if let Ok(response) = http.get("https://meta.fabricmc.net/v2/versions/game").send().await {
+        if let Ok(game) = response.json::<Vec<FabricGameEntry>>().await {
+            for entry in game {
+                if entry.version.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                    add(entry.version.clone(), "fabric");
+                    add(entry.version, "quilt");
+                }
+            }
+        }
+    }
+
+    if let Ok(response) = http
+        .get("https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml")
+        .send()
+        .await
+    {
+        if let Ok(xml) = response.text().await {
+            for version in xml_versions(&xml) {
+                if let Some((mc, _)) = version.split_once('-') {
+                    if mc.starts_with("1.") || mc.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                        add(mc.to_string(), "forge");
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(response) = http
+        .get("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml")
+        .send()
+        .await
+    {
+        if let Ok(xml) = response.text().await {
+            for version in xml_versions(&xml) {
+                if let Some(mc) = neoforge_game_version(&version) {
+                    add(mc, "neoforge");
+                }
+            }
+        }
+    }
+
+    if let Ok(response) = http.get("https://api.purpurmc.org/v2/purpur").send().await {
+        if let Ok(parsed) = response.json::<PurpurList>().await {
+            for mc in parsed.versions {
+                add(mc, "purpur");
+            }
+        }
+    }
+
+    if supported.is_empty() {
+        return Err(AppError::NotFound("No loader metadata was reachable".into()));
+    }
+
+    let allowed: HashSet<&str> = supported.keys().map(String::as_str).collect();
+    let mut catalog: Vec<McVersion> = manifest
+        .versions
+        .into_iter()
+        .filter(|version| version.kind == "release" && allowed.contains(version.id.as_str()))
+        .map(|version| McVersion {
+            id: version.id.clone(),
+            kind: version.kind,
+            release_time: version.release_time,
+            latest: false,
+            loaders: supported.get(&version.id).cloned().unwrap_or_default(),
+        })
+        .collect();
+
+    catalog.sort_by(|a, b| b.release_time.cmp(&a.release_time));
+    if let Some(first) = catalog.first_mut() {
+        first.latest = true;
+    }
+    Ok(catalog)
+}
+
+fn neoforge_game_version(version: &str) -> Option<String> {
+    if let Some((mc, _)) = version.split_once('-') {
+        if mc.starts_with("1.") {
+            return Some(mc.to_string());
+        }
+    }
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() < 2 || parts[0].parse::<u32>().is_err() {
+        return None;
+    }
+    let major = parts[0];
+    let minor = parts[1];
+    if major == "1" {
+        return None;
+    }
+    if major.parse::<u32>().is_ok_and(|value| value >= 20) {
+        return Some(format!("1.{major}.{minor}"));
+    }
+    Some(format!("{major}.{minor}"))
 }

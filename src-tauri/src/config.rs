@@ -17,6 +17,19 @@ pub struct AppConfig {
     pub locale: String,
     /// Ruta a la instalación de ATLauncher (opcional, para la Fase 3).
     pub atlauncher_path: Option<PathBuf>,
+    /// Whether the first-run setup has been completed.
+    #[serde(default)]
+    pub setup_complete: bool,
+    /// Loader preselected when creating a new pack.
+    #[serde(default = "default_loader")]
+    pub default_loader: String,
+    /// Launcher the user plans to use (atlauncher / prism / modrinth / multimc / none).
+    #[serde(default)]
+    pub launcher: Option<String>,
+}
+
+fn default_loader() -> String {
+    "neoforge".to_string()
 }
 
 impl Default for AppConfig {
@@ -29,8 +42,11 @@ impl Default for AppConfig {
             workspace,
             packwiz_path: None,
             serve_port: 8080,
-            locale: "es".to_string(),
+            locale: "en".to_string(),
             atlauncher_path: None,
+            setup_complete: false,
+            default_loader: default_loader(),
+            launcher: None,
         }
     }
 }

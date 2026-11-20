@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::config::{self, AppConfig};
 use crate::error::{AppError, Result};
@@ -38,6 +38,16 @@ pub fn workspace_set(path: String) -> Result<AppConfig> {
     cfg.workspace = path;
     config::save(&cfg)?;
     Ok(cfg)
+}
+
+#[tauri::command]
+pub fn pick_folder(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog()
+        .file()
+        .blocking_pick_folder()
+        .and_then(|path| path.into_path().ok())
+        .map(|path| path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

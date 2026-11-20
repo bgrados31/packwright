@@ -7,6 +7,7 @@ import CreatePackForm from "./components/CreatePackForm";
 import OutputPanel from "./components/OutputPanel";
 import WelcomeView from "./components/WelcomeView";
 import PackEditor from "./components/PackEditor";
+import SetupView from "./components/SetupView";
 import { useI18n } from "./i18n";
 import {
   type AppConfig,
@@ -49,6 +50,15 @@ function SunIcon() {
   );
 }
 
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1.1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 function MoonIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -70,6 +80,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<OpLine[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -101,10 +112,26 @@ export default function App() {
       setConfig(cfg);
       setPackwiz(status);
       setPacks(list);
+      setForm((previous) =>
+        previous.loader === "neoforge" && cfg.default_loader
+          ? { ...previous, loader: cfg.default_loader }
+          : previous,
+      );
     } catch (cause) {
       setError(errorText(cause));
     }
   }, []);
+
+  const saveConfig = async (next: AppConfig) => {
+    try {
+      const saved = await invoke<AppConfig>("config_set", { config: next });
+      setConfig(saved);
+      setShowSettings(false);
+      await loadPacks();
+    } catch (cause) {
+      setError(errorText(cause));
+    }
+  };
 
   useEffect(() => {
     loadPacks();
@@ -120,7 +147,7 @@ export default function App() {
   }, [loadPacks]);
 
   useEffect(() => {
-    invoke<McVersion[]>("versions_minecraft", { includeSnapshots: false })
+    invoke<McVersion[]>("versions_catalog")
       .then(setMcVersions)
       .catch(() => {
         setMcVersions([]);
@@ -137,6 +164,19 @@ export default function App() {
   }, [mcVersions]);
 
   useEffect(() => {
+    if (!form.minecraft_version) return;
+    const loaders = mcVersions.find((version) => version.id === form.minecraft_version)?.loaders ?? [];
+    if (loaders.length > 0 && !loaders.includes(form.loader)) {
+      setForm((previous) => ({ ...previous, loader: loaders[0], loaderVersion: null }));
+    }
+  }, [form.minecraft_version, form.loader, mcVersions]);
+
+  useEffect(() => {
+    const compatible = mcVersions.find((version) => version.id === form.minecraft_version);
+    if (!compatible || !compatible.loaders.includes(form.loader)) {
+      setLoaderVersions([]);
+      return;
+    }
     let cancelled = false;
     invoke<LoaderVersion[]>("versions_loader", {
       loader: form.loader,
@@ -145,7 +185,7 @@ export default function App() {
       .then((list) => { if (!cancelled) setLoaderVersions(list); })
       .catch(() => { if (!cancelled) setLoaderVersions([]); });
     return () => { cancelled = true; };
-  }, [form.loader, form.minecraft_version]);
+  }, [form.loader, form.minecraft_version, mcVersions]);
 
   useEffect(() => {
     if (!selectedPack || !activeFile) return;
@@ -317,6 +357,7 @@ export default function App() {
   };
 
   const activePack = packs.find((pack) => pack.dir === selectedPack);
+  const availableLoaders = mcVersions.find((version) => version.id === form.minecraft_version)?.loaders ?? [];
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -347,6 +388,14 @@ export default function App() {
             >
               {locale}
             </button>
+            <button
+              className="btn btn-quiet px-2.5"
+              onClick={() => setShowSettings(true)}
+              title={t("setup.settingsTitle")}
+              aria-label={t("setup.settingsTitle")}
+            >
+              <GearIcon />
+            </button>
           </div>
         </div>
       </header>
@@ -363,7 +412,24 @@ export default function App() {
       )}
 
       <main className="mx-auto max-w-5xl px-6 py-10">
-        {!showCreate && !selectedPack && packs.length === 0 ? (
+        {config === null ? null : !config.setup_complete ? (
+          <SetupView
+            config={config}
+            isSetup
+            onSave={(next) => void saveConfig(next)}
+            onLocaleChange={setLocale}
+          />
+        ) : showSettings ? (
+          <div className="py-6">
+            <SetupView
+              config={config}
+              isSetup={false}
+              onSave={(next) => void saveConfig(next)}
+              onCancel={() => setShowSettings(false)}
+              onLocaleChange={setLocale}
+            />
+          </div>
+        ) : !showCreate && !selectedPack && packs.length === 0 ? (
           <WelcomeView
             form={form}
             onChange={setForm}
@@ -373,6 +439,7 @@ export default function App() {
             packwizFound={Boolean(packwiz?.found)}
             busy={busy}
             workspace={config?.workspace ?? "—"}
+            availableLoaders={availableLoaders}
           />
         ) : showCreate ? (
           <div className="view-enter mx-auto max-w-lg">
@@ -390,6 +457,7 @@ export default function App() {
                 loaderVersions={loaderVersions}
                 packwizFound={Boolean(packwiz?.found)}
                 busy={busy}
+                availableLoaders={availableLoaders}
                 compact
               />
             </div>

@@ -11,6 +11,7 @@ type Props = {
   packwizFound: boolean;
   busy: boolean;
   compact?: boolean;
+  availableLoaders: string[];
 };
 
 export default function CreatePackForm({
@@ -22,6 +23,7 @@ export default function CreatePackForm({
   packwizFound,
   busy,
   compact = false,
+  availableLoaders,
 }: Props) {
   const { t } = useI18n();
   const patch = (values: Partial<CreatePackInput>) => onChange({ ...form, ...values });
@@ -76,7 +78,7 @@ export default function CreatePackForm({
             id="pack-loader"
             value={form.loader}
             onChange={(value) => patch({ loader: value, loaderVersion: null })}
-            options={LOADERS.map((loader) => ({ value: loader, label: loader }))}
+            options={LOADERS.filter((loader) => availableLoaders.includes(loader)).map((loader) => ({ value: loader, label: loader }))}
           />
         </div>
       </div>

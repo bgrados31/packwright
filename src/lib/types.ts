@@ -18,6 +18,9 @@ export type AppConfig = {
   serve_port: number;
   locale: string;
   atlauncher_path: string | null;
+  setup_complete: boolean;
+  default_loader: string;
+  launcher: string | null;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };
@@ -46,6 +49,7 @@ export type McVersion = {
   kind: string;
   release_time: string;
   latest: boolean;
+  loaders: string[];
 };
 
 export type LoaderVersion = { id: string; stable: boolean };
