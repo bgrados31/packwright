@@ -855,16 +855,37 @@ pub fn server_set_nogui(name: String, enabled: bool) -> Result<()> {
     write_info(&dir, &info)
 }
 
+/// Lee nombres de JSON de Minecraft: arrays con formato o un objeto por línea.
 fn read_names(path: &Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with(['#', '{', '[']))
-        .filter_map(|line| {
-            let value: Value = serde_json::from_str(line).ok()?;
-            value["name"].as_str().map(str::to_string)
-        })
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let mut values: Vec<Value> = Vec::new();
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        match value {
+            Value::Array(items) => values.extend(items),
+            Value::Object(_) => values.push(value),
+            _ => {}
+        }
+    }
+    if values.is_empty() {
+        for line in trimmed.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                values.push(value);
+            }
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    values
+        .into_iter()
+        .filter_map(|value| value["name"].as_str().map(str::to_string))
+        .filter(|name| seen.insert(name.to_lowercase()))
         .collect()
 }
 
@@ -1107,6 +1128,29 @@ fn safe_component(name: &std::ffi::OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_minecraft_player_lists() {
+        let base = std::env::temp_dir().join(format!("pw-players-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let ops = base.join("ops.json");
+        std::fs::write(
+            &ops,
+            "[\n  {\n    \"uuid\": \"0c82213474dd4be6bba5b7b830cb39a3\",\n    \"name\": \"TNOZamas\",\n    \"level\": 4\n  }\n]\n",
+        )
+        .unwrap();
+        assert_eq!(read_names(&ops), vec!["TNOZamas"]);
+
+        let whitelist = base.join("whitelist.json");
+        std::fs::write(
+            &whitelist,
+            "{\"uuid\":\"aaa\",\"name\":\"Steve\"}\n{\"uuid\":\"bbb\",\"name\":\"Alex\"}\n",
+        )
+        .unwrap();
+        assert_eq!(read_names(&whitelist), vec!["Steve", "Alex"]);
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 
     #[tokio::test]
     #[ignore = "requires network access to Minecraft services"]
