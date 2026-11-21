@@ -42,6 +42,11 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
   const [showHints, setShowHints] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (blurTimer.current !== null) window.clearTimeout(blurTimer.current);
+  }, []);
 
   const hints = useMemo(() => {
     const term = command.trim().toLowerCase();
@@ -118,7 +123,7 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
 
       <div className="console-box console-body" ref={boxRef} style={{ height }}>
         {lines.length === 0 ? (
-          <p className="text-[11px] text-muted">{t("output.empty")}</p>
+          <p className="console-placeholder">{t("output.empty")}</p>
         ) : (
           lines.map((line, index) => (
             <div
@@ -152,7 +157,10 @@ export default function ConsolePanel({ lines, onSend, running, height = 320, onC
           value={command}
           onChange={(event) => { setCommand(event.target.value); setShowHints(true); }}
           onFocus={() => setShowHints(true)}
-          onBlur={() => window.setTimeout(() => setShowHints(false), 120)}
+          onBlur={() => {
+            if (blurTimer.current !== null) window.clearTimeout(blurTimer.current);
+            blurTimer.current = window.setTimeout(() => setShowHints(false), 120);
+          }}
           onKeyDown={onKeyDown}
           placeholder={running ? t("console.placeholder") : t("console.offlineHint")}
           disabled={!running}

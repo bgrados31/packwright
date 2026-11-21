@@ -112,22 +112,92 @@ impl Default for AppConfig {
     }
 }
 
+/// Vista pública de la configuración: las credenciales nunca salen del
+/// backend hacia el webview. Los booleanos permiten mostrar el estado sin
+/// exponer el valor.
+#[derive(Debug, Clone, Serialize)]
+pub struct AppConfigView {
+    pub workspace: PathBuf,
+    pub packwiz_path: Option<PathBuf>,
+    pub serve_port: u16,
+    pub locale: String,
+    pub atlauncher_path: Option<PathBuf>,
+    pub java_path: Option<PathBuf>,
+    pub setup_complete: bool,
+    pub default_loader: String,
+    pub launchers: Vec<String>,
+    pub launcher_paths: HashMap<String, String>,
+    pub editor_font_size: u32,
+    pub editor_tab_size: u32,
+    pub editor_minimap: bool,
+    pub editor_word_wrap: bool,
+    pub editor_roots: Vec<String>,
+    pub debug_console: bool,
+    /// Siempre vacío en la vista; solo se envía el indicador `has_*`.
+    pub modrinth_token: String,
+    pub modrinth_project_id: String,
+    pub has_modrinth_token: bool,
+    pub curseforge_api_key: String,
+    pub has_curseforge_api_key: bool,
+}
+
+impl From<&AppConfig> for AppConfigView {
+    fn from(cfg: &AppConfig) -> Self {
+        Self {
+            workspace: cfg.workspace.clone(),
+            packwiz_path: cfg.packwiz_path.clone(),
+            serve_port: cfg.serve_port,
+            locale: cfg.locale.clone(),
+            atlauncher_path: cfg.atlauncher_path.clone(),
+            java_path: cfg.java_path.clone(),
+            setup_complete: cfg.setup_complete,
+            default_loader: cfg.default_loader.clone(),
+            launchers: cfg.launchers.clone(),
+            launcher_paths: cfg.launcher_paths.clone(),
+            editor_font_size: cfg.editor_font_size,
+            editor_tab_size: cfg.editor_tab_size,
+            editor_minimap: cfg.editor_minimap,
+            editor_word_wrap: cfg.editor_word_wrap,
+            editor_roots: cfg.editor_roots.clone(),
+            debug_console: cfg.debug_console,
+            modrinth_token: String::new(),
+            modrinth_project_id: cfg.modrinth_project_id.clone(),
+            has_modrinth_token: !cfg.modrinth_token.is_empty(),
+            curseforge_api_key: String::new(),
+            has_curseforge_api_key: !cfg.curseforge_api_key.is_empty(),
+        }
+    }
+}
+
+pub fn public_view(cfg: &AppConfig) -> AppConfigView {
+    AppConfigView::from(cfg)
+}
+
 fn config_path() -> Result<PathBuf> {
     let base = dirs::config_dir()
         .ok_or_else(|| AppError::Config("Could not resolve the config directory".into()))?;
     Ok(base.join("packwright").join("config.json"))
 }
 
-pub fn load() -> Result<AppConfig> {
+/// Lee el archivo sin crear uno por defecto (necesario para no sobrescribir
+/// secretos al guardar una configuración que no los incluye).
+fn read_raw() -> Result<Option<AppConfig>> {
     let path = config_path()?;
     if !path.exists() {
-        let cfg = AppConfig::default();
-        save(&cfg)?;
-        return Ok(cfg);
+        return Ok(None);
     }
     let text = std::fs::read_to_string(&path)?;
     let cfg: AppConfig = serde_json::from_str(&text)
         .map_err(|e| AppError::Config(format!("Invalid config.json: {e}")))?;
+    Ok(Some(cfg))
+}
+
+pub fn load() -> Result<AppConfig> {
+    if let Some(cfg) = read_raw()? {
+        return Ok(cfg);
+    }
+    let cfg = AppConfig::default();
+    save(&cfg)?;
     Ok(cfg)
 }
 
@@ -140,6 +210,37 @@ pub fn save(cfg: &AppConfig) -> Result<()> {
         .map_err(|e| AppError::Config(format!("Could not serialize the configuration: {e}")))?;
     std::fs::write(&path, text)?;
     Ok(())
+}
+
+/// Un campo de secreto vacío en la vista significa "no lo cambies": así
+/// cualquier ajuste posterior conserva tokens y claves ya guardados, aunque el
+/// frontend nunca los haya recibido.
+pub fn merge_secrets(mut next: AppConfig, existing: Option<AppConfig>) -> AppConfig {
+    if let Some(existing) = existing {
+        if next.modrinth_token.is_empty() {
+            next.modrinth_token = existing.modrinth_token;
+        }
+        if next.curseforge_api_key.is_empty() {
+            next.curseforge_api_key = existing.curseforge_api_key;
+        }
+    }
+    next
+}
+
+pub fn save_from_view(cfg: &AppConfig) -> Result<AppConfig> {
+    let next = merge_secrets(cfg.clone(), read_raw()?);
+    save(&next)?;
+    Ok(next)
+}
+
+pub fn clear_secret(kind: &str) -> Result<()> {
+    let mut cfg = load()?;
+    match kind {
+        "modrinth_token" => cfg.modrinth_token.clear(),
+        "curseforge_api_key" => cfg.curseforge_api_key.clear(),
+        other => return Err(AppError::Validation(format!("Unknown secret: {other}"))),
+    }
+    save(&cfg)
 }
 
 pub fn ensure_workspace(cfg: &AppConfig) -> Result<()> {
@@ -342,5 +443,42 @@ mod tests {
         let major = java_version(&java).unwrap();
         assert!(major >= 8, "unknown Java version: {major}");
         println!("Java detectado: {} (Java {major})", java.display());
+    }
+
+    #[test]
+    fn public_view_never_exposes_secrets() {
+        let mut cfg = AppConfig::default();
+        cfg.modrinth_token = "super-secret-token".into();
+        cfg.curseforge_api_key = "super-secret-key".into();
+        let view = public_view(&cfg);
+        assert!(view.has_modrinth_token && view.has_curseforge_api_key);
+        assert!(view.modrinth_token.is_empty());
+        assert!(view.curseforge_api_key.is_empty());
+        let json = serde_json::to_string(&view).unwrap();
+        assert!(!json.contains("super-secret"));
+    }
+
+    #[test]
+    fn redacted_view_preserves_stored_secrets_on_save() {
+        let mut stored = AppConfig::default();
+        stored.modrinth_token = "keep-me".into();
+        stored.curseforge_api_key = "keep-me-too".into();
+
+        // Lo que devuelve el frontend tras cargar una vista redactada.
+        let incoming = AppConfig::default();
+        assert!(incoming.modrinth_token.is_empty());
+        let merged = merge_secrets(incoming, Some(stored));
+        assert_eq!(merged.modrinth_token, "keep-me");
+        assert_eq!(merged.curseforge_api_key, "keep-me-too");
+        assert!(public_view(&merged).modrinth_token.is_empty());
+
+        // Un valor nuevo sí se guarda.
+        let mut replacement = AppConfig::default();
+        replacement.modrinth_token = "new-token".into();
+        let merged = merge_secrets(replacement, Some(AppConfig {
+            modrinth_token: "old-token".into(),
+            ..Default::default()
+        }));
+        assert_eq!(merged.modrinth_token, "new-token");
     }
 }

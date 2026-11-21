@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::config;
 use crate::error::{AppError, Result};
+use crate::paths::safe_component;
 
 #[derive(Debug, Serialize)]
 pub struct FileEntry {
@@ -44,7 +45,8 @@ const TEXT_EXTENSIONS: &[&str] = &[
 
 fn pack_root(dir: &str) -> Result<PathBuf> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(dir);
+    let name = safe_component(dir, "pack")?;
+    let root = cfg.workspace.join(name);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -298,7 +300,7 @@ pub fn file_write(dir: String, path: String, content: String) -> Result<()> {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs();
+            .as_nanos();
         let backup_dir = root.join(".packwright").join("history").join(stamp.to_string());
         std::fs::create_dir_all(&backup_dir)?;
         let backup = backup_dir.join(resolve(&root, &path)?.strip_prefix(&root).unwrap_or(&full));
@@ -362,14 +364,20 @@ pub fn file_history(dir: String, path: String) -> Result<Vec<HistoryEntry>> {
         return Ok(Vec::new());
     }
 
-    let relative = Path::new(&path);
     let mut entries = Vec::new();
     for stamp_dir in std::fs::read_dir(&history_root)? {
         let stamp_dir = stamp_dir?;
         if !stamp_dir.path().is_dir() {
             continue;
         }
-        let backup = stamp_dir.path().join(relative);
+        // El id viene del directorio, pero aplicamos la misma validación que a
+        // cualquier entrada del frontend para no leer fuera del historial.
+        let Ok(id) = safe_component(&stamp_dir.file_name().to_string_lossy(), "version") else {
+            continue;
+        };
+        let Ok(backup) = resolve(&history_root, &format!("{id}/{path}")) else {
+            continue;
+        };
         if backup.is_file() {
             entries.push(HistoryEntry {
                 id: stamp_dir.file_name().to_string_lossy().to_string(),
@@ -384,11 +392,11 @@ pub fn file_history(dir: String, path: String) -> Result<Vec<HistoryEntry>> {
 #[tauri::command]
 pub fn file_restore(dir: String, path: String, id: String) -> Result<String> {
     let root = pack_root(&dir)?;
-    let backup = root
-        .join(".packwright")
-        .join("history")
-        .join(&id)
-        .join(&path);
+    let history_root = root.join(".packwright").join("history");
+    let id = safe_component(&id, "version")?;
+    // `resolve` rechaza `..` y rutas absolutas y confirma que la ruta quede
+    // dentro de `.packwright/history`.
+    let backup = resolve(&history_root, &format!("{id}/{path}"))?;
     if !backup.is_file() {
         return Err(AppError::NotFound("That file version does not exist".into()));
     }
@@ -396,9 +404,27 @@ pub fn file_restore(dir: String, path: String, id: String) -> Result<String> {
 }
 
 fn line_col(text: &str, offset: usize) -> (usize, usize) {
-    let offset = offset.min(text.len());
+    // `offset` puede caer dentro de un carácter UTF-8 multibyte; recortar a un
+    // límite válido evita un panic (y con `panic = "abort"`, cerrar la app).
+    let mut offset = offset.min(text.len());
+    while offset > 0 && !text.is_char_boundary(offset) {
+        offset -= 1;
+    }
     let before = &text[..offset];
     let line = before.bytes().filter(|b| *b == b'\n').count() + 1;
-    let column = before.rsplit('\n').next().map(|s| s.len() + 1).unwrap_or(1);
+    let column = before.rsplit('\n').next().map(|s| s.chars().count() + 1).unwrap_or(1);
     (line, column)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_col_handles_multibyte_and_newlines() {
+        assert_eq!(line_col("abc\ndef", 5), (2, 2));
+        // El offset cae en mitad de la 'ñ' (2 bytes); se ajusta al inicio.
+        assert_eq!(line_col("añb", 2), (1, 2));
+        assert_eq!(line_col("añb", 200), (1, 4));
+    }
 }

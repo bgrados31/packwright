@@ -81,7 +81,9 @@ fn servers_root(cfg: &config::AppConfig) -> PathBuf {
 }
 
 pub fn server_dir(cfg: &config::AppConfig, name: &str) -> Result<PathBuf> {
-    let root = servers_root(cfg).join(name);
+    // Todos los comandos de servidor reciben `name` del frontend: validarlo
+    // aquí evita que uno solo de ellos pueda apuntar a otro directorio.
+    let root = servers_root(cfg).join(crate::paths::safe_component(name, "server")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Server does not exist: {name}")));
     }
@@ -89,11 +91,11 @@ pub fn server_dir(cfg: &config::AppConfig, name: &str) -> Result<PathBuf> {
 }
 
 fn safe_name(value: &str) -> Result<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+    let name = crate::paths::safe_component(value, "server")?;
+    if name.contains([':', '*', '?', '"', '<', '>', '|']) {
         return Err(AppError::Validation("Invalid server name".into()));
     }
-    Ok(trimmed.to_string())
+    Ok(name)
 }
 
 fn emit(app: &AppHandle, id: &str, line: &str, stream: &str) {
@@ -276,6 +278,9 @@ async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, j
     let setup = match jar_url.filter(|value| !value.trim().is_empty()) {
         Some(custom) => {
             let url = custom.trim().to_string();
+            if !(url.starts_with("https://") || url.starts_with("http://")) {
+                return Err(AppError::Validation("The jar URL must use http or https".into()));
+            }
             let name = url.split('?').next().unwrap_or(&url).rsplit('/').next()
                 .filter(|value| !value.is_empty() && *value != "download")
                 .map(str::to_string)
@@ -292,11 +297,14 @@ async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, j
     }
     let bytes = response.bytes().await
         .map_err(|e| AppError::Process(format!("Jar read failed: {e}")))?;
-    let target = dir.join(&setup.name);
+    // El nombre puede venir de una URL introducida por el usuario o de una API
+    // remota: validarlo evita que escriba fuera de la carpeta del servidor.
+    let safe_jar_name = crate::paths::safe_component(&setup.name, "jar")?;
+    let target = crate::paths::contained(dir, &safe_jar_name, "jar")?;
     std::fs::write(&target, &bytes)?;
 
     let jar_name = match setup.kind {
-        JarKind::Direct => setup.name,
+        JarKind::Direct => safe_jar_name,
         JarKind::Installer => {
             let cfg = config::load()?;
             let java = if java.trim().is_empty() || !Path::new(java.trim()).is_file() {
@@ -362,11 +370,17 @@ pub async fn server_create(
     let dir = root.join(&name);
     let info_file = dir.join("server.toml");
     if info_file.is_file() {
-        let text = std::fs::read_to_string(&info_file).unwrap_or_default();
+        let text = std::fs::read_to_string(&info_file)
+            .map_err(|e| AppError::Io(format!("Cannot read server.toml: {e}")))?;
         if toml_edit::de::from_str::<ServerInfo>(&text).is_ok() {
             return Err(AppError::Validation("A server with that name already exists".into()));
         }
-        // metadata inválida: es un resto, no un servidor real.
+        // Nunca borramos un directorio con server.toml: puede ser un servidor
+        // real con un esquema de metadatos más antiguo. Mejor fallar con un
+        // mensaje claro que destruir el mundo del usuario.
+        return Err(AppError::Validation(
+            "A server with that name has incompatible server.toml metadata. Back it up and remove it before creating a new server.".into(),
+        ));
     }
     if dir.exists() {
         if !is_stale_setup_dir(&dir)? {
@@ -474,7 +488,7 @@ pub async fn server_start(
 
     let mut processes = state.processes.lock().await;
     if let Some(child) = processes.get_mut(&name) {
-        let _ = child.kill().await;
+        crate::process::terminate(child).await;
     }
     processes.remove(&name);
 
@@ -491,6 +505,7 @@ pub async fn server_start(
     };
     let mut command = Command::new(&java);
     command
+        .kill_on_drop(true)
         .arg(format!("-Xmx{}M", info.memory))
         .arg("-jar")
         .arg(&info.jar);
@@ -598,7 +613,7 @@ pub async fn server_stop(state: tauri::State<'_, ServerState>, name: String) -> 
     }
     let mut processes = state.processes.lock().await;
     if let Some(child) = processes.get_mut(&name) {
-        let _ = child.kill().await;
+        crate::process::terminate(child).await;
     }
     processes.remove(&name);
     state.stdin.lock().await.remove(&name);
@@ -677,8 +692,7 @@ pub async fn server_install_geyser(name: String) -> Result<String> {
     let plugins = dir.join("plugins");
     std::fs::create_dir_all(&plugins)?;
     let url = "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot";
-    let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;
+    let client = crate::net::download_client()?;
     let response = client.get(url).send().await.map_err(|e| AppError::Process(format!("Geyser download failed: {e}")))?;
     if !response.status().is_success() {
         return Err(AppError::Process(format!("Geyser download returned HTTP {}", response.status())));
@@ -687,6 +701,35 @@ pub async fn server_install_geyser(name: String) -> Result<String> {
     let file = plugins.join("Geyser-Spigot.jar");
     std::fs::write(&file, &bytes)?;
     Ok(file.to_string_lossy().to_string())
+}
+
+/// Borra la carpeta de un servidor, pero solo si tiene `server.toml`.
+fn delete_server_dir(dir: &Path) -> Result<()> {
+    if !dir.join("server.toml").is_file() {
+        return Err(AppError::Validation(
+            "Refusing to delete: this folder is not a server (server.toml is missing)".into(),
+        ));
+    }
+    std::fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+/// Elimina un servidor por completo (incluido su mundo). Detiene el proceso
+/// si está en marcha y limpia el estado en memoria antes de borrar la carpeta.
+#[tauri::command]
+pub async fn server_delete(state: tauri::State<'_, ServerState>, name: String) -> Result<()> {
+    let cfg = config::load()?;
+    let dir = server_dir(&cfg, &name)?;
+    {
+        let mut processes = state.processes.lock().await;
+        if let Some(child) = processes.get_mut(&name) {
+            crate::process::terminate(child).await;
+        }
+        processes.remove(&name);
+    }
+    state.stdin.lock().await.remove(&name);
+    state.started.lock().await.remove(&name);
+    delete_server_dir(&dir)
 }
 
 #[tauri::command]
@@ -698,15 +741,16 @@ pub fn server_open_folder(name: String) -> Result<()> {
 }
 
 fn chrono_stamp() -> String {
+    // Milisegundos para que dos backups seguidos no se sobrescriban.
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-    format!("{}", now.as_secs())
+    format!("{}", now.as_millis())
 }
 
 #[tauri::command]
 pub fn server_sync(name: String, pack: String) -> Result<usize> {
     let cfg = config::load()?;
     let dir = server_dir(&cfg, &name)?;
-    let pack_root = cfg.workspace.join(&pack).canonicalize()?;
+    let pack_root = cfg.workspace.join(crate::paths::safe_component(&pack, "pack")?).canonicalize()?;
     let source = pack_root.join("mods");
     let target = dir.join("mods");
     std::fs::create_dir_all(&target)?;
@@ -737,6 +781,24 @@ fn safe_component(name: &std::ffi::OsStr) -> bool {
 mod tests {
     use super::*;
     use super::players::{parse_player_event, read_names};
+
+    #[test]
+    fn delete_server_dir_only_removes_real_servers() {
+        let base = std::env::temp_dir().join(format!("pw-server-delete-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        // Una carpeta cualquiera no se borra.
+        assert!(delete_server_dir(&base).is_err());
+        assert!(base.is_dir());
+
+        // Un servidor real (con server.toml) sí, incluido su contenido.
+        std::fs::write(base.join("server.toml"), "name = \"test\"").unwrap();
+        std::fs::create_dir_all(base.join("world")).unwrap();
+        std::fs::write(base.join("world").join("level.dat"), b"x").unwrap();
+        delete_server_dir(&base).unwrap();
+        assert!(!base.exists());
+    }
 
     #[test]
     fn reads_minecraft_player_lists() {

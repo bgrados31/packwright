@@ -1,4 +1,4 @@
-import { Activity, ArrowUpRight, Copy, Download, FolderOpen, Play, Server, Square, Terminal, Wifi } from "lucide-react";
+import { Activity, ArrowUpRight, Copy, Download, FolderOpen, Play, Server, Square, Terminal, Trash2, Wifi } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { PackInfo, ServerInfo } from "../lib/types";
 
@@ -15,6 +15,7 @@ type Props = {
   onOpenFolder: () => void;
   onTunnel: () => void;
   onSync: () => void;
+  onDelete: () => void;
 };
 
 export default function ServerCard({
@@ -30,6 +31,7 @@ export default function ServerCard({
   onOpenFolder,
   onTunnel,
   onSync,
+  onDelete,
 }: Props) {
   const { t } = useI18n();
 
@@ -61,7 +63,8 @@ export default function ServerCard({
           <button className="server-action-btn" onClick={onBackup} title={t("servers.backup")}><Copy size={13} /></button>
           <button className="server-action-btn" onClick={onOpenFolder} title={t("packs.folder")}><FolderOpen size={13} /></button>
           <button className="server-action-btn" onClick={onTunnel} title={t("servers.tunnel")}><Wifi size={13} /></button>
-          <button className="server-action-btn" onClick={onOpen} title={t("servers.details")}><Activity size={13} /></button>
+          <button className="server-action-btn" onClick={onOpen} title={t("servers.details")} aria-label={t("servers.details")}><Activity size={13} /></button>
+          <button className="server-action-btn danger" onClick={onDelete} title={t("delete.deleteServer")} aria-label={t("delete.deleteServer")}><Trash2 size={13} /></button>
         </div>
         <div className="mt-3 flex items-center gap-2 border-t border-line pt-3" onClick={(event) => event.stopPropagation()}>
           <select className="field !py-1.5 text-[11px]" value={syncPack} onChange={(event) => onSyncPack(event.target.value)}>

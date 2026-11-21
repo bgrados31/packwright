@@ -134,10 +134,12 @@ fn player_cache_dir() -> Option<PathBuf> {
 
 fn read_name_cache() -> HashMap<String, Option<String>> {
     let Some(dir) = player_cache_dir() else { return HashMap::new() };
-    std::fs::read_to_string(dir.join("names.json"))
+    let cached: HashMap<String, Option<String>> = std::fs::read_to_string(dir.join("names.json"))
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Las búsquedas fallidas (jugadores nuevos o renombrados) no se cachean.
+    cached.into_iter().filter(|(_, value)| value.is_some()).collect()
 }
 
 fn save_name_cache(values: &HashMap<String, Option<String>>) {
@@ -180,9 +182,11 @@ async fn resolve_uuid(client: &reqwest::Client, player: &str) -> Option<String> 
             }
         }
     }
-    let mut cache = UUID_CACHE.lock().await;
-    cache.insert(safe, resolved.clone());
-    save_name_cache(&cache);
+    if resolved.is_some() {
+        let mut cache = UUID_CACHE.lock().await;
+        cache.insert(safe, resolved.clone());
+        save_name_cache(&cache);
+    }
     resolved
 }
 
@@ -232,13 +236,23 @@ pub async fn player_avatar(player: String) -> Result<String> {
     Ok(data)
 }
 
+/// Lee una lista de jugadores sin convertir un archivo corrupto en `[]`:
+/// sobrescribirlo borraría silenciosamente a todos los jugadores.
+fn read_player_list(file: &Path) -> Result<Vec<Value>> {
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(file)?;
+    serde_json::from_str(&text)
+        .map_err(|e| AppError::Parse(format!("Invalid {}: {e}", file.display())))
+}
+
 #[tauri::command]
 pub async fn server_player_add(name: String, list: String, player: String) -> Result<()> {
     let cfg = config::load()?;
     let dir = server_dir(&cfg, &name)?;
     let file = players_file(&dir, &list)?;
-    let mut entries: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_default();
+    let mut entries = read_player_list(&file)?;
     if entries.iter().any(|entry| entry["name"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&player))) {
         return Ok(());
     }
@@ -255,8 +269,7 @@ pub fn server_player_remove(name: String, list: String, player: String) -> Resul
     let cfg = config::load()?;
     let dir = server_dir(&cfg, &name)?;
     let file = players_file(&dir, &list)?;
-    let entries: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_default();
+    let entries = read_player_list(&file)?;
     let kept: Vec<Value> = entries.into_iter()
         .filter(|entry| !entry["name"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&player)))
         .collect();

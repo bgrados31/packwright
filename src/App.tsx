@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fireAndForget, messageOf as errorText } from "./lib/error";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -32,13 +33,13 @@ import DebugConsole from "./components/DebugConsole";
 import ImportModal from "./components/ImportModal";
 import ProfileModal from "./components/ProfileModal";
 import CommandPalette, { type PaletteAction } from "./components/CommandPalette";
+import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import type { PackProfile } from "./lib/profiles";
 import { useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
   type CreatePackInput,
   type Diagnostic,
-  type ErrorInfo,
   type FileEntry,
   type HistoryEntry,
   type InstalledMod,
@@ -65,13 +66,6 @@ const emptyForm: CreatePackInput = {
   description: "",
 };
 
-function errorText(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return (error as ErrorInfo).message;
-  }
-  return String(error);
-}
-
 function toHistoryItem(mod: InstalledMod): ModHistoryItem {
   return { id: mod.id, name: mod.name, version: mod.version_id };
 }
@@ -95,8 +89,8 @@ function fileKey(root: string, path: string): string {
 
 export default function App() {
   const { t, locale, setLocale } = useI18n();
-  const [theme, setTheme] = useState<"light" | "dark">(
-    () => (localStorage.getItem("packwright-theme") as "light" | "dark") || "light",
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [packwiz, setPackwiz] = useState<PackwizStatus | null>(null);
@@ -105,11 +99,13 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportTarget, setExportTarget] = useState<string | null>(null);
+  const [deletePackTarget, setDeletePackTarget] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastTimers = useRef<number[]>([]);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
@@ -133,6 +129,9 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
+    // Keeps native controls (scrollbars, inputs, dialogs) in sync with the app theme.
+    document.documentElement.style.colorScheme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0a0c11" : "#f1ede8");
     localStorage.setItem("packwright-theme", theme);
   }, [theme]);
 
@@ -352,8 +351,9 @@ export default function App() {
   };
 
   const closeFile = (key: string) => {
-    setOpenFiles((current) => current.filter((file) => file.key !== key));
-    setActiveKey((current) => (current === key ? openFiles.find((file) => file.key !== key)?.key ?? null : current));
+    const remaining = openFiles.filter((file) => file.key !== key);
+    setOpenFiles(remaining);
+    if (activeKey === key) setActiveKey(remaining[0]?.key ?? null);
   };
 
   const saveFile = useCallback(async () => {
@@ -372,11 +372,21 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      const editing = Boolean(
+        target?.isContentEditable ||
+          target?.closest?.("input, textarea, select, [contenteditable='true']"),
+      );
+      if (event.key.toLowerCase() === "s") {
+        // Save is useful even from the editor, so only skip unrelated text fields.
+        if (editing && !target?.closest?.(".monaco-editor")) return;
         event.preventDefault();
         void saveFile();
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if (event.key.toLowerCase() === "k") {
+        // Don't steal Ctrl/Cmd+K from text inputs (e.g. search boxes).
+        if (editing) return;
         event.preventDefault();
         setPaletteOpen((value) => !value);
       }
@@ -456,18 +466,37 @@ export default function App() {
     }
   };
 
+  useEffect(() => () => {
+    toastTimers.current.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+
   const dismissToast = (id: string) =>
     setToasts((current) => current.filter((item) => item.id !== id));
 
   const pushToast = (title: string, state: Toast["state"] = "success", detail?: string) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((current) => [...current, { id, title, detail, state }]);
-    window.setTimeout(() => dismissToast(id), 3200);
+    toastTimers.current.push(window.setTimeout(() => dismissToast(id), 3200));
   };
 
   const refreshTree = () => {
     setTreeRevision((value) => value + 1);
     void loadPacks();
+  };
+
+  const deletePack = async () => {
+    if (!deletePackTarget) return;
+    await invoke("pack_delete", { dir: deletePackTarget });
+    const wasSelected = selectedPack === deletePackTarget;
+    setDeletePackTarget(null);
+    if (wasSelected) {
+      setSelectedPack(null);
+      setOpenFiles([]);
+      setActiveKey(null);
+      setView("packs");
+    }
+    await loadPacks();
+    pushToast(t("delete.successPack"));
   };
 
   const renameFile = async (root: string, path: string, name: string) => {
@@ -696,7 +725,7 @@ export default function App() {
       );
     } finally {
       unlisten?.();
-      window.setTimeout(() => dismissToast(id), 4200);
+      toastTimers.current.push(window.setTimeout(() => dismissToast(id), 4200));
     }
   };
 
@@ -722,7 +751,7 @@ export default function App() {
 
   const activeView: SidebarView = selectedPack && view === "editor" ? "editor" : view;
 
-  const paletteActions: PaletteAction[] = [
+  const paletteActions = useMemo<PaletteAction[]>(() => [
     { id: "home", label: t("nav.home"), group: t("palette.groupNavigate"), icon: <House size={14} />, run: () => setView("home") },
     { id: "packs", label: t("nav.modpacks"), group: t("palette.groupNavigate"), icon: <LayoutGrid size={14} />, run: () => setView("packs") },
     { id: "servers", label: t("nav.servers"), group: t("palette.groupNavigate"), icon: <Server size={14} />, run: () => setView("servers") },
@@ -758,7 +787,7 @@ export default function App() {
       icon: <Globe size={14} />,
       run: () => setLocale(locale === "en" ? "es" : "en"),
     },
-  ];
+  ], [t, theme, locale, selectedPack, setLocale]);
   const inSetup = config === null || !config.setup_complete;
 
   return (
@@ -815,7 +844,7 @@ export default function App() {
             onNew={() => setView("create")}
             onGoPacks={() => setView("packs")}
             onOpenPack={(dir) => { setSelectedPack(dir); setView("editor"); }}
-            onOpenWorkspace={() => void invoke("open_path", { path: config?.workspace ?? "" })}
+            onOpenWorkspace={() => fireAndForget(invoke("open_path", { path: config?.workspace ?? "" }))}
           />
         ) : view === "create" ? (
           <div className="view-enter mx-auto max-w-lg">
@@ -897,10 +926,11 @@ export default function App() {
               onUseIcon={() => void useDefaultIcon()}
               onGenerateReadme={() => void generateReadme()}
               onExport={() => setExportTarget(selectedPack)}
-              exporting={exportTarget === selectedPack}
+              exporting={selectedPack !== null && exportTarget === selectedPack}
               onAssetsChanged={() => void reloadAssets()}
               modsRevision={modsRevision}
               onModOperation={(operation) => void runModOperation(operation)}
+              onDeletePack={() => selectedPack && setDeletePackTarget(selectedPack)}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (
@@ -925,6 +955,7 @@ export default function App() {
             exporting={exportTarget}
             onNew={() => setView("create")}
             onImport={() => setImportOpen(true)}
+            onDelete={(dir) => setDeletePackTarget(dir)}
           />
         )}
       </main>
@@ -938,6 +969,15 @@ export default function App() {
           />,
           document.body,
         )}
+
+      {deletePackTarget && (
+        <ConfirmDeleteModal
+          kind="pack"
+          name={packs.find((pack) => pack.dir === deletePackTarget)?.name ?? deletePackTarget}
+          onCancel={() => setDeletePackTarget(null)}
+          onConfirm={deletePack}
+        />
+      )}
 
       {profileOpen &&
         createPortal(

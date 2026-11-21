@@ -123,7 +123,7 @@ export default function HomeView({ packs, workspace, launchersCount, onNew, onGo
                     MC {pack.minecraft_version ?? "—"} · {pack.loader ?? "—"}
                   </p>
                 </div>
-                <span className="chip">{pack.mod_count} mods</span>
+                <span className="chip">{t("packs.modCount", { count: pack.mod_count })}</span>
                 <ArrowRight size={14} className="text-muted" />
               </button>
             ))}

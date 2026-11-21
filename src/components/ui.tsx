@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Check, LayoutGrid, List, Search, X } from "lucide-react";
+import { useI18n } from "../i18n";
 
 /** Campo de búsqueda con icono, botón limpiar y sugerencia de atajo. */
 export function SearchField({
@@ -16,6 +17,7 @@ export function SearchField({
   inputRef?: RefObject<HTMLInputElement | null>;
   className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className={`relative ${className}`}>
       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
@@ -32,7 +34,8 @@ export function SearchField({
         <button
           className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-subtle hover:text-ink"
           onClick={() => onChange("")}
-          title="Clear"
+          title={t("common.clear")}
+          aria-label={t("common.clear")}
         >
           <X size={13} />
         </button>

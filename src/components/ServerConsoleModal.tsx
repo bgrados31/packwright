@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { messageOf } from "../lib/error";
 import { Terminal, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine, ServerInfo } from "../lib/types";
 import ConsolePanel from "./ConsolePanel";
 
@@ -14,14 +16,8 @@ type Props = {
   onAppend: (line: OpLine) => void;
 };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function ServerConsoleModal({ server, lines, running, playerNames, onClose, onClear, onAppend }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
 
   const send = async (command: string) => {

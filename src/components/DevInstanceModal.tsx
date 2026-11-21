@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { FolderOpen, Loader2, Play, RotateCcw, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
 
@@ -15,14 +17,8 @@ type Props = {
 type Instance = { path: string; mods_linked: boolean; overrides: number };
 type Status = { running: boolean; watching: boolean };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function DevInstanceModal({ dir, launcherPaths, servePort, onClose }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [instance, setInstance] = useState<Instance | null>(null);
   const [status, setStatus] = useState<Status>({ running: false, watching: false });

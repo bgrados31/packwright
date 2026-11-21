@@ -2,131 +2,147 @@
 
 # Packwright
 
-> Build modpacks. Launch servers. One desktop app.
+> **Build modpacks. Launch servers. One desktop app.**
+> El estudio local donde tu modpack y tu servidor dejan de ser dos proyectos distintos.
 
-**Packwright** es un estudio de escritorio para crear y mantener modpacks de Minecraft (con [packwiz](https://packwiz.infra.link/)) **y** arrancar/gestionar servidores propios, inspirado en la experiencia de [SquidServers](https://squidservers.com/en). Todo en local, multiplataforma (Windows, macOS y Linux) y con una sola biblioteca de mods compartida.
+[![CI](https://github.com/bgrados31/packwright/actions/workflows/ci.yml/badge.svg)](https://github.com/bgrados31/packwright/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-0.1.0-C74A2E?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-232C3A?style=flat-square)
+![Stack](https://img.shields.io/badge/built%20with-Tauri%20%2B%20React%20%2B%20Rust-2E8B6B?style=flat-square)
+![Status](https://img.shields.io/badge/status-MVP%20%E2%80%94%20beta-C74A2E?style=flat-square)
 
-## ¿Por qué?
+---
 
-Hoy las herramientas están separadas:
+## El problema
 
-| Herramienta | Qué hace | Limitación |
-| --- | --- | --- |
-| `packwiz` | Metadatos de modpacks en TOML | Solo CLI |
-| `packui-next` | UI web para modpacks | Solo packs, solo navegador |
-| SquidServers / Aternos / Pterodactyl | Servidores | No crean packs, algunos son de pago o requieren servidor |
+Crear un modpack de Minecraft hoy significa saltar entre herramientas: editar TOML a mano, buscar mods en webs distintas, copiar jars, configurar un servidor por separado y repetir el proceso cada vez que sale una versión nueva.
 
-Packwright une las dos mitades: **lo que instalas en el cliente y lo que corres en el servidor salen de la misma fuente de verdad**.
+## La idea
 
-## Concepto central
+**Packwright reúne las dos mitades en una sola app de escritorio.** Un único workspace local, una sola biblioteca de mods, una sola fuente de verdad:
 
 ```
-                 ┌────────────────────────┐
-                 │   Workspace Packwright │
-                 │  (un solo caché de mods)│
-                 └───────────┬────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                             ▼
-     ┌────────────────┐            ┌────────────────┐
-     │  Modpack       │            │  Server        │
-     │  pack.toml     │  ◀─ sync ─▶│  Paper/Forge/  │
-     │  mods/*.pw.toml│            │  Fabric/Velocity│
-     └────────────────┘            └────────────────┘
-              │                             │
-              ▼                             ▼
-     Launcher (ATLauncher,         start/stop + consola
-     Prism, Modrinth App)          + túnel opcional
+                    Workspace Packwright
+              (un caché de mods compartido)
+                            │
+             ┌──────────────┴──────────────┐
+             ▼                             ▼
+       Modpack (packwiz)              Servidor (Paper, Forge…)
+       pack.toml + mods/*.pw.toml  ◀─sync─▶  jar + mundo + plugins
+             │                             │
+             ▼                             ▼
+     ATLauncher / Prism / Modrinth     start/stop + consola + backups
 ```
 
-## Funcionalidades planeadas
+Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripciones.
 
-### Modpacks
-- Crear/editar packs packwiz (`pack.toml`, versión de Minecraft y loader).
-- Versiones reales de Minecraft desde el manifest de Mojang y del loader (Fabric API, Maven de Forge/NeoForge y API de Purpur), con caché local para trabajar offline.
-- Metadatos profesionales (resumen, icono, licencia, categorías, web) y generador de README.
-- Catálogo de Modrinth y CurseForge con búsqueda, filtros y detalle de versiones.
-- Instalar, actualizar, fijar (pin) y quitar mods.
-- Health checks: duplicados, dependencias faltantes, conflictos de versión.
-- Importar `.mrpack` / packs de CurseForge; exportar para launchers.
+---
 
-### Servidores
-- Templates: Vanilla, Paper, Purpur, Forge, NeoForge, Fabric, Velocity/Bungee.
-- Setup automático: descarga del `.jar`, `eula.txt`, `server.properties`, JVM args (preset Aikar).
-- Detección e instalación guiada de Java (17/21 según la versión).
-- Ciclo de vida: start / stop / restart con consola en vivo y logs.
-- Túnel opcional tipo playit.gg para jugar sin port forwarding.
-- Bedrock Dedicated Server + GeyserMC para crossplay.
-- Backups con snapshots y restore.
-- Gestión de jugadores: ops, whitelist, bans.
+## Lo que puedes hacer
 
-### Compartido
-- Sincronización cliente ↔ servidor (mods client-only / server-only).
-- Un solo caché de descargas y hashes.
-- Interfaz en español e inglés.
-- Atajos de teclado / command palette.
+### Modpacks, de principio a fin
+- Crear packs `packwiz` con versiones reales de Minecraft y loader (Fabric, Forge, NeoForge, Quilt, Purpur).
+- **Catálogo de Modrinth** con búsqueda, filtros, categorías, entorno y detalle de versiones.
+- Instalar, actualizar, fijar (pin) y quitar mods en un clic, con dependencias resueltas.
+- Metadatos profesionales: resumen, licencia, categorías, icono, banner, galería y README generado.
+- Health checks (duplicados, sin fuente, conflictos), historial por pack y exportación `.mrpack` / `.zip`.
+- Importar desde Modrinth o CurseForge, y publicar directamente en Modrinth.
 
-Ver el plan detallado en [ROADMAP.md](ROADMAP.md).
+### Editor y flujo de desarrollo
+- Editor **Monaco** local con TOML/JSON/YAML/MD/XML, validación en vivo, guardado atómico e historial con restore.
+- Árbol multi-root (Pack / Packwiz / Packwright), pestañas reordenables, renombrado y menús contextuales.
+- **Play** en un paso: `packwiz serve` + instancia de prueba (symlink) + watcher + launcher.
+- Consola flotante, command palette (`Ctrl/Cmd+K`) e i18n español/inglés.
 
-## Stack
+### Servidores propios
+- Templates Vanilla, Paper, Purpur, Forge, NeoForge, Fabric y Velocity con setup automático.
+- Start/stop/restart con **consola interactiva**, autocompletado e historial de comandos.
+- Ping real del protocolo MC (jugadores, MOTD, latencia), backups, restore y gestión de ops/whitelist/bans.
+- Sincronización cliente ↔ servidor y túnel opcional **playit.gg**.
 
-| Capa | Tecnología | Motivo |
-| --- | --- | --- |
-| Backend / nativo | **Rust** (Tauri 2) | filesystem, TOML, lanzar packwiz, supervisar procesos, descargas, backups |
-| UI | **React 19 + TypeScript** | catálogo, dashboards, editores, i18n |
-| Build UI | Vite 8 | desarrollo rápido del frontend |
-| Escritorio | **Tauri 2** | un codebase → Windows, macOS y Linux; binarios pequeños |
+### Cuidado y seguridad
+- Temas **claro y obsidiana** con contraste AA, focus visible y `prefers-reduced-motion`.
+- Eliminación completa de packs y servidores con **confirmación escribiendo el nombre**.
+- Secretos redactados en la interfaz, CSP estricto y rutas validadas en el backend.
 
-## Requisitos
+---
 
-- [Bun](https://bun.sh/) >= 1.4 (o Node + npm)
-- [Rust](https://rustup.rs/) estable
-- En Windows: **MSVC Build Tools** (Visual Studio C++ Build Tools)
-- [packwiz](https://packwiz.infra.link/installation/) en el PATH (para las operaciones de packs)
-- Opcional: ATLauncher / Prism / Modrinth App
+## Galería
 
-## Desarrollo
+| Inicio — claro | Inicio — obsidiana |
+| --- | --- |
+| ![Home claro](docs/screenshots/01-home-light.jpg) | ![Home oscuro](docs/screenshots/06-home-dark.jpg) |
+
+| Catálogo de mods | Editor de archivos |
+| --- | --- |
+| ![Mods](docs/screenshots/10-mods-dark.jpg) | ![Editor](docs/screenshots/11-editor-dark.jpg) |
+
+| Mis modpacks | Detalles del pack |
+| --- | --- |
+| ![Modpacks](docs/screenshots/07-modpacks-dark.jpg) | ![Detalles](docs/screenshots/05-details-light.jpg) |
+
+| Servidores | Panel del servidor |
+| --- | --- |
+| ![Servidores](docs/screenshots/08-servers-dark.jpg) | ![Detalle servidor](docs/screenshots/09-server-detail-dark.jpg) |
+
+> Todas las capturas son de la app real ejecutándose, no maquetas.
+
+---
+
+## Para quién es
+
+| Perfil | Qué gana |
+| --- | --- |
+| **Creador de modpacks** | Deja de pelear con TOML y manages el catálogo desde una UI. |
+| **Dueño de servidor** | Configura, arranca y respalda su servidor sin terminal. |
+| **Grupo de amigos** | El mismo pack para todos y un servidor sincronizado en minutos. |
+| **Modder / autor** | Prepara releases con README, icono y exportación listos para publicar. |
+
+---
+
+## Instalación y desarrollo
 
 ```bash
 bun install
 bun run tauri dev        # app de escritorio con hot reload
 ```
 
-Solo el frontend (más rápido, sin Rust):
+Solo el frontend:
 
 ```bash
 bun run dev              # Vite en http://localhost:1420
 ```
 
-Build de producción:
+Build de producción (instaladores `.msi` / `.deb` / `.dmg`):
 
 ```bash
-bun run tauri build      # instaladores .msi / .deb / .dmg
+bun run tauri build
 ```
 
 Tests:
 
 ```bash
-cd src-tauri
-cargo test                         # pruebas puras (sin red)
-cargo test -- --ignored            # pruebas que consultan APIs reales
+bun run build            # typecheck + build del frontend
+cd src-tauri && cargo test
 ```
 
-Las pruebas `#[ignore]` verifican resolución de jars, detección de Java,
-avatares y el protocolo de status; requieren conexión o una instalación local.
-El ping de servidores se prueba con un socket UDP simulado (sin red externa).
+**Requisitos:** [Bun](https://bun.sh/) ≥ 1.4, [Rust](https://rustup.rs/) estable, MSVC Build Tools en Windows y [packwiz](https://packwiz.infra.link/installation/) en el PATH.
 
-## Relación con `packui-next`
+---
 
-`packui-next` fue el prototipo web que validó la idea de gestionar packs con UI. Packwright es su evolución: misma idea de catálogo y gestión, pero como aplicación de escritorio real y con gestión de servidores. El código se reutilizará donde tenga sentido.
+## Arquitectura
+
+| Capa | Tecnología |
+| --- | --- |
+| Nativo | **Rust** (Tauri 2): filesystem, TOML, packwiz, procesos, descargas, backups |
+| UI | **React 19 + TypeScript** con Tailwind 4 y Monaco |
+| Build | Vite 8 |
+
+Ver el plan detallado en [ROADMAP.md](ROADMAP.md) y el kit de marca en [docs/ASSETS-PROMPT.md](docs/ASSETS-PROMPT.md) y [docs/SHOWCASE.md](docs/SHOWCASE.md).
 
 ## Estado
 
-🚧 Proyecto en fase inicial (MVP). No lanzar aún en producción.
-
-## Identidad visual
-
-El isotipo, el monocromo y las imágenes de marca están en `public/`. La imagen para redes sociales (Open Graph) está en [`public/open_graph.jpg`](public/open_graph.jpg). Los prompts usados para generarlos y la paleta aceptada están en [`docs/ASSETS-PROMPT.md`](docs/ASSETS-PROMPT.md).
+🚧 **MVP funcional en beta.** La interfaz y los flujos principales están listos; no lanzar aún en producción.
 
 ## Licencia
 

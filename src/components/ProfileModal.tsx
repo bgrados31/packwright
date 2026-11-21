@@ -1,5 +1,6 @@
 import { Layers, Sparkles, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import { PACK_PROFILES, type PackProfile } from "../lib/profiles";
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export default function ProfileModal({ onClose, onPick }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
 
   return (
@@ -33,7 +35,7 @@ export default function ProfileModal({ onClose, onPick }: Props) {
               <span className="block text-[13px] font-semibold">{profile.name}</span>
               <span className="block text-[11px] leading-4 text-muted">{profile.description}</span>
               <span className="mt-auto pt-2 font-mono text-[10px] text-accent">
-                {profile.mods.length} mods · {profile.loader}
+                {t("packs.modCount", { count: profile.mods.length })} · {profile.loader}
               </span>
             </button>
           ))}

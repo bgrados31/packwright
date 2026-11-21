@@ -27,6 +27,16 @@ pub fn hide_console_window(command: &mut std::process::Command) {
     let _ = command;
 }
 
+/// Mata y **reap** un hijo: `kill()` por sí solo deja zombies y puede dejar el
+/// proceso corriendo si el app se cierra antes de esperarlo.
+pub async fn terminate(child: &mut tokio::process::Child) {
+    if child.try_wait().ok().flatten().is_some() {
+        return;
+    }
+    let _ = child.kill().await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), child.wait()).await;
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CommandOutput {
     pub id: String,
@@ -81,6 +91,7 @@ impl CommandRunner {
 
         let mut command = Command::new(program);
         command
+            .kill_on_drop(true)
             .args(args)
             .current_dir(cwd)
             .stdout(Stdio::piped())

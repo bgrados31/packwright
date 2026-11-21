@@ -13,6 +13,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import { useI18n } from "../i18n";
@@ -31,6 +32,7 @@ type Props = {
   exporting: string | null;
   onNew: () => void;
   onImport: () => void;
+  onDelete: (dir: string) => void;
 };
 
 type SortMode = "name" | "recent" | "mods";
@@ -44,7 +46,7 @@ const LOADER_TONES: Record<string, string> = {
   purpur: "tone-purpur",
 };
 
-export default function PacksView({ packs, workspace, onOpen, onReveal, onExport, exporting, onNew, onImport }: Props) {
+export default function PacksView({ packs, workspace, onOpen, onReveal, onExport, exporting, onNew, onImport, onDelete }: Props) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortMode>("name");
@@ -267,7 +269,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                         className={`pack-block ${block < Math.min(8, Math.ceil(pack.mod_count / 5)) ? "filled" : ""}`}
                       />
                     ))}
-                    <span className="ml-auto font-mono text-[9px] text-muted">{pack.mod_count} mods</span>
+                    <span className="ml-auto font-mono text-[9px] text-muted">{t("packs.modCount", { count: pack.mod_count })}</span>
                   </div>
                 ) : (
                   <div className="mt-4 flex items-center gap-2 text-[11px] text-muted">
@@ -303,8 +305,17 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                     className="btn btn-ghost px-3"
                     onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                     title={t("packs.folder")}
+                    aria-label={t("packs.folder")}
                   >
                     <ArrowUpRight size={15} />
+                  </button>
+                  <button
+                    className="btn btn-ghost px-3 text-bad"
+                    onClick={(event) => { event.stopPropagation(); onDelete(pack.dir); }}
+                    title={t("delete.deletePack")}
+                    aria-label={t("delete.deletePack")}
+                  >
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -343,7 +354,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
               <span className={`chip chip-loader ${LOADER_TONES[pack.loader ?? ""] ?? ""}`}>
                 {pack.loader ?? "—"}
               </span>
-              <span className="w-16 text-right font-mono text-[11px] text-muted">{pack.mod_count} mods</span>
+              <span className="w-16 text-right font-mono text-[11px] text-muted">{t("packs.modCount", { count: pack.mod_count })}</span>
               <button
                 className="btn btn-ghost px-3"
                 onClick={(event) => { event.stopPropagation(); onExport(pack.dir); }}
@@ -356,6 +367,7 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                 className="btn btn-ghost px-3"
                 onClick={(event) => { event.stopPropagation(); onReveal(pack.dir); }}
                 title={t("packs.folder")}
+                aria-label={t("packs.folder")}
               >
                 <FolderOpen size={14} />
               </button>
@@ -366,6 +378,14 @@ export default function PacksView({ packs, workspace, onOpen, onReveal, onExport
                 aria-label={t("packs.view")}
               >
                 <Eye size={15} />
+              </button>
+              <button
+                className="btn btn-ghost px-3 text-bad"
+                onClick={(event) => { event.stopPropagation(); onDelete(pack.dir); }}
+                title={t("delete.deletePack")}
+                aria-label={t("delete.deletePack")}
+              >
+                <Trash2 size={14} />
               </button>
             </article>
           ))}

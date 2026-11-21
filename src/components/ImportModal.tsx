@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { FileArchive, FolderOpen, Globe2, Loader2, Search, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { ModpackHit, PackInfo } from "../lib/types";
 
 type Props = {
@@ -11,13 +13,6 @@ type Props = {
 
 type Mode = "file" | "modrinth" | "url" | "curseforge";
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 function compact(number: number): string {
   if (number >= 1_000_000) return `${(number / 1_000_000).toFixed(1)}M`;
   if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
@@ -25,6 +20,7 @@ function compact(number: number): string {
 }
 
 export default function ImportModal({ onClose, onImported }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("file");
   const [source, setSource] = useState<string | null>(null);

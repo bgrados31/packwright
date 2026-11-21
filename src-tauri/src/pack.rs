@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
@@ -22,8 +22,14 @@ pub struct PackwizStatus {
 }
 
 #[tauri::command]
-pub fn config_get() -> Result<AppConfig> {
-    config::load()
+pub fn config_get() -> Result<config::AppConfigView> {
+    Ok(config::public_view(&config::load()?))
+}
+
+#[tauri::command]
+pub fn config_clear_secret(kind: String) -> Result<config::AppConfigView> {
+    config::clear_secret(&kind)?;
+    Ok(config::public_view(&config::load()?))
 }
 
 #[tauri::command]
@@ -38,20 +44,20 @@ pub fn open_path(path: String) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn config_set(config: AppConfig) -> Result<AppConfig> {
-    config::save(&config)?;
-    config::ensure_workspace(&config)?;
-    Ok(config)
+pub fn config_set(config: AppConfig) -> Result<config::AppConfigView> {
+    let saved = config::save_from_view(&config)?;
+    config::ensure_workspace(&saved)?;
+    Ok(config::public_view(&saved))
 }
 
 #[tauri::command]
-pub fn workspace_set(path: String) -> Result<AppConfig> {
+pub fn workspace_set(path: String) -> Result<config::AppConfigView> {
     let mut cfg = config::load()?;
     let path = PathBuf::from(path);
     std::fs::create_dir_all(&path)?;
     cfg.workspace = path;
     config::save(&cfg)?;
-    Ok(cfg)
+    Ok(config::public_view(&cfg))
 }
 
 #[tauri::command]
@@ -368,10 +374,49 @@ pub async fn pack_create(
     model::read_pack_info(&target)
 }
 
+/// Borra la carpeta de un pack solo si contiene `pack.toml`.
+fn delete_pack_dir(root: &Path) -> Result<()> {
+    if !root.join("pack.toml").is_file() {
+        return Err(AppError::Validation(
+            "Refusing to delete: this folder is not a pack (pack.toml is missing)".into(),
+        ));
+    }
+    std::fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+/// Elimina un pack completo del workspace. Solo se permite si parece un pack
+/// real (tiene `pack.toml`) y la ruta resuelta sigue dentro del workspace.
+#[tauri::command]
+pub fn pack_delete(dir: String) -> Result<()> {
+    let cfg = config::load()?;
+    let root = crate::paths::contained(&cfg.workspace, &dir, "pack")?;
+    delete_pack_dir(&root)
+}
+
+#[cfg(test)]
+mod delete_tests {
+    use super::*;
+
+    #[test]
+    fn delete_pack_dir_only_removes_real_packs() {
+        let base = std::env::temp_dir().join(format!("pw-pack-delete-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        assert!(delete_pack_dir(&base).is_err());
+        assert!(base.is_dir());
+        std::fs::write(base.join("pack.toml"), "name = \"test\"").unwrap();
+        std::fs::create_dir_all(base.join("mods")).unwrap();
+        std::fs::write(base.join("mods").join("a.pw.toml"), "x").unwrap();
+        delete_pack_dir(&base).unwrap();
+        assert!(!base.exists());
+    }
+}
+
 #[tauri::command]
 pub fn pack_reveal(dir: String) -> Result<()> {
     let cfg = config::load()?;
-    let path = cfg.workspace.join(&dir);
+    let path = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?);
     if !path.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }

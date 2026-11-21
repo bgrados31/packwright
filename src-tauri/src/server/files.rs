@@ -213,7 +213,8 @@ pub fn server_backup(name: String) -> Result<ServerBackup> {
         zip.start_file(file_name, options)
             .map_err(|e| AppError::Io(format!("Could not add file to backup: {e}")))?;
         use std::io::Write;
-        let _ = zip.write_all(&std::fs::read(path)?);
+        zip.write_all(&std::fs::read(path)?)
+            .map_err(|e| AppError::Io(format!("Could not write backup entry: {e}")))?;
     }
     zip.finish()
         .map_err(|e| AppError::Io(format!("Could not finish backup: {e}")))?;
@@ -291,7 +292,9 @@ pub fn server_backup_restore(name: String, stamp: String) -> Result<usize> {
         let mut entry = archive.by_index(index)
             .map_err(|e| AppError::Parse(format!("Could not read backup entry: {e}")))?;
         let file_name = entry.name().to_string();
-        if file_name.ends_with('/') || file_name.contains("..") || file_name.starts_with('/') || file_name == "server.toml" {
+        if file_name.ends_with('/') || file_name.starts_with('/')
+            || std::path::Path::new(&file_name).components().any(|part| matches!(part, std::path::Component::ParentDir))
+            || file_name == "server.toml" {
             continue;
         }
         let target = dir.join(safe_relative_path(&file_name)?);
@@ -318,7 +321,7 @@ pub struct ModsCompare {
 pub fn server_mods_compare(name: String, pack: String) -> Result<ModsCompare> {
     let cfg = config::load()?;
     let dir = server_dir(&cfg, &name)?;
-    let pack_root = cfg.workspace.join(&pack).canonicalize()
+    let pack_root = cfg.workspace.join(crate::paths::safe_component(&pack, "pack")?).canonicalize()
         .map_err(|_| AppError::NotFound("Pack not found".into()))?;
     let list = |root: &Path| -> Vec<String> {
         std::fs::read_dir(root)

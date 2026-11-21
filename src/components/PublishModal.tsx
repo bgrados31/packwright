@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { CheckCircle2, ExternalLink, Loader2, Rocket, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 
 type Props = {
   dir: string;
@@ -11,14 +13,8 @@ type Props = {
   onClose: () => void;
 };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function PublishModal({ dir, projectId, hasToken, onClose }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [changelog, setChangelog] = useState("");

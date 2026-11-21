@@ -39,11 +39,12 @@ impl DevState {
 }
 
 fn instance_path(cfg: &config::AppConfig, dir: &str) -> Result<PathBuf> {
-    let pack = cfg.workspace.join(dir);
+    let name = crate::paths::safe_component(dir, "pack")?;
+    let pack = cfg.workspace.join(&name);
     if !pack.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
-    Ok(cfg.workspace.join(".packwright").join("instances").join(dir))
+    Ok(cfg.workspace.join(".packwright").join("instances").join(name))
 }
 
 fn copy_dir_all(source: &Path, destination: &Path) -> Result<usize> {
@@ -168,7 +169,7 @@ fn migrate_metadata(cfg: &config::AppConfig, dir: &str, pack: &Path, instance: &
 #[tauri::command]
 pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
     let cfg = config::load()?;
-    let pack = cfg.workspace.join(&dir).canonicalize()?;
+    let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?).canonicalize()?;
     let instance = instance_path(&cfg, &dir)?;
     std::fs::create_dir_all(&instance)?;
     let mods_linked = link_or_copy(&pack.join("mods"), &instance.join("mods"))?;
@@ -184,7 +185,7 @@ pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
 #[tauri::command]
 pub fn dev_watch_start(state: tauri::State<'_, DevState>, dir: String) -> Result<()> {
     let cfg = config::load()?;
-    let pack = cfg.workspace.join(&dir).canonicalize()?;
+    let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?).canonicalize()?;
     let instance = instance_path(&cfg, &dir)?;
     let overrides_root = pack.join("overrides");
     std::fs::create_dir_all(&overrides_root)?;
@@ -288,12 +289,16 @@ pub async fn dev_launch(
 
     let mut guard = state.child.lock().await;
     if let Some(child) = guard.as_mut() {
-        let _ = child.kill().await;
+        crate::process::terminate(child).await;
     }
     *guard = None;
 
     let mut command = Command::new(&program);
-    command.arg(&instance).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .kill_on_drop(true)
+        .arg(&instance)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     crate::process::hide_console_window(command.as_std_mut());
     let mut child = command
         .spawn()
@@ -331,7 +336,7 @@ pub async fn dev_launch(
 pub async fn dev_stop(state: tauri::State<'_, DevState>) -> Result<()> {
     let mut guard = state.child.lock().await;
     if let Some(child) = guard.as_mut() {
-        let _ = child.kill().await;
+        crate::process::terminate(child).await;
     }
     *guard = None;
     Ok(())
@@ -340,6 +345,13 @@ pub async fn dev_stop(state: tauri::State<'_, DevState>) -> Result<()> {
 #[tauri::command]
 pub async fn dev_status(state: tauri::State<'_, DevState>) -> Result<DevStatus> {
     let watching = state.watcher.lock().await.is_some();
-    let running = state.child.lock().await.is_some();
-    Ok(DevStatus { running, watching })
+    let mut child = state.child.lock().await;
+    let exited = child
+        .as_mut()
+        .map(|process| process.try_wait().map(|status| status.is_some()).unwrap_or(true))
+        .unwrap_or(true);
+    if exited {
+        *child = None;
+    }
+    Ok(DevStatus { running: !exited, watching })
 }

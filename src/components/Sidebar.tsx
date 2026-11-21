@@ -109,7 +109,9 @@ export default function Sidebar(props: Props) {
           {!props.collapsed && (
             <>
               <span className="truncate">{t("palette.title")}</span>
-              <span className="sidebar-badge">⌘K</span>
+              <span className="sidebar-badge">
+                {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}
+              </span>
             </>
           )}
         </button>

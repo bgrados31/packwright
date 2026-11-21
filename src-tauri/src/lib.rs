@@ -9,6 +9,7 @@ mod meta;
 mod mods;
 mod net;
 mod model;
+mod paths;
 mod pack;
 mod ping;
 mod playit;
@@ -47,6 +48,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             pack::config_get,
             pack::config_set,
+            pack::config_clear_secret,
             config::java_detect,
             config::java_set_path,
             pack::workspace_set,
@@ -55,6 +57,7 @@ pub fn run() {
             pack::pack_list,
             pack::pack_create,
             pack::pack_reveal,
+            pack::pack_delete,
             pack::pick_folder,
             pack::pick_file,
             pack::launcher_defaults,
@@ -110,9 +113,9 @@ pub fn run() {
             server::server_sync,
             server::server_install_geyser,
             server::server_open_folder,
+            server::server_delete,
             playit::playit_install_agent,
             playit::playit_set_secret,
-            playit::playit_get_secret,
             playit::playit_status,
             playit::playit_start,
             playit::playit_stop,

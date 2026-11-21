@@ -27,7 +27,7 @@ pub async fn modrinth_publish(
             "Set your Modrinth token and project ID in Settings first".into(),
         ));
     }
-    let root = cfg.workspace.join(&dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -69,8 +69,7 @@ pub async fn modrinth_publish(
         "dependencies": {},
     });
 
-    let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("Could not create HTTP client: {e}")))?;
+    let client = crate::net::download_client()?;
     let form = Form::new()
         .text("data", data.to_string())
         .part("file", Part::bytes(bytes).file_name(filename.to_string()));

@@ -20,7 +20,7 @@ pub struct GitChange {
 }
 
 fn repo(cfg: &config::AppConfig, dir: &str) -> Result<std::path::PathBuf> {
-    let path = cfg.workspace.join(dir);
+    let path = cfg.workspace.join(crate::paths::safe_component(dir, "pack")?);
     if !path.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -84,10 +84,12 @@ pub fn git_commit(dir: String, message: String) -> Result<String> {
 pub fn git_tag(dir: String, tag: String) -> Result<()> {
     let cfg = config::load()?;
     let root = repo(&cfg, &dir)?;
-    if tag.trim().is_empty() {
-        return Err(AppError::Validation("Tag cannot be empty".into()));
+    let tag = tag.trim();
+    if tag.is_empty() || tag.starts_with('-') {
+        // Un tag que empiece por `-` sería interpretado como opción de git.
+        return Err(AppError::Validation("Tag cannot be empty or start with '-'".into()));
     }
-    run(&root, &["tag", tag.trim()])?;
+    run(&root, &["tag", tag])?;
     Ok(())
 }
 

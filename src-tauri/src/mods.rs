@@ -134,7 +134,7 @@ pub struct ModHealth {
 
 fn pack_root(dir: &str) -> Result<PathBuf> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -437,9 +437,10 @@ fn list_mods(root: &Path) -> Result<Vec<InstalledMod>> {
             continue;
         }
         let text = std::fs::read_to_string(&path)?;
-        let doc = text
-            .parse::<toml_edit::DocumentMut>()
-            .unwrap_or_else(|_| toml_edit::DocumentMut::new());
+        // Un archivo malformado se ignora para el análisis; nunca se reescribe.
+        let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+            continue;
+        };
         let str_of = |keys: &[&str]| -> Option<String> {
             let mut item: Option<&toml_edit::Item> = None;
             for (index, key) in keys.iter().enumerate() {

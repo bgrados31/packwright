@@ -1,7 +1,8 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Rocket, Settings2, Trash2, X } from "lucide-react";
+import { Copy, ExternalLink, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Rocket, Settings2, Trash2, X } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
@@ -11,12 +12,13 @@ import type {
   OpenFile,
   PackMeta,
 } from "../lib/types";
+import { fireAndForget, messageOf } from "../lib/error";
 import type { EditorSettings } from "./CodeEditor";
 import FileTree from "./FileTree";
 import ModsView from "./ModsView";
 import { clearImageCache } from "./PackImage";
 import PackImage from "./PackImage";
-import { Checkbox, ContextMenu, type ContextMenuItem } from "./ui";
+import { Checkbox, ContextMenu, Tag, type ContextMenuItem } from "./ui";
 import DevInstanceModal from "./DevInstanceModal";
 import GitPanel from "./GitPanel";
 import PublishModal from "./PublishModal";
@@ -65,6 +67,7 @@ type Props = {
   onAssetsChanged: () => void;
   modsRevision: number;
   onModOperation: (operation: ModOperation) => void;
+  onDeletePack: () => void;
 };
 
 export default function PackEditor(props: Props) {
@@ -92,17 +95,18 @@ export default function PackEditor(props: Props) {
 
   const activeTab = props.openFiles.find((file) => file.key === props.activeKey) ?? null;
   const dirty = activeTab ? activeTab.content !== activeTab.saved : false;
-  const settings: EditorSettings = {
+  // Un objeto estable evita que Monaco se reconfigure en cada pulsación.
+  const settings = useMemo<EditorSettings>(() => ({
     fontSize: props.config.editor_font_size || 12,
     tabSize: props.config.editor_tab_size || 2,
     minimap: props.config.editor_minimap ?? true,
     wordWrap: props.config.editor_word_wrap ?? true,
-  };
-
-  const messageOf = (error: unknown) =>
-    typeof error === "object" && error !== null && "message" in error
-      ? String((error as { message: unknown }).message)
-      : String(error);
+  }), [
+    props.config.editor_font_size,
+    props.config.editor_tab_size,
+    props.config.editor_minimap,
+    props.config.editor_word_wrap,
+  ]);
 
   const upload = async (kind: "icon" | "banner" | "gallery", files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -374,7 +378,8 @@ export default function PackEditor(props: Props) {
           />
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-[1fr_320px] gap-6">
+        <>
+        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
           <div className="card p-6">
             <h2 className="text-lg font-semibold">{t("details.title")}</h2>
             <p className="mt-1 text-sm text-muted">{t("details.subtitle")}</p>
@@ -391,6 +396,9 @@ export default function PackEditor(props: Props) {
                     onChange={(event) => props.onMetaChange({ ...props.meta!, summary: event.target.value })}
                     placeholder={t("details.summaryPlaceholder")}
                   />
+                  <span className="self-end font-mono text-[10px] text-muted">
+                    {props.meta.summary.length}/200
+                  </span>
                 </label>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -402,6 +410,7 @@ export default function PackEditor(props: Props) {
                       onChange={(event) => props.onMetaChange({ ...props.meta!, license: event.target.value })}
                       placeholder="MIT"
                     />
+                    <span className="text-[10px] text-muted">{t("details.licenseHint")}</span>
                   </label>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs text-muted">{t("details.categories")}</span>
@@ -416,6 +425,21 @@ export default function PackEditor(props: Props) {
                       }
                       placeholder={t("details.categoriesPlaceholder")}
                     />
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {props.meta.categories.length === 0 ? (
+                        <span className="text-[10px] text-muted">{t("details.categoriesHint")}</span>
+                      ) : (
+                        props.meta.categories.map((category) => (
+                          <Tag key={category} seed={category}>{category}</Tag>
+                        ))
+                      )}
+                      <span className={`ml-auto font-mono text-[10px] ${props.meta.categories.length > 6 ? "text-bad" : "text-muted"}`}>
+                        {props.meta.categories.length}/6
+                      </span>
+                    </div>
+                    {props.meta.categories.length > 6 && (
+                      <span className="text-[10px] text-bad">{t("details.categoriesLimit")}</span>
+                    )}
                   </label>
                 </div>
 
@@ -589,21 +613,60 @@ export default function PackEditor(props: Props) {
           <div>
             <div className="text-xs font-medium text-muted">{t("details.preview")}</div>
             <div className="card mt-2 overflow-hidden">
-              <div className="flex h-28 items-center justify-center bg-subtle">
-                <img src="/packwright-mark.png" alt="" className="h-16 w-16" />
+              <div className="relative h-28 bg-subtle">
+                {props.meta?.banner ? (
+                  <PackImage dir={props.dir} path={props.meta.banner} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full place-items-center text-[10px] text-muted">
+                    {t("editor.noBanner")}
+                  </div>
+                )}
+                <div className="absolute -bottom-6 left-4">
+                  <PackImage
+                    dir={props.dir}
+                    path={props.meta?.icon}
+                    className="h-12 w-12 rounded-xl object-cover ring-2 ring-surface"
+                  />
+                </div>
               </div>
-              <div className="p-5">
-                <h3 className="font-semibold">{props.packName}</h3>
+              <div className="p-5 pt-8">
+                <h3 className="truncate font-semibold">{props.packName}</h3>
                 <p className="mt-2 line-clamp-3 text-sm leading-5 text-muted">
                   {props.meta?.summary || t("details.noSummary")}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {props.minecraftVersion && <span className="chip">MC {props.minecraftVersion}</span>}
+                  {props.loader && <span className="chip chip-loader">{props.loader}</span>}
                   {props.meta?.categories.slice(0, 3).map((category) => (
-                    <span key={category} className="chip">{category}</span>
+                    <Tag key={category} seed={category}>{category}</Tag>
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-muted">v{props.version ?? "—"}</p>
+                <div className="mt-4 flex items-center justify-between text-xs text-muted">
+                  <span>v{props.version ?? "—"}</span>
+                  {props.meta?.license && <span className="truncate">{props.meta.license}</span>}
+                </div>
+                {(props.meta?.homepage || props.meta?.source) && (
+                  <div className="mt-3 flex gap-2 border-t border-line pt-3">
+                    {props.meta.homepage && (
+                      <button
+                        className="btn btn-ghost px-2 text-[11px]"
+                        title={props.meta.homepage}
+                        onClick={() => fireAndForget(openUrl(props.meta!.homepage))}
+                      >
+                        <ExternalLink size={12} /> {t("details.website")}
+                      </button>
+                    )}
+                    {props.meta.source && (
+                      <button
+                        className="btn btn-ghost px-2 text-[11px]"
+                        title={props.meta.source}
+                        onClick={() => fireAndForget(openUrl(props.meta!.source))}
+                      >
+                        <ExternalLink size={12} /> {t("details.source")}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <p className="mt-3 text-xs text-muted">
@@ -613,6 +676,19 @@ export default function PackEditor(props: Props) {
             </p>
           </div>
         </div>
+
+        <div className="mt-6 card border border-bad/30 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-bad">{t("delete.dangerZone")}</h3>
+              <p className="mt-1 text-[11px] text-muted">{t("delete.dangerHint")}</p>
+            </div>
+            <button className="btn delete-danger-btn" onClick={props.onDeletePack}>
+              <Trash2 size={14} /> {t("delete.deletePack")}
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       {publishOpen &&
@@ -620,7 +696,7 @@ export default function PackEditor(props: Props) {
           <PublishModal
             dir={props.dir}
             projectId={props.config.modrinth_project_id ?? ""}
-            hasToken={Boolean(props.config.modrinth_token?.trim())}
+            hasToken={props.config.has_modrinth_token}
             onClose={() => setPublishOpen(false)}
           />,
           document.body,
@@ -653,7 +729,7 @@ export default function PackEditor(props: Props) {
             { label: t("editor.closeOthers"), onClick: () => props.onCloseOthers(tabMenu.key) },
             { label: t("editor.closeToRight"), onClick: () => props.onCloseToRight(tabMenu.key) },
             { label: t("editor.closeAll"), onClick: () => props.onCloseAll() },
-            { label: t("editor.copyPath"), icon: <Copy size={13} />, onClick: () => void navigator.clipboard.writeText(tabMenu.path) },
+            { label: t("editor.copyPath"), icon: <Copy size={13} />, onClick: () => fireAndForget(navigator.clipboard.writeText(tabMenu.path)) },
           ] as ContextMenuItem[]}
         />
       )}

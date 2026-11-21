@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import en from "./en.json";
 import es from "./es.json";
 
@@ -30,6 +30,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem("packwright-locale");
     return saved === "en" || saved === "es" ? saved : "en";
   });
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const value = useMemo<I18nValue>(() => {
     const dictionary = dictionaries[locale];

@@ -18,7 +18,7 @@ export type AppConfig = {
   workspace: string;
   packwiz_path: string | null;
   serve_port: number;
-  locale: string;
+  locale: "en" | "es";
   atlauncher_path: string | null;
   java_path: string | null;
   setup_complete: boolean;
@@ -31,9 +31,12 @@ export type AppConfig = {
   editor_word_wrap: boolean;
   editor_roots: string[];
   debug_console: boolean;
+  /// Siempre "" en la vista pública; el backend solo envía los indicadores.
   modrinth_token: string;
   modrinth_project_id: string;
+  has_modrinth_token: boolean;
   curseforge_api_key: string;
+  has_curseforge_api_key: boolean;
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };

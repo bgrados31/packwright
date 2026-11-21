@@ -11,7 +11,10 @@ const cache = new Map<string, string>();
 
 export default function PlayerAvatar({ name, size = 28, className = "" }: Props) {
   const key = name.toLowerCase();
-  const [src, setSrc] = useState<string | null>(cache.get(key) ?? null);
+  // Guardamos la clave junto a la imagen para no mostrar el avatar del
+  // jugador anterior cuando cambia el prop `name`.
+  const [avatar, setAvatar] = useState(() => ({ key, src: cache.get(key) ?? null }));
+  const src = avatar.key === key ? avatar.src : cache.get(key) ?? null;
 
   useEffect(() => {
     if (src || cache.has(key)) return;
@@ -19,7 +22,7 @@ export default function PlayerAvatar({ name, size = 28, className = "" }: Props)
     invoke<string>("player_avatar", { player: name })
       .then((data) => {
         cache.set(key, data);
-        if (!cancelled) setSrc(data);
+        if (!cancelled) setAvatar({ key, src: data });
       })
       .catch(() => undefined);
     return () => { cancelled = true; };

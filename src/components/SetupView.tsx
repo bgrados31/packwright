@@ -39,6 +39,8 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
         if (key === "workspace") patch({ workspace: path });
         else patch({ launcher_paths: { ...draft.launcher_paths, [key]: path } });
       }
+    } catch {
+      // Diálogo cancelado o error de lectura: se mantiene el valor anterior.
     } finally {
       setPicking(null);
     }

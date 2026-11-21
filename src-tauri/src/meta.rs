@@ -25,7 +25,7 @@ pub struct PackMeta {
 
 fn pack_root(dir: &str) -> Result<std::path::PathBuf> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -104,7 +104,7 @@ pub fn meta_set(dir: String, meta: PackMeta) -> Result<PackMeta> {
     let mut doc = if path.is_file() {
         std::fs::read_to_string(&path)?
             .parse::<toml_edit::DocumentMut>()
-            .unwrap_or_else(|_| toml_edit::DocumentMut::new())
+            .map_err(|e| AppError::Parse(format!("Invalid {}: {e}", path.display())))?
     } else {
         toml_edit::DocumentMut::new()
     };
@@ -240,7 +240,7 @@ fn edit_meta(root: &Path, change: impl FnOnce(&mut toml_edit::DocumentMut)) -> R
     let mut doc = if path.is_file() {
         std::fs::read_to_string(&path)?
             .parse::<toml_edit::DocumentMut>()
-            .unwrap_or_else(|_| toml_edit::DocumentMut::new())
+            .map_err(|e| AppError::Parse(format!("Invalid {}: {e}", path.display())))?
     } else {
         toml_edit::DocumentMut::new()
     };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 
 export type PaletteAction = {
   id: string;
@@ -24,6 +25,7 @@ export default function CommandPalette({
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useDialogKeyboard(onClose);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const filtered = useMemo(() => {
@@ -43,8 +45,14 @@ export default function CommandPalette({
   };
 
   return createPortal(
-    <div className="modal-backdrop palette-backdrop" onMouseDown={onClose}>
-      <div className="command-palette" onMouseDown={(event) => event.stopPropagation()}>
+    <div
+      className="modal-backdrop palette-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("palette.title")}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div className="command-palette">
         <div className="command-palette-search">
           <Search size={16} className="text-muted" />
           <input
@@ -68,7 +76,7 @@ export default function CommandPalette({
             }}
             placeholder={t("palette.placeholder")}
           />
-          <button className="icon-btn !h-6 !w-6" onClick={onClose}><X size={14} /></button>
+          <button className="icon-btn !h-6 !w-6" onClick={onClose} title={t("palette.close")} aria-label={t("palette.close")}><X size={14} /></button>
         </div>
         <div className="command-palette-list">
           {filtered.length === 0 && <p className="p-4 text-center text-[12px] text-muted">{t("palette.empty")}</p>}

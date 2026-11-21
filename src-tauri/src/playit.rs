@@ -63,6 +63,15 @@ fn secret_path() -> Result<PathBuf> {
     Ok(base.join("packwright").join("playit.secret"))
 }
 
+/// El secreto solo se lee dentro del backend: nunca se expone al webview.
+fn read_secret() -> Result<String> {
+    let path = secret_path()?;
+    if !path.is_file() {
+        return Ok(String::new());
+    }
+    Ok(std::fs::read_to_string(path)?.trim().to_string())
+}
+
 fn emit(app: &AppHandle, id: &str, stream: &str, line: &str) {
     let _ = app.emit("operation://line", json!({ "id": id, "stream": stream, "line": line }));
 }
@@ -74,8 +83,7 @@ pub async fn playit_install_agent(state: tauri::State<'_, PlayitState>, id: Stri
         agent_name()
     );
     emit(&state.app, &id, "stdout", &format!("Downloading {url}"));
-    let client = reqwest::Client::builder().user_agent("Packwright/0.1").build()
-        .map_err(|e| AppError::Process(format!("HTTP client: {e}")))?;
+    let client = crate::net::download_client()?;
     let response = client.get(&url).send().await.map_err(|e| AppError::Process(format!("Download failed: {e}")))?;
     if !response.status().is_success() {
         return Err(AppError::Process(format!("Download returned HTTP {}", response.status())));
@@ -141,19 +149,18 @@ pub fn playit_set_secret(secret: String) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn playit_get_secret() -> Result<String> {
-    let path = secret_path()?;
-    if !path.is_file() {
-        return Ok(String::new());
-    }
-    Ok(std::fs::read_to_string(path)?.trim().to_string())
-}
-
-#[tauri::command]
 pub async fn playit_status(state: tauri::State<'_, PlayitState>) -> Result<PlayitStatus> {
     let path = agent_path()?;
     let secret = secret_path()?;
-    let running = state.child.lock().await.is_some();
+    let mut process = state.child.lock().await;
+    let exited = process
+        .as_mut()
+        .map(|child| child.try_wait().map(|status| status.is_some()).unwrap_or(true))
+        .unwrap_or(true);
+    if exited {
+        *process = None;
+    }
+    let running = !exited;
     Ok(PlayitStatus {
         installed: path.is_file(),
         path: path.to_string_lossy().to_string(),
@@ -168,19 +175,20 @@ pub async fn playit_start(state: tauri::State<'_, PlayitState>, id: String) -> R
     if !agent.is_file() {
         return Err(AppError::NotFound("Playit agent is not installed".into()));
     }
-    let secret = playit_get_secret()?;
+    let secret = read_secret()?;
     if secret.is_empty() {
         return Err(AppError::Validation("Set your playit secret first".into()));
     }
 
     let mut child = state.child.lock().await;
     if let Some(existing) = child.as_mut() {
-        let _ = existing.kill().await;
+        crate::process::terminate(existing).await;
     }
     *child = None;
 
     let mut command = Command::new(&agent);
     command
+        .kill_on_drop(true)
         .env("SECRET_KEY", &secret)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -222,7 +230,7 @@ pub async fn playit_start(state: tauri::State<'_, PlayitState>, id: String) -> R
 pub async fn playit_stop(state: tauri::State<'_, PlayitState>) -> Result<()> {
     let mut child = state.child.lock().await;
     if let Some(process) = child.as_mut() {
-        let _ = process.kill().await;
+        crate::process::terminate(process).await;
     }
     *child = None;
     Ok(())

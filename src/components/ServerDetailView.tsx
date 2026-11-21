@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Activity,
@@ -37,6 +38,7 @@ import type {
   ServerPing,
   ServerStats,
 } from "../lib/types";
+import { fireAndForget } from "../lib/error";
 import { Checkbox } from "./ui";
 import ConsolePanel from "./ConsolePanel";
 import PlayerAvatar from "./PlayerAvatar";
@@ -46,17 +48,11 @@ type Props = {
   server: ServerInfo;
   packs: PackInfo[];
   onBack: () => void;
+  onDelete: () => void;
 };
 
 const TABS = ["overview", "console", "files", "players", "mods", "backups", "properties"] as const;
 type Tab = (typeof TABS)[number];
-
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
 
 function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -154,7 +150,7 @@ function PropField({
   );
 }
 
-export default function ServerDetailView({ server, packs, onBack }: Props) {
+export default function ServerDetailView({ server, packs, onBack, onDelete }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("overview");
   const [stats, setStats] = useState<ServerStats | null>(null);
@@ -177,7 +173,7 @@ export default function ServerDetailView({ server, packs, onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     invoke<ServerStats>("server_stats", { name: server.name })
       .then(setStats)
       .catch((cause) => setError(messageOf(cause)));
@@ -190,14 +186,19 @@ export default function ServerDetailView({ server, packs, onBack }: Props) {
     invoke<ServerPing>("server_ping", { name: server.name })
       .then(setPing)
       .catch(() => setPing(null));
-  };
+  }, [server.name]);
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // Solo sondeamos el servidor mientras se ve el resumen: en pestañas como
+  // Consola o Archivos las cuatro llamadas cada 5 s eran trabajo innecesario.
+  useEffect(() => {
+    if (tab !== "overview") return;
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server.name]);
+  }, [refresh, tab]);
 
   useOpLine((line) => {
     if (!line.id.startsWith(`server-${server.name}`)) return;
@@ -407,8 +408,11 @@ export default function ServerDetailView({ server, packs, onBack }: Props) {
             <button className="btn btn-secondary" onClick={() => void run(() => invoke("server_backup", { name: server.name }))}>
               <Copy size={13} /> {t("servers.backup")}
             </button>
-            <button className="btn btn-secondary" onClick={() => void invoke("server_open_folder", { name: server.name })}>
+            <button className="btn btn-secondary" onClick={() => fireAndForget(invoke("server_open_folder", { name: server.name }))}>
               <FolderOpen size={13} /> {t("packs.folder")}
+            </button>
+            <button className="btn delete-danger-btn" onClick={onDelete} title={t("delete.deleteServer")}>
+              <Trash2 size={13} /> {t("delete.deleteServer")}
             </button>
           </div>
         </div>

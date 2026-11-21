@@ -1,21 +1,17 @@
 import { useEffect, useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { GitBranch, Loader2, Plus, RefreshCw, Tag, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 
 type Props = { dir: string; onClose: () => void };
 
 type GitStatus = { initialized: boolean; branch: string; changed: string[]; clean: boolean };
 type GitChange = { hash: string; message: string };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function GitPanel({ dir, onClose }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [changes, setChanges] = useState<GitChange[]>([]);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { messageOf } from "../lib/error";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -38,6 +39,7 @@ import type {
   ModVersion,
 } from "../lib/types";
 import { cachedModIcon, loadModIcons } from "../lib/modIcons";
+import { useDialogKeyboard } from "../lib/useDialog";
 import { mdLite } from "../lib/markdown";
 import Select from "./Select";
 import { Checkbox, FilterChips, SearchField, Tag, ViewToggle } from "./ui";
@@ -77,13 +79,6 @@ function formatDate(value: string): string {
 function prettyCategory(value: string): string {
   const clean = value.replace(/-/g, " ").replace(/^\w/, (char) => char.toUpperCase());
   return clean;
-}
-
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
 }
 
 function releaseChip(type: string) {
@@ -213,6 +208,7 @@ function ModDetail({
   onInstall: (version: ModVersion) => void;
 }) {
   const { t } = useI18n();
+  useDialogKeyboard(onClose);
   const [project, setProject] = useState<ModProject | null>(null);
   const [versions, setVersions] = useState<ModVersion[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -562,9 +558,11 @@ export default function ModsView({ dir, minecraftVersion, loader, revision, onOp
   }, [installed]);
 
   useEffect(() => {
+    let cancelled = false;
     invoke<ModCategory[]>("mods_categories", { projectType })
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then((list) => { if (!cancelled) setCategories(list); })
+      .catch(() => { if (!cancelled) setCategories([]); });
+    return () => { cancelled = true; };
   }, [projectType]);
 
   useEffect(() => {

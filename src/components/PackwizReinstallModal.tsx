@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { CheckCircle2, Loader2, RotateCcw, Terminal, X, XCircle } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine, PackwizStatus } from "../lib/types";
 
 type Props = {
@@ -20,6 +21,7 @@ function errorMessage(error: unknown): string {
 }
 
 export default function PackwizReinstallModal({ onClose, onInstalled }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [lines, setLines] = useState<OpLine[]>([]);
   const [state, setState] = useState<RunState>("running");
@@ -44,7 +46,12 @@ export default function PackwizReinstallModal({ onClose, onInstalled }: Props) {
       if (!disposed && event.payload.id === id) {
         setLines((previous) => [...previous.slice(-199), event.payload]);
       }
-    }).then((unlisten) => unlisteners.push(unlisten));
+    }).then((unlisten) => {
+      // El efecto puede desmontarse antes de que `listen` resuelva: cancelar
+      // aquí evita dejar un listener huérfano para siempre.
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
+    });
 
     invoke<PackwizStatus>("packwiz_reinstall", { id })
       .then((status) => {

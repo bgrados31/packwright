@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { fireAndForget, messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { HardDrive, Plus, Save, Server, Sparkles, X } from "lucide-react";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import { useI18n } from "../i18n";
 import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerStats } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
+import { useDialogKeyboard } from "../lib/useDialog";
 import MinecraftScene from "./MinecraftScene";
 import ServerCard from "./ServerCard";
 import CreateServerModal from "./CreateServerModal";
@@ -15,11 +18,37 @@ type Props = {
   packs: PackInfo[];
 };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
+function PropertiesModal({
+  name,
+  value,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const { t } = useI18n();
+  useDialogKeyboard(onClose);
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.properties")}>
+      <div className="modal-card" style={{ maxWidth: 520 }}>
+        <div className="modal-header">
+          <span className="modal-icon running"><Server size={18} /></span>
+          <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{t("servers.properties")}</h2><p className="text-[11px] text-muted">{name}</p></div>
+          <button className="icon-btn" onClick={onClose} title={t("common.close")} aria-label={t("common.close")}><X size={16} /></button>
+        </div>
+        <div className="p-4"><textarea className="field font-mono text-[11px]" rows={14} value={value} onChange={(event) => onChange(event.target.value)} /></div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>{t("common.close")}</button>
+          <button className="btn btn-primary" onClick={onSave}><Save size={14} />{t("common.save")}</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ServersView({ packs }: Props) {
@@ -39,6 +68,7 @@ export default function ServersView({ packs }: Props) {
   const [syncPack, setSyncPack] = useState("");
   const [playitOpen, setPlayitOpen] = useState(false);
   const [detailServer, setDetailServer] = useState<ServerInfo | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServerInfo | null>(null);
 
   const refresh = () => {
     invoke<ServerInfo[]>("server_list")
@@ -77,6 +107,14 @@ export default function ServersView({ packs }: Props) {
     }
   };
 
+  const deleteServer = async () => {
+    if (!deleteTarget) return;
+    await invoke("server_delete", { name: deleteTarget.name });
+    if (detailServer?.name === deleteTarget.name) setDetailServer(null);
+    setDeleteTarget(null);
+    refresh();
+  };
+
   const openConsole = (server: ServerInfo) => {
     setLines([]);
     setConsoleServer(server);
@@ -104,6 +142,7 @@ export default function ServersView({ packs }: Props) {
           server={detailServer}
           packs={packs}
           onBack={() => { setDetailServer(null); refresh(); }}
+          onDelete={() => detailServer && setDeleteTarget(detailServer)}
         />
       ) : (
         <>
@@ -148,9 +187,10 @@ export default function ServersView({ packs }: Props) {
                   onStop={() => { void run(() => invoke("server_stop", { name: server.name })); }}
                   onConsole={() => openConsole(server)}
                   onBackup={() => { void run(() => invoke("server_backup", { name: server.name })); }}
-                  onOpenFolder={() => { void invoke("server_open_folder", { name: server.name }); }}
+                  onOpenFolder={() => fireAndForget(invoke("server_open_folder", { name: server.name }))}
                   onTunnel={() => setPlayitOpen(true)}
                   onSync={() => { void run(() => invoke("server_sync", { name: server.name, pack: syncPack })); }}
+                  onDelete={() => setDeleteTarget(server)}
                 />
               ))}
             </div>
@@ -180,23 +220,25 @@ export default function ServersView({ packs }: Props) {
       )}
 
       {propertiesServer && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.properties")}>
-          <div className="modal-card" style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <span className="modal-icon running"><Server size={18} /></span>
-              <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{t("servers.properties")}</h2><p className="text-[11px] text-muted">{propertiesServer.name}</p></div>
-              <button className="icon-btn" onClick={() => setPropertiesServer(null)}><X size={16} /></button>
-            </div>
-            <div className="p-4"><textarea className="field font-mono text-[11px]" rows={14} value={properties} onChange={(event) => setProperties(event.target.value)} /></div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setPropertiesServer(null)}>{t("common.close")}</button>
-              <button className="btn btn-primary" onClick={() => void run(() => invoke("server_properties_set", { name: propertiesServer.name, content: properties }))}><Save size={14} />{t("common.save")}</button>
-            </div>
-          </div>
-        </div>
+        <PropertiesModal
+          name={propertiesServer.name}
+          value={properties}
+          onChange={setProperties}
+          onClose={() => setPropertiesServer(null)}
+          onSave={() => { void run(() => invoke("server_properties_set", { name: propertiesServer.name, content: properties })); }}
+        />
       )}
 
       {playitOpen && <PlayitModal onClose={() => setPlayitOpen(false)} />}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          kind="server"
+          name={deleteTarget.name}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={deleteServer}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { monaco } from "../lib/monaco";
 
@@ -38,6 +38,32 @@ function languageFor(path: string): string {
 
 export default function CodeEditor({ theme, path, value, diagnostics, settings, onChange, onCursor }: Props) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const { fontSize, tabSize, minimap, wordWrap } = settings;
+  const options = useMemo(() => ({
+    fontFamily: "Cascadia Code, Consolas, monospace",
+    fontSize,
+    lineHeight: Math.round(fontSize * 1.7),
+    minimap: { enabled: minimap, scale: 1, showSlider: "mouseover" as const },
+    wordWrap: wordWrap ? ("on" as const) : ("off" as const),
+    scrollBeyondLastLine: false,
+    smoothScrolling: true,
+    padding: { top: 14, bottom: 14 },
+    renderLineHighlight: "all" as const,
+    tabSize,
+    insertSpaces: true,
+    automaticLayout: true,
+    folding: true,
+    glyphMargin: true,
+    lineNumbersMinChars: 3,
+    bracketPairColorization: { enabled: true },
+    guides: { bracketPairs: true, indentation: true },
+    renderWhitespace: "selection" as const,
+    occurrencesHighlight: "singleFile" as const,
+    quickSuggestions: true,
+    suggestOnTriggerCharacters: true,
+    formatOnPaste: true,
+    scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false },
+  }), [fontSize, tabSize, minimap, wordWrap]);
 
   useEffect(() => {
     const model = editorRef.current?.getModel();
@@ -75,31 +101,7 @@ export default function CodeEditor({ theme, path, value, diagnostics, settings, 
         });
       }}
       onChange={(next) => onChange(next ?? "")}
-      options={{
-        fontFamily: "Cascadia Code, Consolas, monospace",
-        fontSize: settings.fontSize,
-        lineHeight: Math.round(settings.fontSize * 1.7),
-        minimap: { enabled: settings.minimap, scale: 1, showSlider: "mouseover" },
-        wordWrap: settings.wordWrap ? "on" : "off",
-        scrollBeyondLastLine: false,
-        smoothScrolling: true,
-        padding: { top: 14, bottom: 14 },
-        renderLineHighlight: "all",
-        tabSize: settings.tabSize,
-        insertSpaces: true,
-        automaticLayout: true,
-        folding: true,
-        glyphMargin: true,
-        lineNumbersMinChars: 3,
-        bracketPairColorization: { enabled: true },
-        guides: { bracketPairs: true, indentation: true },
-        renderWhitespace: "selection",
-        occurrencesHighlight: "singleFile",
-        quickSuggestions: true,
-        suggestOnTriggerCharacters: true,
-        formatOnPaste: true,
-        scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false },
-      }}
+      options={options}
     />
   );
 }

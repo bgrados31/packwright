@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -14,7 +15,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { ExportResult, ExportValidation, OpLine } from "../lib/types";
+import { fireAndForget } from "../lib/error";
 
 type Props = {
   dir: string;
@@ -32,14 +35,8 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function ExportModal({ dir, packName, onClose }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("select");
   const [format, setFormat] = useState<Format>("modrinth");
@@ -241,7 +238,7 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
                 <RotateCcw size={14} /> {t("settings.retry")}
               </button>
             ) : phase === "success" ? (
-              <button className="btn btn-secondary" onClick={() => void invoke("open_path", { path: result?.output_dir ?? "" })}>
+              <button className="btn btn-secondary" onClick={() => fireAndForget(invoke("open_path", { path: result?.output_dir ?? "" }))}>
                 <FolderOpen size={14} /> {t("export.viewFolder")}
               </button>
             ) : phase === "select" || phase === "review" ? (

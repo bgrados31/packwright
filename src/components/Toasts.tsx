@@ -1,4 +1,5 @@
 import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
+import { useI18n } from "../i18n";
 
 export type Toast = {
   id: string;
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export default function Toasts({ items, onDismiss }: Props) {
+  const { t } = useI18n();
   if (items.length === 0) return null;
 
   return (
@@ -33,7 +35,7 @@ export default function Toasts({ items, onDismiss }: Props) {
             {item.detail && <p className="mt-0.5 truncate text-[10px] leading-3 opacity-70">{item.detail}</p>}
           </div>
           {item.state !== "running" && (
-            <button className="icon-btn" onClick={() => onDismiss(item.id)} title="Close">
+            <button className="icon-btn" onClick={() => onDismiss(item.id)} title={t("common.close")} aria-label={t("common.close")}>
               <X size={13} />
             </button>
           )}

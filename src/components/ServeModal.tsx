@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Copy, ExternalLink, Loader2, Radio, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
+import { fireAndForget } from "../lib/error";
 
 type Props = {
   dir: string;
@@ -10,14 +13,8 @@ type Props = {
   onClose: () => void;
 };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function ServeModal({ dir, port, onClose }: Props) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [running, setRunning] = useState(false);
   const [url, setUrl] = useState("");
@@ -89,7 +86,7 @@ export default function ServeModal({ dir, port, onClose }: Props) {
                   <button className="btn btn-secondary flex-1" onClick={() => void openUrl(url)}>
                     <ExternalLink size={13} /> {t("serve.open")}
                   </button>
-                  <button className="btn btn-ghost px-3" onClick={() => void navigator.clipboard.writeText(url)} title={t("editor.copyPath")}>
+                  <button className="btn btn-ghost px-3" onClick={() => fireAndForget(navigator.clipboard.writeText(url))} title={t("editor.copyPath")}>
                     <Copy size={13} />
                   </button>
                 </>

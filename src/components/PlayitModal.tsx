@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { ExternalLink, KeyRound, Loader2, Play, Save, Square, Wifi, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useI18n } from "../i18n";
+import { useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
 
@@ -13,14 +15,8 @@ type PlayitStatus = {
   running: boolean;
 };
 
-function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 export default function PlayitModal({ onClose }: { onClose: () => void }) {
+  useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [status, setStatus] = useState<PlayitStatus | null>(null);
   const [secret, setSecret] = useState("");
@@ -34,7 +30,6 @@ export default function PlayitModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     refresh();
-    invoke<string>("playit_get_secret").then(setSecret).catch(() => undefined);
   }, []);
 
   useOpLine((line) => {
@@ -88,10 +83,17 @@ export default function PlayitModal({ onClose }: { onClose: () => void }) {
                 type="password"
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}
-                placeholder="••••••••••••••••"
-                autoComplete="off"
+                placeholder={status?.has_secret ? t("settings.secretConfigured") : "••••••••••••••••"}
+                autoComplete="new-password"
               />
-              <button className="btn btn-secondary shrink-0" disabled={busy || !secret.trim()} onClick={() => void run(() => invoke("playit_set_secret", { secret }))}>
+              <button
+                className="btn btn-secondary shrink-0"
+                disabled={busy || !secret.trim()}
+                onClick={() => void run(async () => {
+                  await invoke("playit_set_secret", { secret });
+                  setSecret("");
+                })}
+              >
                 <Save size={14} /> {t("common.save")}
               </button>
             </div>

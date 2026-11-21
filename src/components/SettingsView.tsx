@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert, WandSparkles } from "lucide-react";
 import { LOCALES, useI18n, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig, type JavaInfo, type PackwizStatus } from "../lib/types";
+import { fireAndForget } from "../lib/error";
 import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
 import PackwizReinstallModal from "./PackwizReinstallModal";
@@ -39,6 +40,46 @@ function Section({ index, title, children }: SectionProps) {
   );
 }
 
+function SecretField({
+  label,
+  hint,
+  value,
+  configured,
+  onChange,
+  onClear,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  configured: boolean;
+  onChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-muted">{label}</span>
+      <div className="flex gap-2">
+        <input
+          className="field font-mono text-xs"
+          type="password"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={configured ? t("settings.secretConfigured") : "••••••••"}
+          autoComplete="new-password"
+          spellCheck={false}
+        />
+        {configured && (
+          <button className="btn btn-secondary shrink-0" onClick={onClear} title={t("settings.secretClear")}>
+            {t("settings.secretClear")}
+          </button>
+        )}
+      </div>
+      {hint && <span className="text-[10px] text-muted">{hint}</span>}
+    </div>
+  );
+}
+
 export default function SettingsView({ config, theme, onThemeChange, packwizFound, onSave, onPackwizInstalled }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<AppConfig>(config);
@@ -69,6 +110,8 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
       if (key === "workspace") patch({ workspace: path });
       else if (key === "packwiz") patch({ packwiz_path: path });
       else patch({ launcher_paths: { ...draft.launcher_paths, [key]: path } });
+    } catch {
+      // El usuario canceló el diálogo o falló la lectura; no hay nada que guardar.
     } finally {
       setPicking(null);
     }
@@ -83,13 +126,18 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
       .catch(() => undefined);
   };
 
-  const pickJava = async () => {
-    const path = await invoke<string | null>("pick_file");
-    if (path) patch({ java_path: path });
+  const pickJava = () => {
+    fireAndForget(invoke<string | null>("pick_file").then((path) => {
+      if (path) patch({ java_path: path });
+    }));
+  };
+
+  const clearSecret = (kind: "modrinth_token" | "curseforge_api_key") => {
+    fireAndForget(invoke("config_clear_secret", { kind }).then(() => onSave(draft)));
   };
 
   const changeLocale = (value: string) => {
-    patch({ locale: value });
+    if (value === "en" || value === "es") patch({ locale: value });
   };
 
   return (
@@ -151,7 +199,7 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
             <button
               className="btn btn-secondary shrink-0 px-3"
               title={t("settings.openFolder")}
-              onClick={() => void invoke("open_path", { path: draft.workspace })}
+              onClick={() => fireAndForget(invoke("open_path", { path: draft.workspace }))}
             >
               <FolderOpen size={15} />
             </button>
@@ -264,17 +312,13 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-4 border-t border-line pt-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">{t("settings.modrinthToken")}</span>
-              <input
-                className="field font-mono text-xs"
-                type="password"
-                value={draft.modrinth_token ?? ""}
-                onChange={(event) => patch({ modrinth_token: event.target.value })}
-                placeholder="••••••••"
-                autoComplete="off"
-              />
-            </div>
+            <SecretField
+              label={t("settings.modrinthToken")}
+              value={draft.modrinth_token ?? ""}
+              configured={draft.has_modrinth_token}
+              onChange={(value) => patch({ modrinth_token: value })}
+              onClear={() => clearSecret("modrinth_token")}
+            />
             <div className="flex flex-col gap-1.5">
               <span className="text-xs text-muted">{t("settings.modrinthProject")}</span>
               <input
@@ -285,18 +329,17 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
                 spellCheck={false}
               />
             </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <span className="text-xs text-muted">{t("settings.curseforgeKey")}</span>
-              <input
-                className="field font-mono text-xs"
-                type="password"
+            <div className="col-span-2">
+              <SecretField
+                label={t("settings.curseforgeKey")}
+                hint={t("settings.curseforgeKeyHint")}
                 value={draft.curseforge_api_key ?? ""}
-                onChange={(event) => patch({ curseforge_api_key: event.target.value })}
-                placeholder="••••••••"
-                autoComplete="off"
+                configured={draft.has_curseforge_api_key}
+                onChange={(value) => patch({ curseforge_api_key: value })}
+                onClear={() => clearSecret("curseforge_api_key")}
               />
-              <span className="text-[10px] text-muted">{t("settings.curseforgeKeyHint")}</span>
             </div>
+            <p className="col-span-2 text-[10px] text-muted">{t("settings.secretNote")}</p>
           </div>
         </Section>
 

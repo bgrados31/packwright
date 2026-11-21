@@ -1,8 +1,10 @@
-use std::net::{ToSocketAddrs, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use crate::config;
 use crate::error::{AppError, Result};
@@ -71,74 +73,98 @@ fn offline() -> ServerPing {
     }
 }
 
-/// Status request del protocolo de Minecraft (UDP, sin autenticación).
-pub async fn ping_address(address: String, port: u16) -> ServerPing {
-    let target = match format!("{address}:{port}").to_socket_addrs() {
-        Ok(mut addrs) => match addrs.next() {
-            Some(value) => value,
-            None => return offline(),
-        },
-        Err(_) => return offline(),
+/// Parsea un paquete `status response` (id 0) ya recibido.
+fn parse_status(data: &[u8], elapsed: Duration) -> Option<ServerPing> {
+    let mut position = 0usize;
+    let _length = read_varint(data, &mut position)? as usize;
+    if read_varint(data, &mut position)? != 0 {
+        return None;
+    }
+    let body = read_string(data, &mut position)?;
+    let value: Value = serde_json::from_str(&body).ok()?;
+    let motd = match &value["description"] {
+        Value::String(text) => text.clone(),
+        Value::Object(object) => object.get("text").and_then(Value::as_str).unwrap_or("").to_string(),
+        _ => String::new(),
     };
-
-    let response = tokio::task::spawn_blocking(move || -> Option<ServerPing> {
-        let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-        socket.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-        socket.set_write_timeout(Some(Duration::from_secs(2))).ok()?;
-
-        let mut handshake = Vec::new();
-        write_varint(0, &mut handshake);
-        write_varint(765, &mut handshake);
-        write_string(&address, &mut handshake);
-        handshake.extend_from_slice(&port.to_be_bytes());
-        write_varint(1, &mut handshake);
-        let mut frame = Vec::new();
-        write_varint(handshake.len() as i32, &mut frame);
-        frame.extend_from_slice(&handshake);
-        frame.extend_from_slice(&[0x01, 0x00]); // request
-
-        let started = Instant::now();
-        socket.send_to(&frame, target).ok()?;
-        let mut buffer = [0u8; 8192];
-        let (size, _) = socket.recv_from(&mut buffer).ok()?;
-        let elapsed = started.elapsed();
-
-        let mut position = 0usize;
-        let _length = read_varint(&buffer[..size], &mut position)?;
-        let packet_id = read_varint(&buffer[..size], &mut position)?;
-        if packet_id != 0 {
-            return None;
-        }
-        let body = read_string(&buffer[..size], &mut position)?;
-        let value: Value = serde_json::from_str(&body).ok()?;
-        let motd = match &value["description"] {
-            Value::String(text) => text.clone(),
-            Value::Object(object) => object.get("text").and_then(Value::as_str).unwrap_or("").to_string(),
-            _ => String::new(),
-        };
-        let sample = value["players"]["sample"]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|item| item["name"].as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Some(ServerPing {
-            online: true,
-            motd,
-            version: value["version"]["name"].as_str().unwrap_or("").to_string(),
-            players_online: value["players"]["online"].as_u64().unwrap_or(0) as usize,
-            players_max: value["players"]["max"].as_u64().unwrap_or(0) as usize,
-            sample,
-            latency_ms: elapsed.as_millis() as u64,
+    let sample = value["players"]["sample"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item["name"].as_str().map(str::to_string))
+                .collect()
         })
+        .unwrap_or_default();
+    Some(ServerPing {
+        online: true,
+        motd,
+        version: value["version"]["name"].as_str().unwrap_or("").to_string(),
+        players_online: value["players"]["online"].as_u64().unwrap_or(0) as usize,
+        players_max: value["players"]["max"].as_u64().unwrap_or(0) as usize,
+        sample,
+        latency_ms: elapsed.as_millis() as u64,
     })
-    .await
-    .unwrap_or(None)
-    .unwrap_or_else(offline);
-    response
+}
+
+/// Status request del protocolo de Minecraft. El handshake 1.7+ es **TCP**.
+async fn resolve_target(address: &str, port: u16) -> Option<SocketAddr> {
+    let host = address.to_string();
+    let resolved = tokio::task::spawn_blocking(move || (host.as_str(), port).to_socket_addrs())
+        .await
+        .ok()?
+        .ok()?;
+    resolved.into_iter().next()
+}
+
+pub async fn ping_address(address: String, port: u16) -> ServerPing {
+    const TIMEOUT: Duration = Duration::from_secs(2);
+
+    let Some(target) = resolve_target(&address, port).await else {
+        return offline();
+    };
+    let Ok(stream) = tokio::time::timeout(TIMEOUT, TcpStream::connect(target)).await else {
+        return offline();
+    };
+    let Ok(mut stream) = stream else {
+        return offline();
+    };
+    let _ = stream.set_nodelay(true);
+
+    let mut handshake = Vec::new();
+    write_varint(0, &mut handshake);
+    write_varint(765, &mut handshake);
+    write_string(&address, &mut handshake);
+    handshake.extend_from_slice(&port.to_be_bytes());
+    write_varint(1, &mut handshake);
+    let mut frame = Vec::new();
+    write_varint(handshake.len() as i32, &mut frame);
+    frame.extend_from_slice(&handshake);
+    frame.extend_from_slice(&[0x01, 0x00]); // request
+
+    let started = Instant::now();
+    if tokio::time::timeout(TIMEOUT, stream.write_all(&frame)).await.is_err() {
+        return offline();
+    }
+
+    // La respuesta puede llegar fragmentada: acumulamos hasta poder parsear el
+    // paquete completo (o hasta agotar el timeout / un tamaño razonable).
+    let mut response = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let read = tokio::time::timeout(TIMEOUT, stream.read(&mut chunk)).await;
+        let Ok(Ok(size)) = read else { return offline(); };
+        if size == 0 {
+            return offline();
+        }
+        response.extend_from_slice(&chunk[..size]);
+        if let Some(ping) = parse_status(&response, started.elapsed()) {
+            return ping;
+        }
+        if response.len() > 64 * 1024 {
+            return offline();
+        }
+    }
 }
 
 #[tauri::command]
@@ -167,12 +193,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn parses_status_response() {
-        let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
+    async fn parses_status_response_over_tcp() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let responder = tokio::task::spawn_blocking(move || {
-            let mut buffer = [0u8; 8192];
-            let (_, peer) = listener.recv_from(&mut buffer).unwrap();
+        let responder = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 512];
+            let _ = socket.read(&mut request).await.unwrap();
             let body = r#"{"description":{"text":"Hi"},"players":{"online":2,"max":20,"sample":[{"name":"Steve","id":"x"}]},"version":{"name":"1.21.1"}}"#;
             let mut payload = Vec::new();
             write_varint(0, &mut payload);
@@ -180,7 +207,7 @@ mod tests {
             let mut frame = Vec::new();
             write_varint(payload.len() as i32, &mut frame);
             frame.extend_from_slice(&payload);
-            listener.send_to(&frame, peer).unwrap();
+            socket.write_all(&frame).await.unwrap();
         });
 
         let ping = ping_address("127.0.0.1".to_string(), port).await;
@@ -191,5 +218,14 @@ mod tests {
         assert_eq!(ping.players_max, 20);
         assert_eq!(ping.sample, vec!["Steve".to_string()]);
         assert_eq!(ping.version, "1.21.1");
+    }
+
+    #[tokio::test]
+    async fn reports_offline_when_nothing_listens() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let ping = ping_address("127.0.0.1".to_string(), port).await;
+        assert!(!ping.online);
     }
 }

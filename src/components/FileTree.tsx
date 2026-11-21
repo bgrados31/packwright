@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   ChevronDown,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { TreeNode } from "../lib/types";
+import { fireAndForget } from "../lib/error";
 import { ContextMenu, type ContextMenuItem } from "./ui";
 
 type Props = {
@@ -163,8 +164,6 @@ export default function FileTree({ dir, roots, allRoots, activeKey, revision, on
       );
     });
 
-  const filtered = useMemo(() => trees, [trees]);
-
   return (
     <aside className="file-explorer">
       <div className="file-explorer-head">
@@ -185,7 +184,7 @@ export default function FileTree({ dir, roots, allRoots, activeKey, revision, on
           const meta = ROOT_META[root] ?? { labelKey: "editor.root.pack" as const, icon: FolderTree };
           const RootIcon = meta.icon;
           const isCollapsed = collapsedRoots.has(root);
-          const nodes = filterNodes(filtered[root] ?? [], query);
+          const nodes = filterNodes(trees[root] ?? [], query);
           return (
             <div key={root} className="mb-1">
               <div className="tree-root">
@@ -271,7 +270,7 @@ export default function FileTree({ dir, roots, allRoots, activeKey, revision, on
               {
                 label: t("editor.copyPath"),
                 icon: <Copy size={13} />,
-                onClick: () => void navigator.clipboard.writeText(menu.path),
+                onClick: () => fireAndForget(navigator.clipboard.writeText(menu.path)),
               },
               !menu.isDir && {
                 label: t("editor.delete"),

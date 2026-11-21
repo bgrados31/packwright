@@ -4,8 +4,30 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/packwright-mark.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#232c3a" />
-    <title>Packwright — Estudio de modpacks</title>
+    <meta name="description" content="Packwright es el estudio local donde crear modpacks de Minecraft y arrancar tus propios servidores desde la misma app. Modrinth, editor TOML, backups y más." />
+    <meta name="theme-color" content="#f1ede8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0c11" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Packwright — Build modpacks. Launch servers. One desktop app." />
+    <meta property="og:description" content="Crea modpacks con packwiz y gestiona tus servidores de Minecraft desde un mismo estudio local, en Windows, macOS y Linux." />
+    <meta property="og:image" content="/open_graph.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Packwright — Estudio de modpacks y servidores" />
+    <meta name="twitter:description" content="Un workspace local para tus modpacks y tus servidores de Minecraft." />
+    <meta name="twitter:image" content="/open_graph.jpg" />
+    <title>Packwright — Build modpacks. Launch servers.</title>
+    <script>
+      // Aplica el tema antes del primer paint para evitar el flash de tema claro.
+      (function () {
+        try {
+          var saved = localStorage.getItem("packwright-theme");
+          var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", dark ? "#0a0c11" : "#f1ede8");
+        } catch (e) { /* almacenamiento no disponible */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -24,7 +24,7 @@ impl ServeState {
 async fn stop_child(state: &ServeState) {
     let mut guard = state.child.lock().await;
     if let Some(child) = guard.as_mut() {
-        let _ = child.kill().await;
+        crate::process::terminate(child).await;
     }
     *guard = None;
 }
@@ -37,7 +37,7 @@ pub async fn serve_start(
     id: String,
 ) -> Result<String> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(&dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -48,6 +48,7 @@ pub async fn serve_start(
 
     let mut command = Command::new(&packwiz);
     command
+        .kill_on_drop(true)
         .args(["serve", "-p", &port.to_string(), "-y"])
         .current_dir(&root)
         .stdout(Stdio::piped())
@@ -91,6 +92,13 @@ pub async fn serve_stop(state: tauri::State<'_, ServeState>) -> Result<()> {
 
 #[tauri::command]
 pub async fn serve_status(state: tauri::State<'_, ServeState>) -> Result<bool> {
-    let guard = state.child.lock().await;
-    Ok(guard.as_ref().is_some_and(|child| child.id().is_some()))
+    let mut guard = state.child.lock().await;
+    let exited = guard
+        .as_mut()
+        .map(|child| child.try_wait().map(|status| status.is_some()).unwrap_or(true))
+        .unwrap_or(true);
+    if exited {
+        *guard = None;
+    }
+    Ok(!exited)
 }

@@ -49,7 +49,7 @@ pub async fn pack_export(
     side: Option<String>,
 ) -> Result<ExportResult> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(&dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
@@ -121,7 +121,7 @@ pub async fn pack_export(
 #[tauri::command]
 pub fn export_validate(dir: String) -> Result<ExportValidation> {
     let cfg = config::load()?;
-    let root = cfg.workspace.join(&dir);
+    let root = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?);
     if !root.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
