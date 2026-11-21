@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -157,18 +157,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare.outputs.tag }}
           BUNDLE_DIR: ${{ matrix.bundle_dir }}
+          OS: ${{ runner.os }}
         run: |
+          # Solo los instaladores finales, nunca recursos internos del bundle
+          # (packwiz.exe, data.tar.gz, etc.) que aparecen dentro de .deb/.AppImage.
+          case "$OS" in
+            Windows) patterns=('*/nsis/*.exe' '*/msi/*.msi') ;;
+            macOS)   patterns=('*/dmg/*.dmg') ;;
+            Linux)   patterns=('*/deb/*.deb' '*/appimage/*.AppImage') ;;
+          esac
+
           assets=()
-          while IFS= read -r -d '' file; do
-            assets+=("$file")
-          done < <(find "$BUNDLE_DIR" -type f \( \
-            -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
-            -name '*.deb' -o -name '*.AppImage' -o -name '*.tar.gz' \
-            \) -print0)
+          for pattern in "${patterns[@]}"; do
+            for file in $BUNDLE_DIR/$pattern; do
+              [ -f "$file" ] && assets+=("$file")
+            done
+          done
 
           if [ "${#assets[@]}" -eq 0 ]; then
             echo "No se generaron instaladores en $BUNDLE_DIR"
-            find src-tauri/target -maxdepth 5 -type f | head -50
+            find "$BUNDLE_DIR" -maxdepth 3 -type f | head -50
             exit 1
           fi
 
