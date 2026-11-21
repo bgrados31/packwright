@@ -304,11 +304,14 @@ async fn prepare_server(dir: &Path, template: &str, version: &str, java: &str, j
             } else {
                 java.trim().to_string()
             };
-            let output = Command::new(&java)
+            let mut command = Command::new(&java);
+            command
                 .arg("-jar")
                 .arg(&target)
                 .arg("--installServer")
-                .current_dir(dir)
+                .current_dir(dir);
+            crate::process::hide_console_window(command.as_std_mut());
+            let output = command
                 .output().await
                 .map_err(|e| AppError::Process(format!("Could not run installer with {java}: {e}")))?;
             if !output.status.success() {
@@ -494,6 +497,7 @@ pub async fn server_start(
     if info.nogui {
         command.arg("nogui");
     }
+    crate::process::hide_console_window(command.as_std_mut());
     let mut child = command
         .current_dir(&dir)
         .stdin(Stdio::piped())

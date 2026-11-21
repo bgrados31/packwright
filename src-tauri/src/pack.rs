@@ -187,7 +187,10 @@ async fn reinstall_packwiz(app: &AppHandle, id: &str) -> Result<PackwizStatus> {
     emit_op_line(app, id, "stdout", &format!("Installed to: {}", target.display()));
 
     emit_op_line(app, id, "stdout", "Verifying installation…");
-    match std::process::Command::new(&target).arg("--version").output() {
+    let mut verify = std::process::Command::new(&target);
+    verify.arg("--version");
+    crate::process::hide_console_window(&mut verify);
+    match verify.output() {
         Ok(output) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             emit_op_line(app, id, "stdout", &format!("packwiz {version}"));

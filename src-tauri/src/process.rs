@@ -14,6 +14,19 @@ use crate::error::{AppError, Result};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Evita que los procesos de consola destellen una ventana al ser lanzados
+/// desde la GUI (especialmente visible al consultar `java -version`).
+pub fn hide_console_window(command: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CommandOutput {
     pub id: String,
@@ -66,11 +79,14 @@ impl CommandRunner {
             .app
             .emit("operation://start", json!({ "id": id, "command": label }));
 
-        let mut child = Command::new(program)
+        let mut command = Command::new(program);
+        command
             .args(args)
             .current_dir(cwd)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        hide_console_window(command.as_std_mut());
+        let mut child = command
             .spawn()
             .map_err(|e| AppError::Process(format!("Could not run packwiz: {e}")))?;
 

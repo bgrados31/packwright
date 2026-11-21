@@ -46,11 +46,14 @@ pub async fn serve_start(
 
     stop_child(&state).await;
 
-    let mut child = Command::new(&packwiz)
+    let mut command = Command::new(&packwiz);
+    command
         .args(["serve", "-p", &port.to_string(), "-y"])
         .current_dir(&root)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::process::hide_console_window(command.as_std_mut());
+    let mut child = command
         .spawn()
         .map_err(|e| AppError::Process(format!("Could not start packwiz serve: {e}")))?;
 

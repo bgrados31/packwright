@@ -291,7 +291,10 @@ pub struct JavaInfo {
 }
 
 pub fn java_version(path: &Path) -> Option<u32> {
-    let output = std::process::Command::new(path).arg("-version").output().ok()?;
+    let mut command = std::process::Command::new(path);
+    command.arg("-version");
+    crate::process::hide_console_window(&mut command);
+    let output = command.output().ok()?;
     let text = String::from_utf8_lossy(&output.stderr);
     let quoted = text.split('"').nth(1)?;
     let version = quoted.split('.').next()?;

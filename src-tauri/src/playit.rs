@@ -187,6 +187,7 @@ pub async fn playit_start(state: tauri::State<'_, PlayitState>, id: String) -> R
     if let Some(parent) = agent.parent() {
         command.current_dir(parent);
     }
+    crate::process::hide_console_window(command.as_std_mut());
     let mut process = command.spawn()
         .map_err(|e| AppError::Process(format!("Could not start playit agent: {e}")))?;
 

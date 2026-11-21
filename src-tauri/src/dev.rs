@@ -292,10 +292,10 @@ pub async fn dev_launch(
     }
     *guard = None;
 
-    let mut child = Command::new(&program)
-        .arg(&instance)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+    let mut command = Command::new(&program);
+    command.arg(&instance).stdout(Stdio::piped()).stderr(Stdio::piped());
+    crate::process::hide_console_window(command.as_std_mut());
+    let mut child = command
         .spawn()
         .map_err(|e| AppError::Process(format!("Could not launch the instance: {e}")))?;
 

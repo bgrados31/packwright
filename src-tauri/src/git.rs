@@ -28,9 +28,10 @@ fn repo(cfg: &config::AppConfig, dir: &str) -> Result<std::path::PathBuf> {
 }
 
 fn run(root: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
+    let mut command = Command::new("git");
+    command.args(args).current_dir(root);
+    crate::process::hide_console_window(&mut command);
+    let output = command
         .output()
         .map_err(|e| AppError::Process(format!("Git is not available: {e}")))?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
