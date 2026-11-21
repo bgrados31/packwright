@@ -27,6 +27,14 @@
     "active": true,
     "targets": "all",
     "resources": ["resources/packwiz.exe"],
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      },
+      "wix": {
+        "template": "wix-template.wxs"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
