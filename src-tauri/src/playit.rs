@@ -30,6 +30,15 @@ impl PlayitState {
     pub fn new(app: AppHandle) -> Self {
         Self { child: Arc::new(Mutex::new(None)), app }
     }
+
+    /// Cierre limpio al salir de la app: mata el agente de playit si sigue vivo.
+    pub async fn shutdown(&self) {
+        let mut child = self.child.lock().await;
+        if let Some(process) = child.as_mut() {
+            crate::process::terminate(process).await;
+        }
+        *child = None;
+    }
 }
 
 fn bin_dir() -> Result<PathBuf> {

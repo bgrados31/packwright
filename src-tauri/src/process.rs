@@ -8,7 +8,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 
 use crate::error::{AppError, Result};
 
@@ -51,6 +51,9 @@ pub struct CommandRunner {
     /// Serializa las ejecuciones: packwiz escribe index.toml y no tolera concurrencia.
     queue: Arc<Mutex<()>>,
     app: AppHandle,
+    /// Senal para abortar cualquier comando en curso cuando la app se cierra.
+    /// `kill_on_drop` no basta: `std::process::exit` no ejecuta destructores.
+    shutdown: watch::Sender<bool>,
 }
 
 impl CommandRunner {
@@ -59,10 +62,17 @@ impl CommandRunner {
     }
 
     pub fn new(app: AppHandle) -> Self {
+        let (shutdown, _) = watch::channel(false);
         Self {
             queue: Arc::new(Mutex::new(())),
             app,
+            shutdown,
         }
+    }
+
+    /// Avisa a todas las ejecuciones activas de que deben matar a su hijo.
+    pub fn request_shutdown(&self) {
+        let _ = self.shutdown.send(true);
     }
 
     pub async fn run(&self, program: &Path, args: &[String], cwd: &Path) -> Result<CommandOutput> {
@@ -78,6 +88,11 @@ impl CommandRunner {
         cwd: &Path,
     ) -> Result<CommandOutput> {
         let _guard = self.queue.lock().await;
+        // Suscribirse antes de lanzar el hijo para no perder la senal de cierre.
+        let mut shutdown_rx = self.shutdown.subscribe();
+        if *shutdown_rx.borrow() {
+            return Err(AppError::Process("App is shutting down".into()));
+        }
 
         let id = id.unwrap_or_else(|| format!("op-{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)));
         let label = format!(
@@ -142,7 +157,17 @@ impl CommandRunner {
             lines
         };
 
-        let (out_lines, err_lines, status) = tokio::join!(read_out, read_err, child.wait());
+        let wait = async {
+            tokio::select! {
+                result = child.wait() => result,
+                _ = shutdown_rx.changed() => {
+                    // El app se esta cerrando: no dejemos un packwiz huerfano.
+                    terminate(&mut child).await;
+                    child.wait().await
+                }
+            }
+        };
+        let (out_lines, err_lines, status) = tokio::join!(read_out, read_err, wait);
         let status =
             status.map_err(|e| AppError::Process(format!("Error waiting for the process: {e}")))?;
 

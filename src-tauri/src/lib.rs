@@ -17,6 +17,7 @@ mod playit;
 mod publish;
 mod serve;
 mod server;
+mod shutdown;
 mod process;
 mod versions;
 
@@ -159,6 +160,13 @@ pub fn run() {
             versions::server_versions,
             versions::versions_catalog,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // El event loop corre en el hilo principal; el runtime async
+                // esta en otro hilo, asi que block_on aqui no lo bloquea.
+                tauri::async_runtime::block_on(shutdown::stop_all(app));
+            }
+        });
 }

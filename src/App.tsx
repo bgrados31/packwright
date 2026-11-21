@@ -29,6 +29,7 @@ import SettingsView from "./components/SettingsView";
 import ServersView from "./components/ServersView";
 import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
+import UpdateToast from "./components/UpdateToast";
 import DebugConsole from "./components/DebugConsole";
 import ImportModal from "./components/ImportModal";
 import ProfileModal from "./components/ProfileModal";
@@ -1005,6 +1006,7 @@ export default function App() {
       )}
 
       <Toasts items={toasts} onDismiss={dismissToast} />
+      <UpdateToast />
       {config?.debug_console && (
         <DebugConsole onClose={() => void saveConfig({ ...config, debug_console: false })} />
       )}

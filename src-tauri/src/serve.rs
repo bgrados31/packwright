@@ -19,6 +19,11 @@ impl ServeState {
     pub fn new(app: AppHandle) -> Self {
         Self { child: Arc::new(Mutex::new(None)), app }
     }
+
+    /// Cierre limpio al salir de la app: mata `packwiz serve` si sigue vivo.
+    pub async fn shutdown(&self) {
+        stop_child(self).await;
+    }
 }
 
 async fn stop_child(state: &ServeState) {

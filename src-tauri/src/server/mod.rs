@@ -73,6 +73,18 @@ impl ServerState {
             app,
         }
     }
+
+    /// Cierre limpio al salir de la app: apaga todos los servidores que
+    /// todavia estuvieran corriendo, aunque la ventana se cerrara sin stop.
+    pub async fn shutdown(&self) {
+        let mut processes = self.processes.lock().await;
+        for child in processes.values_mut() {
+            crate::process::terminate(child).await;
+        }
+        processes.clear();
+        self.stdin.lock().await.clear();
+        self.started.lock().await.clear();
+    }
 }
 
 

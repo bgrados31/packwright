@@ -36,6 +36,16 @@ impl DevState {
     pub fn new(app: AppHandle) -> Self {
         Self { watcher: Mutex::new(None), child: Mutex::new(None), app }
     }
+
+    /// Cierre limpio al salir de la app: suelta el watcher y mata el launcher.
+    pub async fn shutdown(&self) {
+        *self.watcher.lock().await = None;
+        let mut guard = self.child.lock().await;
+        if let Some(child) = guard.as_mut() {
+            crate::process::terminate(child).await;
+        }
+        *guard = None;
+    }
 }
 
 fn instance_path(cfg: &config::AppConfig, dir: &str) -> Result<PathBuf> {

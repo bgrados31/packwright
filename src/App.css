@@ -1128,6 +1128,72 @@ details[open] summary::before { content: "▾"; }
 .toast.error { border-color: color-mix(in srgb, var(--pw-bad) 35%, transparent); }
 .toast.error .toast-icon { color: var(--pw-bad); }
 
+/* --- Aviso inferior de actualizaciones --- */
+@keyframes updateToastIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.update-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 85;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: min(430px, calc(100vw - 32px));
+  padding: 13px 14px;
+  border: 1px solid var(--pw-line);
+  border-left: 3px solid var(--pw-accent);
+  border-radius: 12px;
+  background: var(--pw-surface);
+  box-shadow: 0 18px 44px -16px rgba(0, 0, 0, 0.55);
+  animation: updateToastIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.update-toast-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--pw-accent-soft);
+  color: var(--pw-accent);
+}
+.update-toast-icon.bad { background: color-mix(in srgb, var(--pw-bad) 14%, transparent); color: var(--pw-bad); }
+.update-toast-body { min-width: 0; flex: 1; }
+.update-toast-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.update-toast-title { font-size: 12px; font-weight: 600; line-height: 16px; }
+.update-toast-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pw-bad) 16%, transparent);
+  color: var(--pw-bad);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.update-toast-version { margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: var(--pw-accent); }
+.update-toast-notes {
+  margin-top: 5px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--pw-muted);
+}
+.update-toast-progress { height: 4px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--pw-subtle); }
+.update-toast-progress-fill { height: 100%; border-radius: 999px; background: var(--pw-accent); transition: width 180ms ease-out; }
+.update-toast-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+.update-toast-actions .btn { padding: 6px 9px; font-size: 11px; }
+@media (max-width: 520px) {
+  .update-toast { right: 12px; bottom: 12px; left: 12px; width: auto; }
+  .update-toast-actions { align-self: center; }
+}
+
 .pagination-page {
   min-width: 30px;
   height: 30px;
