@@ -164,6 +164,17 @@ pub fn resolve_packwiz(cfg: &AppConfig) -> Result<PathBuf> {
 
     let exe = if cfg!(windows) { "packwiz.exe" } else { "packwiz" };
 
+    // Instalador: packwiz se distribuye junto al ejecutable.
+    if let Ok(current) = std::env::current_exe() {
+        if let Some(directory) = current.parent() {
+            for candidate in [directory.join(exe), directory.join("resources").join(exe)] {
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
     if let Some(local) = dirs::data_local_dir() {
         let candidate = local.join("Programs").join("packwiz").join(exe);
         if candidate.is_file() {
