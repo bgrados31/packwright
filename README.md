@@ -53,7 +53,7 @@ Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripci
 ### Editor y flujo de desarrollo
 - Editor **Monaco** local con TOML/JSON/YAML/MD/XML, validación en vivo, guardado atómico e historial con restore.
 - Árbol multi-root (Pack / Packwiz / Packwright), pestañas reordenables, renombrado y menús contextuales.
-- **Play** en un paso: `packwiz serve` + instancia de prueba (symlink) + watcher + launcher.
+- **Play** en un paso: `packwiz serve` + instancia de prueba (symlink) + watcher + launcher. Detecta automáticamente Prism, Modrinth App, MultiMC y ATLauncher instalados; puedes marcar el preferido en Ajustes y la instancia se crea en su carpeta de instancias cuando el formato es compatible.
 - Consola flotante, command palette (`Ctrl/Cmd+K`) e i18n español/inglés.
 
 ### Servidores propios

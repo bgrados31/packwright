@@ -33,6 +33,9 @@ pub struct AppConfig {
     /// Detected/custom folder for each launcher.
     #[serde(default)]
     pub launcher_paths: HashMap<String, String>,
+    /// Launcher elegido por el usuario para el botón Play.
+    #[serde(default)]
+    pub preferred_launcher: Option<String>,
     /// Preferencias del editor de archivos.
     #[serde(default)]
     pub editor_font_size: u32,
@@ -99,6 +102,7 @@ impl Default for AppConfig {
             default_loader: default_loader(),
             launchers: Vec::new(),
             launcher_paths: default_launcher_paths(),
+            preferred_launcher: None,
             editor_font_size: 12,
             editor_tab_size: default_tab_size(),
             editor_minimap: default_true(),
@@ -127,6 +131,7 @@ pub struct AppConfigView {
     pub default_loader: String,
     pub launchers: Vec<String>,
     pub launcher_paths: HashMap<String, String>,
+    pub preferred_launcher: Option<String>,
     pub editor_font_size: u32,
     pub editor_tab_size: u32,
     pub editor_minimap: bool,
@@ -154,6 +159,7 @@ impl From<&AppConfig> for AppConfigView {
             default_loader: cfg.default_loader.clone(),
             launchers: cfg.launchers.clone(),
             launcher_paths: cfg.launcher_paths.clone(),
+            preferred_launcher: cfg.preferred_launcher.clone(),
             editor_font_size: cfg.editor_font_size,
             editor_tab_size: cfg.editor_tab_size,
             editor_minimap: cfg.editor_minimap,

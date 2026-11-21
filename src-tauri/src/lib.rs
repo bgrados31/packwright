@@ -3,6 +3,7 @@ mod dev;
 mod error;
 mod export;
 mod git;
+mod launchers;
 mod import;
 mod files;
 mod meta;
@@ -63,6 +64,7 @@ pub fn run() {
             pack::pick_folder,
             pack::pick_file,
             pack::launcher_defaults,
+            launchers::launcher_detect,
             pack::open_path,
             export::pack_export,
             export::export_validate,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { LOCALES, useI18n, type Locale, type TranslationKey } from "../i18n";
-import { LOADERS, type AppConfig } from "../lib/types";
+import { LOADERS, type AppConfig, type LauncherInfo } from "../lib/types";
 import Flag from "./Flag";
 import LauncherPicker, { LAUNCHERS } from "./LauncherPicker";
 import Select from "./Select";
@@ -21,11 +21,27 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<AppConfig>(config);
   const [defaults, setDefaults] = useState<Record<string, string>>(config.launcher_paths ?? {});
+  const [detected, setDetected] = useState<LauncherInfo[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<Record<string, string>>("launcher_defaults")
       .then((paths) => setDefaults((current) => ({ ...paths, ...current })))
+      .catch(() => undefined);
+
+    // Autodetecta launchers instalados y los preselecciona en el primer arranque.
+    invoke<LauncherInfo[]>("launcher_detect")
+      .then((items) => {
+        setDetected(items);
+        const found = items.filter((item) => item.found);
+        if (found.length === 0 || config.launchers.length > 0) return;
+        const best = found.find((item) => item.integration === "full") ?? found[0];
+        setDraft((current) => ({
+          ...current,
+          launchers: found.map((item) => item.key),
+          preferred_launcher: best.key,
+        }));
+      })
       .catch(() => undefined);
   }, []);
 
@@ -117,7 +133,10 @@ export default function SetupView({ config, isSetup, onSave, onCancel, onLocaleC
                   launchers={draft.launchers}
                   paths={draft.launcher_paths}
                   defaults={defaults}
+                  detected={detected}
+                  preferred={draft.preferred_launcher}
                   onChange={(launchers, paths) => patch({ launchers, launcher_paths: paths })}
+                  onPreferred={(key) => patch({ preferred_launcher: key })}
                   onBrowse={(key) => void pickFolder(key)}
                   picking={picking}
                 />

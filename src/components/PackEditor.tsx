@@ -714,6 +714,7 @@ export default function PackEditor(props: Props) {
             dir={props.dir}
             launcherPaths={props.config.launcher_paths ?? {}}
             servePort={props.config.serve_port || 8080}
+            preferredLauncher={props.config.preferred_launcher}
             onClose={() => setDevOpen(false)}
           />,
           document.body,

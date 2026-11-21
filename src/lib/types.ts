@@ -25,6 +25,7 @@ export type AppConfig = {
   default_loader: string;
   launchers: string[];
   launcher_paths: Record<string, string>;
+  preferred_launcher: string | null;
   editor_font_size: number;
   editor_tab_size: number;
   editor_minimap: boolean;
@@ -40,6 +41,17 @@ export type AppConfig = {
 };
 
 export type PackwizStatus = { found: boolean; path: string | null };
+
+export type LauncherInfo = {
+  key: string;
+  label: string;
+  found: boolean;
+  executable: string | null;
+  data_dir: string | null;
+  instances_dir: string | null;
+  integration: "full" | "import";
+  source: "configured" | "path" | "install" | "data" | "none";
+};
 
 export type ModpackHit = {
   id: string;

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { createPortal } from "react-dom";
 import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert, WandSparkles } from "lucide-react";
 import { LOCALES, useI18n, type TranslationKey } from "../i18n";
-import { LOADERS, type AppConfig, type JavaInfo, type PackwizStatus } from "../lib/types";
+import { LOADERS, type AppConfig, type JavaInfo, type LauncherInfo, type PackwizStatus } from "../lib/types";
 import { fireAndForget } from "../lib/error";
 import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
@@ -85,6 +85,7 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
   const { t } = useI18n();
   const [draft, setDraft] = useState<AppConfig>(config);
   const [defaults, setDefaults] = useState<Record<string, string>>(config.launcher_paths ?? {});
+  const [detected, setDetected] = useState<LauncherInfo[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
   const [showReinstall, setShowReinstall] = useState(false);
   const [javaInfo, setJavaInfo] = useState<JavaInfo | null>(null);
@@ -96,6 +97,20 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
   useEffect(() => {
     invoke<Record<string, string>>("launcher_defaults")
       .then((paths) => setDefaults((current) => ({ ...paths, ...current })))
+      .catch(() => undefined);
+
+    invoke<LauncherInfo[]>("launcher_detect")
+      .then((items) => {
+        setDetected(items);
+        const found = items.filter((item) => item.found);
+        if (found.length === 0 || config.launchers.length > 0 || config.preferred_launcher) return;
+        const best = found.find((item) => item.integration === "full") ?? found[0];
+        setDraft((current) => ({
+          ...current,
+          launchers: found.map((item) => item.key),
+          preferred_launcher: best.key,
+        }));
+      })
       .catch(() => undefined);
   }, []);
 
@@ -281,7 +296,10 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
             launchers={draft.launchers}
             paths={draft.launcher_paths}
             defaults={defaults}
+            detected={detected}
+            preferred={draft.preferred_launcher}
             onChange={(launchers, paths) => patch({ launchers, launcher_paths: paths })}
+            onPreferred={(key) => patch({ preferred_launcher: key })}
             onBrowse={(key) => void pickFolder(key)}
             picking={picking}
           />

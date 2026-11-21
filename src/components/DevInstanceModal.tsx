@@ -4,25 +4,28 @@ import { invoke } from "@tauri-apps/api/core";
 import { FolderOpen, Loader2, Play, RotateCcw, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
-import type { OpLine } from "../lib/types";
+import type { LauncherInfo, OpLine } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
+import Select from "./Select";
 
 type Props = {
   dir: string;
   launcherPaths: Record<string, string>;
   servePort: number;
+  preferredLauncher?: string | null;
   onClose: () => void;
 };
 
 type Instance = { path: string; mods_linked: boolean; overrides: number };
 type Status = { running: boolean; watching: boolean };
 
-export default function DevInstanceModal({ dir, launcherPaths, servePort, onClose }: Props) {
+export default function DevInstanceModal({ dir, launcherPaths, servePort, preferredLauncher, onClose }: Props) {
   useDialogKeyboard(onClose);
   const { t } = useI18n();
   const [instance, setInstance] = useState<Instance | null>(null);
   const [status, setStatus] = useState<Status>({ running: false, watching: false });
   const [serving, setServing] = useState(false);
+  const [detected, setDetected] = useState<LauncherInfo[]>([]);
   const [executable, setExecutable] = useState(
     launcherPaths.prism ?? launcherPaths.modrinth ?? launcherPaths.atlauncher ?? "",
   );
@@ -37,6 +40,17 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, onClos
 
   useEffect(() => {
     refresh();
+    invoke<LauncherInfo[]>("launcher_detect")
+      .then((items) => {
+        setDetected(items);
+        const found = items.filter((item) => item.found && item.executable);
+        if (found.length === 0) return;
+        const chosen = found.find((item) => item.key === preferredLauncher)
+          ?? found.find((item) => item.integration === "full")
+          ?? found[0];
+        setExecutable(chosen.executable ?? "");
+      })
+      .catch(() => undefined);
   }, []);
 
   useOpLine((line) => {
@@ -121,6 +135,24 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, onClos
 
           <details className="group mt-4 text-sm">
             <summary className="cursor-pointer py-1 text-xs text-muted hover:text-ink">{t("dev.advanced")}</summary>
+            <label className="mt-2 flex flex-col gap-1.5">
+              <span className="text-xs text-muted">{t("dev.launcher")}</span>
+              <Select
+                value={detected.find((item) => item.executable === executable)?.key ?? (executable ? "custom" : "")}
+                onChange={(key) => {
+                  const info = detected.find((item) => item.key === key);
+                  if (info?.executable) setExecutable(info.executable);
+                }}
+                options={[
+                  ...detected
+                    .filter((item) => item.found && item.executable)
+                    .map((item) => ({ value: item.key, label: item.label })),
+                  ...(executable && !detected.some((item) => item.executable === executable)
+                    ? [{ value: "custom", label: t("dev.custom") }]
+                    : []),
+                ]}
+              />
+            </label>
             <label className="mt-2 flex flex-col gap-1.5">
               <span className="text-xs text-muted">{t("dev.executable")}</span>
               <input

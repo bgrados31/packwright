@@ -44,6 +44,16 @@ fn instance_path(cfg: &config::AppConfig, dir: &str) -> Result<PathBuf> {
     if !pack.is_dir() {
         return Err(AppError::NotFound(format!("Pack does not exist: {dir}")));
     }
+    // Si el launcher preferido admite instancias MultiMC/OneSix y tenemos su
+    // carpeta de instancias, creamos la instancia allí para que aparezca en el
+    // launcher. Si no (ATLauncher), se usa la carpeta interna del workspace.
+    if let Some(info) = crate::launchers::preferred(cfg) {
+        if info.integration == "full" {
+            if let Some(base) = info.instances_dir.map(PathBuf::from).filter(|path| path.is_dir()) {
+                return Ok(base.join(&name));
+            }
+        }
+    }
     Ok(cfg.workspace.join(".packwright").join("instances").join(name))
 }
 
@@ -139,8 +149,18 @@ fn migrate_metadata(cfg: &config::AppConfig, dir: &str, pack: &Path, instance: &
     let _ = std::fs::write(instance.join("instance.cfg"), instance_cfg);
     let _ = std::fs::write(instance.join("packwiz.url"), format!("{serve}\n"));
 
-    // Prism / Modrinth App: instancia nativa OneSix con componentes.
-    if cfg.launcher_paths.contains_key("prism") || cfg.launcher_paths.contains_key("modrinth") {
+    // Prism / Modrinth App / MultiMC: instancia nativa OneSix con componentes.
+    // ATLauncher usa su propio formato: ahí solo se exporta .mrpack.
+    let onesix = crate::launchers::preferred(cfg)
+        .map(|info| info.integration == "full")
+        .unwrap_or(false)
+        || ["prism", "modrinth", "multimc"].iter().any(|key| {
+            cfg.launcher_paths
+                .get(*key)
+                .map(|value| Path::new(value).exists())
+                .unwrap_or(false)
+        });
+    if onesix {
         let mut components: Vec<Value> = Vec::new();
         if let Some(minecraft) = info.as_ref().and_then(|value| value.minecraft_version.clone()) {
             components.push(json!({ "uid": "net.minecraft", "version": minecraft }));
@@ -228,41 +248,9 @@ pub fn dev_watch_stop(state: tauri::State<'_, DevState>) -> Result<()> {
     Ok(())
 }
 
+/// Resuelve el launcher a usar: preferencia del usuario o primero detectado.
 fn launcher_executable(cfg: &config::AppConfig) -> Option<String> {
-    const CANDIDATES: &[(&str, &[&str])] = &[
-        ("prism", &["PrismLauncher.exe", "PrismLauncher"]),
-        ("modrinth", &["Modrinth.exe", "theseus.exe", "Modrinth"]),
-        ("atlauncher", &["ATLauncher.exe", "ATLauncher"]),
-    ];
-    for (key, names) in CANDIDATES {
-        let configured = cfg.launcher_paths.get(*key);
-        let mut roots: Vec<PathBuf> = Vec::new();
-        if let Some(value) = configured {
-            let path = PathBuf::from(value);
-            if path.is_file() {
-                return Some(path.to_string_lossy().to_string());
-            }
-            if path.is_dir() {
-                roots.push(path);
-            }
-        }
-        if let Some(base) = dirs::config_dir() {
-            roots.push(base.join(match *key {
-                "prism" => "PrismLauncher",
-                "modrinth" => "com.modrinth.theseus",
-                _ => "ATLauncher",
-            }));
-        }
-        for root in roots {
-            for name in *names {
-                let candidate = root.join(name);
-                if candidate.is_file() {
-                    return Some(candidate.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-    None
+    crate::launchers::preferred(cfg).and_then(|info| info.executable)
 }
 
 fn is_error_line(line: &str) -> bool {
