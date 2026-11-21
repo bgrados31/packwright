@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { CheckCircle2, ExternalLink, Loader2, Rocket, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 
 type Props = {
   dir: string;
@@ -42,7 +42,7 @@ export default function PublishModal({ dir, projectId, hasToken, onClose }: Prop
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("publish.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("publish.title")}>
       <div className="modal-card" style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <span className={`modal-icon ${result ? "success" : "running"}`}>

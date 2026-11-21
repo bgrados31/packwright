@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Download, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { ServerVersion } from "../lib/types";
 import Select from "./Select";
 import { Checkbox } from "./ui";
@@ -98,7 +98,7 @@ export default function CreateServerModal({ detectedJava, detectedJavaMajor, onC
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.new")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("servers.new")}>
       <div className="modal-card" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <span className="modal-icon running"><Plus size={18} /></span>

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { CheckCircle2, Loader2, RotateCcw, Terminal, X, XCircle } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine, PackwizStatus } from "../lib/types";
 
 type Props = {
@@ -80,7 +80,7 @@ export default function PackwizReinstallModal({ onClose, onInstalled }: Props) {
   }, [lines]);
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("settings.packwizReinstallTitle")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (state !== "running") onClose(); })} role="dialog" aria-modal="true" aria-label={t("settings.packwizReinstallTitle")}>
       <div className="modal-card modal-console">
         <div className="modal-header">
           <span className={`modal-icon ${state}`}>

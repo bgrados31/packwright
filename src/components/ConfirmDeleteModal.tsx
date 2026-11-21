@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { messageOf } from "../lib/error";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 
 type Props = {
   kind: "pack" | "server";
@@ -40,7 +40,7 @@ export default function ConfirmDeleteModal({ kind, name, onCancel, onConfirm }: 
   const title = kind === "pack" ? t("delete.packTitle") : t("delete.serverTitle");
 
   return createPortal(
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onCancel(); })} role="dialog" aria-modal="true" aria-label={title}>
       <div className="modal-card delete-modal" style={{ maxWidth: 520 }}>
         <div className="modal-header">
           <span className="modal-icon error"><AlertTriangle size={18} /></span>

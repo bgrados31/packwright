@@ -109,6 +109,8 @@ Cada push a `main` publica automáticamente una nueva release con:
 
 👉 [Descargar la última versión](https://github.com/bgrados31/packwright/releases/latest) · [Ver el historial de cambios](CHANGELOG.md)
 
+Las versiones instaladas comprueban actualizaciones al abrir **Ajustes → Actualizaciones** y permiten descargar e instalar sin volver a GitHub. Cada release publica un `latest.json` firmado con la clave del updater.
+
 > Las releases se publican desde `.github/workflows/release.yml`. El changelog se calcula con `git log` entre tags y se adjunta a cada release.
 
 ## Instalación y desarrollo

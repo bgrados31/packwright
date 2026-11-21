@@ -39,7 +39,7 @@ import type {
   ModVersion,
 } from "../lib/types";
 import { cachedModIcon, loadModIcons } from "../lib/modIcons";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import { mdLite } from "../lib/markdown";
 import Select from "./Select";
 import { Checkbox, FilterChips, SearchField, Tag, ViewToggle } from "./ui";
@@ -286,7 +286,7 @@ function ModDetail({
   }, [lightbox, images.length]);
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("mods.detailTitle")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(onClose)} role="dialog" aria-modal="true" aria-label={t("mods.detailTitle")}>
       <div className="modal-card mod-detail">
         <div className="modal-header">
           <span className="modal-icon running"><Box size={18} /></span>

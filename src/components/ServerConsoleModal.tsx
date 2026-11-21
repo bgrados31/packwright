@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { messageOf } from "../lib/error";
 import { Terminal, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine, ServerInfo } from "../lib/types";
 import ConsolePanel from "./ConsolePanel";
 
@@ -33,7 +33,7 @@ export default function ServerConsoleModal({ server, lines, running, playerNames
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.console")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(onClose)} role="dialog" aria-modal="true" aria-label={t("servers.console")}>
       <div className="modal-card" style={{ maxWidth: 640 }}>
         <div className="modal-header">
           <span className="modal-icon running"><Terminal size={18} /></span>

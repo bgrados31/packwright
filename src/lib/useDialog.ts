@@ -1,4 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
+
+/**
+ * Cierra el modal solo cuando el clic cae en el fondo, no en la tarjeta.
+ * Se usa en el `.modal-backdrop` de todos los diálogos.
+ */
+export function onBackdropClick(onClose: () => void) {
+  return (event: MouseEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) onClose();
+  };
+}
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';

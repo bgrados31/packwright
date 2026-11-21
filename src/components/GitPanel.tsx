@@ -3,7 +3,7 @@ import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { GitBranch, Loader2, Plus, RefreshCw, Tag, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 
 type Props = { dir: string; onClose: () => void };
 
@@ -41,7 +41,7 @@ export default function GitPanel({ dir, onClose }: Props) {
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("git.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("git.title")}>
       <div className="modal-card" style={{ maxWidth: 520 }}>
         <div className="modal-header">
           <span className="modal-icon running"><GitBranch size={18} /></span>

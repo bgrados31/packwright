@@ -9,6 +9,7 @@ import Flag from "./Flag";
 import LauncherPicker from "./LauncherPicker";
 import PackwizReinstallModal from "./PackwizReinstallModal";
 import Select from "./Select";
+import UpdatePanel from "./UpdatePanel";
 import { Checkbox } from "./ui";
 
 type Props = {
@@ -182,6 +183,10 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
               />
             </div>
           </div>
+        </Section>
+
+        <Section index="U" title={t("settings.updates")}>
+          <UpdatePanel />
         </Section>
 
         <Section index="02" title={t("settings.workspace")}>

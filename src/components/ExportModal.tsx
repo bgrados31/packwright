@@ -15,7 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useI18n, type TranslationKey } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { ExportResult, ExportValidation, OpLine } from "../lib/types";
 import { fireAndForget } from "../lib/error";
 
@@ -116,7 +116,7 @@ export default function ExportModal({ dir, packName, onClose }: Props) {
   const showPicker = phase === "select" || phase === "review" || phase === "checking";
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("export.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(onClose)} role="dialog" aria-modal="true" aria-label={t("export.title")}>
       <div className="modal-card export-modal">
         <div className="modal-header">
           <span className={`modal-icon ${phase === "success" ? "success" : phase === "error" || phase === "review" ? "error" : "running"}`}>

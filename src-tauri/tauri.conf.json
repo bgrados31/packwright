@@ -42,5 +42,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIzMTJDRUM4RkEwNjdFQ0IKUldUTGZnYjZ5TTRTczhodDY3K1IvODNYMnRHcmwrcmVYRnZGRzN4M2R4bVZZM0xHcFI5dUJmdkkK",
+      "endpoints": [
+        "https://github.com/bgrados31/packwright/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

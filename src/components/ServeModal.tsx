@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Copy, ExternalLink, Loader2, Radio, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import { fireAndForget } from "../lib/error";
 
 type Props = {
@@ -58,7 +58,7 @@ export default function ServeModal({ dir, port, onClose }: Props) {
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("serve.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("serve.title")}>
       <div className="modal-card" style={{ maxWidth: 460 }}>
         <div className="modal-header">
           <span className={`modal-icon ${running ? "success" : "running"}`}>

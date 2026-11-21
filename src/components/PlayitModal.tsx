@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ExternalLink, KeyRound, Loader2, Play, Save, Square, Wifi, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
 
@@ -51,7 +51,7 @@ export default function PlayitModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("playit.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("playit.title")}>
       <div className="modal-card" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <span className={`modal-icon ${status?.running ? "success" : "running"}`}><Wifi size={18} /></span>

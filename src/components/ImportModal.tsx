@@ -3,7 +3,7 @@ import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { FileArchive, FolderOpen, Globe2, Loader2, Search, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { ModpackHit, PackInfo } from "../lib/types";
 
 type Props = {
@@ -98,7 +98,7 @@ export default function ImportModal({ onClose, onImported }: Props) {
   ];
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("import.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("import.title")}>
       <div className="modal-card" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <span className="modal-icon running"><FileArchive size={18} /></span>

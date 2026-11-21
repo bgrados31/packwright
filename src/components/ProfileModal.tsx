@@ -1,6 +1,6 @@
 import { Layers, Sparkles, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import { PACK_PROFILES, type PackProfile } from "../lib/profiles";
 
 type Props = {
@@ -13,7 +13,7 @@ export default function ProfileModal({ onClose, onPick }: Props) {
   const { t } = useI18n();
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("profiles.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(onClose)} role="dialog" aria-modal="true" aria-label={t("profiles.title")}>
       <div className="modal-card" style={{ maxWidth: 620 }}>
         <div className="modal-header">
           <span className="modal-icon running"><Layers size={18} /></span>

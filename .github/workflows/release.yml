@@ -60,6 +60,12 @@ jobs:
           node scripts/build-changelog.mjs "$LAST_TAG" "$VERSION" > CHANGELOG_RELEASE.md
           cat CHANGELOG_RELEASE.md
 
+      - name: Guardar notas para el manifiesto del updater
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: CHANGELOG_RELEASE.md
+
       - name: Crear tag y release
         shell: bash
         env:
@@ -151,6 +157,19 @@ jobs:
       - name: Compilar Tauri
         run: ${{ matrix.build_cmd }}
 
+      # El updater de macOS necesita un .tar.gz del .app. Se crea aquí en vez
+      # de usar createUpdaterArtifacts para que los builds locales no exijan
+      # la clave privada del updater.
+      - name: Preparar bundle del updater (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle_dir }}
+        run: |
+          tar -czf "$BUNDLE_DIR/Packwright_universal.app.tar.gz" \
+            -C "$BUNDLE_DIR/macos" "Packwright.app"
+          ls -lh "$BUNDLE_DIR/Packwright_universal.app.tar.gz"
+
       - name: Subir instaladores a la release
         shell: bash
         env:
@@ -163,7 +182,7 @@ jobs:
           # (packwiz.exe, data.tar.gz, etc.) que aparecen dentro de .deb/.AppImage.
           case "$OS" in
             Windows) patterns=('nsis/*.exe' 'msi/*.msi') ;;
-            macOS)   patterns=('dmg/*.dmg') ;;
+            macOS)   patterns=('dmg/*.dmg' '*.app.tar.gz') ;;
             Linux)   patterns=('deb/*.deb' 'appimage/*.AppImage') ;;
           esac
 
@@ -183,3 +202,48 @@ jobs:
           printf 'Subiendo %d archivos:\n' "${#assets[@]}"
           printf '  %s\n' "${assets[@]}"
           gh release upload "$TAG" "${assets[@]}" --clobber
+
+      - name: Guardar bundles para firmar el updater
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.os }}
+          path: |
+            ${{ matrix.bundle_dir }}/**/*.exe
+            ${{ matrix.bundle_dir }}/**/*.dmg
+            ${{ matrix.bundle_dir }}/**/*.deb
+            ${{ matrix.bundle_dir }}/**/*.AppImage
+            ${{ matrix.bundle_dir }}/**/*.app.tar.gz
+
+  finalize:
+    name: Manifiesto del updater
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Instalar dependencias
+        run: bun install --frozen-lockfile
+
+      - name: Descargar bundles y notas
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generar latest.json firmado
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: node scripts/build-updater-json.mjs "$VERSION" "$TAG"
+
+      - name: Publicar latest.json en la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release upload "$TAG" latest.json --clobber

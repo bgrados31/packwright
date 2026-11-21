@@ -3,7 +3,7 @@ import { messageOf } from "../lib/error";
 import { invoke } from "@tauri-apps/api/core";
 import { FolderOpen, Loader2, Play, RotateCcw, Square, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import type { OpLine } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
 
@@ -81,7 +81,7 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, onClos
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("dev.title")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onClose(); })} role="dialog" aria-modal="true" aria-label={t("dev.title")}>
       <div className="modal-card" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <span className="modal-icon running"><Play size={18} /></span>

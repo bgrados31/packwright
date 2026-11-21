@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 
 export type PaletteAction = {
   id: string;
@@ -50,7 +50,7 @@ export default function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label={t("palette.title")}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onClick={onBackdropClick(onClose)}
     >
       <div className="command-palette">
         <div className="command-palette-search">

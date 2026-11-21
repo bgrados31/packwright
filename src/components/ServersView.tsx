@@ -6,7 +6,7 @@ import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import { useI18n } from "../i18n";
 import type { JavaInfo, OpLine, PackInfo, ServerInfo, ServerStats } from "../lib/types";
 import { useOpLine } from "../lib/useOpLine";
-import { useDialogKeyboard } from "../lib/useDialog";
+import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 import MinecraftScene from "./MinecraftScene";
 import ServerCard from "./ServerCard";
 import CreateServerModal from "./CreateServerModal";
@@ -34,7 +34,7 @@ function PropertiesModal({
   const { t } = useI18n();
   useDialogKeyboard(onClose);
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("servers.properties")}>
+    <div className="modal-backdrop" onClick={onBackdropClick(onClose)} role="dialog" aria-modal="true" aria-label={t("servers.properties")}>
       <div className="modal-card" style={{ maxWidth: 520 }}>
         <div className="modal-header">
           <span className="modal-icon running"><Server size={18} /></span>
