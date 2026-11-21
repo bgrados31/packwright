@@ -162,9 +162,9 @@ jobs:
           # Solo los instaladores finales, nunca recursos internos del bundle
           # (packwiz.exe, data.tar.gz, etc.) que aparecen dentro de .deb/.AppImage.
           case "$OS" in
-            Windows) patterns=('*/nsis/*.exe' '*/msi/*.msi') ;;
-            macOS)   patterns=('*/dmg/*.dmg') ;;
-            Linux)   patterns=('*/deb/*.deb' '*/appimage/*.AppImage') ;;
+            Windows) patterns=('nsis/*.exe' 'msi/*.msi') ;;
+            macOS)   patterns=('dmg/*.dmg') ;;
+            Linux)   patterns=('deb/*.deb' 'appimage/*.AppImage') ;;
           esac
 
           assets=()
