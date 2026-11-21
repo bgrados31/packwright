@@ -9,7 +9,16 @@ use crate::error::{AppError, Result};
 /// evita que un argumento del frontend escape del workspace.
 pub fn safe_component(value: &str, label: &str) -> Result<String> {
     let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed.contains('\0') {
+    // Rechazar ambos separadores en todas las plataformas: en Unix '\' es un
+    // carácter válido en nombres de archivo, pero el mismo valor se interpreta
+    // como separador en Windows. Los workspaces pueden moverse entre sistemas,
+    // así que un nombre con '\' permitido en Linux podría escapar su raíz al
+    // abrirlo en Windows.
+    if trimmed.is_empty()
+        || trimmed.contains('\0')
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+    {
         return Err(AppError::Validation(format!("Invalid {label} name")));
     }
     let mut components = Path::new(trimmed).components();
