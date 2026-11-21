@@ -145,11 +145,11 @@ jobs:
           BUNDLE_DIR: ${{ matrix.bundle_dir }}
         run: rm -rf "$BUNDLE_DIR"
 
+      # En Windows se usa el shell por defecto (PowerShell), no bash: Git Bash
+      # antepone C:\Program Files\Git\usr\bin\link.exe al PATH y Rust acabaría
+      # linkeando con el `link` de coreutils en vez del link.exe de MSVC.
       - name: Compilar Tauri
-        shell: bash
-        env:
-          BUILD_CMD: ${{ matrix.build_cmd }}
-        run: eval "$BUILD_CMD"
+        run: ${{ matrix.build_cmd }}
 
       - name: Subir instaladores a la release
         shell: bash
