@@ -1,0 +1,177 @@
+name: Release
+
+# Cada push a main publica una nueva versión:
+#   1. calcula el siguiente número (patch) a partir del último tag v*
+#   2. genera el changelog desde los conventional commits
+#   3. crea el tag y la release de GitHub con esas notas
+#   4. compila Windows / macOS / Linux y sube los instaladores a la release
+# El push del tag no vuelve a disparar el workflow (solo escucha branches: main).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Versión, tag y changelog
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular siguiente versión
+        id: version
+        shell: bash
+        run: |
+          git fetch --tags --force
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+          if [ -z "$LAST_TAG" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+            echo "Sin tags previos: primera release $VERSION"
+          else
+            VERSION=$(node -e "
+              const p = '$LAST_TAG'.replace(/^v/, '').split('.');
+              p[2] = String(Number(p[2] || 0) + 1);
+              process.stdout.write(p.join('.'));
+            ")
+            echo "$LAST_TAG -> $VERSION"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Generar changelog
+        shell: bash
+        env:
+          LAST_TAG: ${{ steps.version.outputs.last_tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node scripts/build-changelog.mjs "$LAST_TAG" "$VERSION" > CHANGELOG_RELEASE.md
+          cat CHANGELOG_RELEASE.md
+
+      - name: Crear tag y release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "El tag $TAG ya existe, se reutiliza"
+          else
+            git tag -a "$TAG" -m "Packwright $VERSION"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "La release $TAG ya existe, los builds sobrescribirán los assets"
+          else
+            gh release create "$TAG" \
+              --title "Packwright $VERSION" \
+              --notes-file CHANGELOG_RELEASE.md
+          fi
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            targets: x86_64-pc-windows-msvc
+            bundle_dir: src-tauri/target/release/bundle
+            build_cmd: bun run tauri build --bundles nsis
+          - os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
+            build_cmd: bun run tauri build --target universal-apple-darwin
+          - os: ubuntu-latest
+            targets: x86_64-unknown-linux-gnu
+            bundle_dir: src-tauri/target/release/bundle
+            build_cmd: bun run tauri build
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+
+      - name: Dependencias de Linux (WebKit / GTK)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Aplicar versión ${{ needs.prepare.outputs.version }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/set-version.mjs "$VERSION"
+
+      - name: Instalar dependencias del frontend
+        run: bun install --frozen-lockfile
+
+      - name: Limpiar bundles de builds anteriores
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle_dir }}
+        run: rm -rf "$BUNDLE_DIR"
+
+      - name: Compilar Tauri
+        shell: bash
+        env:
+          BUILD_CMD: ${{ matrix.build_cmd }}
+        run: eval "$BUILD_CMD"
+
+      - name: Subir instaladores a la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          BUNDLE_DIR: ${{ matrix.bundle_dir }}
+        run: |
+          assets=()
+          while IFS= read -r -d '' file; do
+            assets+=("$file")
+          done < <(find "$BUNDLE_DIR" -type f \( \
+            -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
+            -name '*.deb' -o -name '*.AppImage' -o -name '*.tar.gz' \
+            \) -print0)
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No se generaron instaladores en $BUNDLE_DIR"
+            find src-tauri/target -maxdepth 5 -type f | head -50
+            exit 1
+          fi
+
+          printf 'Subiendo %d archivos:\n' "${#assets[@]}"
+          printf '  %s\n' "${assets[@]}"
+          gh release upload "$TAG" "${assets[@]}" --clobber

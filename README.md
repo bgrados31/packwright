@@ -6,6 +6,8 @@
 > El estudio local donde tu modpack y tu servidor dejan de ser dos proyectos distintos.
 
 [![CI](https://github.com/bgrados31/packwright/actions/workflows/ci.yml/badge.svg)](https://github.com/bgrados31/packwright/actions/workflows/ci.yml)
+[![Release](https://github.com/bgrados31/packwright/actions/workflows/release.yml/badge.svg)](https://github.com/bgrados31/packwright/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/bgrados31/packwright?style=flat-square)](https://github.com/bgrados31/packwright/releases/latest)
 ![Version](https://img.shields.io/badge/version-0.1.0-C74A2E?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-232C3A?style=flat-square)
 ![Stack](https://img.shields.io/badge/built%20with-Tauri%20%2B%20React%20%2B%20Rust-2E8B6B?style=flat-square)
@@ -99,6 +101,15 @@ Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripci
 | **Modder / autor** | Prepara releases con README, icono y exportación listos para publicar. |
 
 ---
+
+## Descargas
+
+Cada push a `main` publica automáticamente una nueva release con:
+**instalador de Windows (`.exe` NSIS)**, **paquetes de Linux (`.deb` / `.AppImage`)** y **`.dmg` universal de macOS**, junto con un changelog generado desde los commits del release anterior.
+
+👉 [Descargar la última versión](https://github.com/bgrados31/packwright/releases/latest) · [Ver el historial de cambios](CHANGELOG.md)
+
+> Las releases se publican desde `.github/workflows/release.yml`. El changelog se calcula con `git log` entre tags y se adjunta a cada release.
 
 ## Instalación y desarrollo
 
