@@ -726,5 +726,11 @@
   "instances.stateError": "Erro",
   "instances.stateNeedsInstall": "Precisa de tempo de execução",
   "instances.stateReady": "Pronto",
-  "instances.jvmArgsHint": "Um argumento JVM por linha. Aplicado quando a instância é iniciada."
+  "instances.jvmArgsHint": "Um argumento JVM por linha. Aplicado quando a instância é iniciada.",
+  "instances.badge": "LANÇADOR INTEGRADO",
+  "instances.statReady": "pronto",
+  "instances.statInstalling": "instalando",
+  "instances.statPlaying": "jogando",
+  "instances.statErrors": "erros",
+  "instances.username": "Nome do jogador"
 }

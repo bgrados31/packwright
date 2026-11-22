@@ -726,5 +726,11 @@
   "instances.stateError": "Error",
   "instances.stateNeedsInstall": "Needs runtime",
   "instances.stateReady": "Ready",
-  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts."
+  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts.",
+  "instances.badge": "BUILT-IN LAUNCHER",
+  "instances.statReady": "ready",
+  "instances.statInstalling": "installing",
+  "instances.statPlaying": "playing",
+  "instances.statErrors": "errors",
+  "instances.username": "Player name"
 }

@@ -726,5 +726,11 @@
   "instances.stateError": "Error",
   "instances.stateNeedsInstall": "Needs runtime",
   "instances.stateReady": "Ready",
-  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts."
+  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts.",
+  "instances.badge": "LANZADOR INTEGRADO",
+  "instances.statReady": "listo",
+  "instances.statInstalling": "instalando",
+  "instances.statPlaying": "jugando",
+  "instances.statErrors": "errores",
+  "instances.username": "Nombre del jugador"
 }

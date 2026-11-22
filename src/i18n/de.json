@@ -726,5 +726,11 @@
   "instances.stateError": "Fehler",
   "instances.stateNeedsInstall": "Benötigt Laufzeit",
   "instances.stateReady": "Bereit",
-  "instances.jvmArgsHint": "Ein JVM-Argument pro Zeile. Wird angewendet, wenn die Instanz startet."
+  "instances.jvmArgsHint": "Ein JVM-Argument pro Zeile. Wird angewendet, wenn die Instanz startet.",
+  "instances.badge": "BUILT-IN LAUNCHER",
+  "instances.statReady": "ready",
+  "instances.statInstalling": "installing",
+  "instances.statPlaying": "playing",
+  "instances.statErrors": "errors",
+  "instances.username": "Player name"
 }

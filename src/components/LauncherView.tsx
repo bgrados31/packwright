@@ -4,25 +4,20 @@ import { listen } from "@tauri-apps/api/event";
 import {
   AlertTriangle,
   Check,
-  ChevronRight,
   Clock,
   Copy,
   Download,
+  FolderOpen,
   Gamepad2,
-  Layers,
   Loader2,
   Pencil,
   Play,
   Plus,
-  Rocket,
-  Square,
-  Terminal,
-  Trash2,
-  Wifi,
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { messageOf } from "../lib/error";
+import MinecraftScene from "./MinecraftScene";
 import type {
   InstanceConfig,
   InstanceInfo,
@@ -55,7 +50,7 @@ function fmtDuration(seconds: number) {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-function InstanceIcon({ instance, className = "h-10 w-10 rounded-lg object-cover" }: { instance: InstanceInfo; className?: string }) {
+function InstanceIcon({ instance, className = "h-11 w-11 rounded-lg" }: { instance: InstanceInfo; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -64,8 +59,8 @@ function InstanceIcon({ instance, className = "h-10 w-10 rounded-lg object-cover
       .catch(() => { if (!cancelled) setSrc(null); });
     return () => { cancelled = true; };
   }, [instance.config.id, instance.config.updated_at]);
-  return src ? <img src={src} alt="" className={className} /> : (
-    <span className={`${className} grid place-items-center bg-subtle text-accent`}><Gamepad2 size={16} /></span>
+  return src ? <img src={src} alt="" className={`${className} object-cover`} /> : (
+    <span className={`${className} grid place-items-center bg-subtle text-accent`}><Gamepad2 size={18} /></span>
   );
 }
 
@@ -146,18 +141,18 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
     () => lines.filter((line) => line.id === (selected?.config.id ?? status.dir)),
     [lines, selected?.config.id, status.dir],
   );
+  const linkedPack = packs.find((pack) => pack.dir === form.linked_pack);
+  const estimatedMods = linkedPack?.mod_count ?? 0;
+
   const stateOf = (item: InstanceInfo) => {
     switch (item.state) {
       case "playing": return { label: t("instances.statePlaying"), tone: "ok" };
-      case "installing": return { label: t("instances.stateInstalling"), tone: "busy" };
-      case "error": return { label: t("instances.stateError"), tone: "bad" };
-      case "needs-install": return { label: t("instances.stateNeedsInstall"), tone: "bad" };
+      case "installing": return { label: t("instances.stateInstalling"), tone: "accent" };
+      case "error": return { label: t("instances.stateError"), tone: "warn" };
+      case "needs-install": return { label: t("instances.stateNeedsInstall"), tone: "warn" };
       default: return { label: t("instances.stateReady"), tone: "ok" };
     }
   };
-
-  const linkedPack = packs.find((pack) => pack.dir === form.linked_pack);
-  const estimatedMods = linkedPack?.mod_count ?? 0;
 
   const openCreate = () => {
     setForm({ ...emptyForm });
@@ -169,12 +164,11 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
     const c = instance.config;
     setForm({
       name: c.name, mc_version: c.mc_version, loader: c.loader, loader_version: c.loader_version,
-      linked_pack: c.linked_pack, linked_server: c.linked_server, memory: c.memory,
+      linked_pack: c.linked_pack ?? "", linked_server: c.linked_server ?? "", memory: c.memory,
       username: c.username, java_path: c.java_path,
       fullscreen: c.fullscreen, width: c.width, height: c.height,
       jvm_args: c.jvm_args.join("\n"),
     });
-    setError(null);
     setSelectedId(c.id);
     setModal("edit");
   };
@@ -188,7 +182,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
           input: {
             name: form.name, mc_version: form.mc_version, loader: form.loader,
             loader_version: form.loader_version || null,
-            linked_pack: form.linked_pack ?? "", linked_server: form.linked_server ?? "",
+            linked_pack: form.linked_pack, linked_server: form.linked_server,
           },
         });
       } else if (modal === "edit" && selected) {
@@ -299,37 +293,46 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
     refresh();
   };
 
+  const stats = useMemo(() => {
+    const ready = instances.filter((item) => item.runtime_ready).length;
+    const playing = instances.filter((item) => item.state === "playing").length;
+    const installing = instances.filter((item) => item.state === "installing").length;
+    const withError = instances.filter((item) => item.state === "error").length;
+    const playtime = instances.reduce((sum, item) => sum + item.playtime, 0);
+    return { ready, playing, installing, withError, playtime };
+  }, [instances]);
+
   return (
     <div className="view-enter">
-      <div className="launcher-hero">
-        <div className="launcher-hero-grid" />
-        <div className="relative z-10">
-          <span className="mc-hero-badge"><Rocket size={12} /> {t("launcher.badge")}</span>
-          <h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("instances.title")}</h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-6 text-muted">{t("instances.subtitle")}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="hero-pill"><Gamepad2 size={12} /> {instances.length} {t("instances.title")}</span>
-            <span className="hero-pill"><Check size={12} /> {instances.filter((item) => item.runtime_ready).length} {t("launcher.ready")}</span>
-            <span className="hero-pill"><Clock size={12} /> {fmtDuration(instances.reduce((sum, item) => sum + item.playtime, 0))} {t("launcher.played")}</span>
+      {/* Hero: tipo splash screen de Minecraft */}
+      <section className="mc-hero">
+        <MinecraftScene />
+        <div className="mc-hero-scrim" />
+        <div className="mc-hero-content">
+          <span className="mc-hero-badge"><Gamepad2 size={12} /> {t("instances.badge")}</span>
+          <h1 className="mt-3 max-w-xl text-[30px] font-semibold leading-[1.15] tracking-tight drop-shadow-sm">
+            {t("instances.title")}
+          </h1>
+          <p className="mt-3 max-w-lg text-[13px] leading-6 text-muted">{t("instances.subtitle")}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <span className="hero-pill"><Check size={12} /> {stats.ready} {t("instances.statReady")}</span>
+            <span className="hero-pill"><Clock size={12} /> {stats.installing} {t("instances.statInstalling")}</span>
+            <span className="hero-pill"><Gamepad2 size={12} /> {stats.playing} {t("instances.statPlaying")}</span>
+            <span className="hero-pill"><Play size={12} /> {stats.withError} {t("instances.statErrors")}</span>
+            <span className="hero-pill"><Plus size={12} /> {fmtDuration(stats.playtime)} {t("launcher.played")}</span>
           </div>
         </div>
-        <div className="launcher-hero-art"><Gamepad2 size={96} strokeWidth={0.8} /></div>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{t("instances.yourInstances")}</h2>
-        <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> {t("instances.new")}</button>
-      </div>
+      </section>
 
       {error && (
-        <div className="launcher-error mt-4">
+        <div className="launcher-error mt-5">
           <AlertTriangle size={15} /><span className="min-w-0 flex-1">{error}</span>
           <button className="icon-btn !h-6 !w-6" onClick={() => setError(null)} aria-label={t("common.close")}><X size={13} /></button>
         </div>
       )}
 
       {status.running && (
-        <div className="launcher-now mt-4">
+        <div className="launcher-now mt-5">
           <span className="status-dot inline-block h-2 w-2 rounded-full bg-ok" />
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-semibold">{t("launcher.nowPlaying")}: {instances.find((item) => item.config.id === status.dir)?.config.name ?? status.dir}</p>
@@ -341,114 +344,101 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
               <span className="truncate">{progress.label}</span>
             </div>
           )}
-          <button className="btn btn-ghost" onClick={() => void stop()}><Square size={13} /> {t("launcher.stop")}</button>
+          <button className="btn btn-ghost" onClick={() => void stop()}><X size={13} /> {t("launcher.stop")}</button>
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {instances.map((instance) => {
-          const isPlaying = status.running && status.dir === instance.config.id;
-          const state = stateOf(instance);
-          return (
-            <div key={instance.config.id} className={`launch-card ${selectedId === instance.config.id ? "selected" : ""} ${isPlaying ? "running" : ""}`}>
-              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSelectedId(instance.config.id)}>
+      <div className="mt-5 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{t("instances.yourInstances")}</h2>
+        <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> {t("instances.new")}</button>
+      </div>
+
+      {instances.length === 0 ? (
+        <div className="launcher-card launcher-card-new mt-4" onClick={openCreate}>
+          <span className="launcher-card-icon">+</span>
+          <span className="launcher-card-text">{t("instances.empty")}</span>
+        </div>
+      ) : (
+        <div className="launcher-cards mt-4">
+          {instances.map((instance) => {
+            const isPlaying = status.running && status.dir === instance.config.id;
+            const state = stateOf(instance);
+            return (
+              <div
+                key={instance.config.id}
+                className={`launcher-card ${selectedId === instance.config.id ? "active" : ""} ${isPlaying ? "running" : ""} ${instance.state === "error" ? "error" : ""}`}
+              >
                 <InstanceIcon instance={instance} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-semibold">{instance.config.name}</p>
-                  <p className="truncate font-mono text-[10px] text-muted">
-                    MC {instance.config.mc_version} · {instance.config.loader}
-                  </p>
-                </div>
-              </button>
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <span className={`runtime-chip ${instance.runtime_ready ? "ok" : ""}`}>
-                  {instance.runtime_ready ? <Check size={10} /> : <Download size={10} />}
-                  Java {instance.config.java_major}
+                <button className="launcher-card-text flex-1 text-left" onClick={() => setSelectedId(instance.config.id)}>
+                  <p className="launcher-card-title truncate">{instance.config.name}</p>
+                  <p className="launcher-card-meta truncate">MC {instance.config.mc_version} · {instance.config.loader}</p>
+                  <p className="launcher-card-meta mt-0.5 truncate"><Clock size={10} /> {fmtDuration(instance.playtime)}</p>
+                </button>
+                <span className={`chip chip-${state.tone} mt-1`}>
+                  {state.tone === "accent" ? <Loader2 size={10} className="spin" /> : <Check size={10} />}
+                  {state.label}
                 </span>
-                <span className="chip">{instance.mods} {t("instances.mods")}</span>
-                <span className={`chip ${state.tone === "ok" ? "ok" : state.tone === "bad" ? "warn" : "chip-accent"}`}>
-                  {state.tone === "busy" ? <Loader2 size={10} className="spin" /> : null}{state.label}
-                </span>
-                <span className="ml-auto font-mono text-[10px] text-muted">{fmtDuration(instance.playtime)}</span>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  className="btn btn-primary flex-1"
-                  disabled={busy || (status.running && !isPlaying)}
-                  onClick={() => void play(instance)}
-                >
-                  {isPlaying ? <Square size={13} /> : instance.runtime_ready ? <Play size={13} /> : <Download size={13} />}
+                <button className="btn btn-primary" disabled={busy || (status.running && !isPlaying)} onClick={() => void play(instance)}>
+                  {isPlaying ? <X size={13} /> : instance.runtime_ready ? <Play size={13} /> : <Download size={13} />}
                   {isPlaying ? t("launcher.stop") : instance.runtime_ready ? t("launcher.play") : t("launcher.installAndPlay")}
                 </button>
                 <button className="btn btn-secondary" onClick={() => openEdit(instance)} title={t("instances.edit")}><Pencil size={13} /></button>
-                <button className="btn btn-secondary" onClick={() => setSelectedId(instance.config.id)} title={t("instances.details")}><ChevronRight size={13} /></button>
               </div>
-              {servers.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {servers.slice(0, 3).map((server) => (
-                    <button key={server.name} className="server-choice !py-1 text-[10px]" disabled={busy || (status.running && !isPlaying)}
-                      onClick={() => void play(instance, server)}>
-                      <Wifi size={11} /> {server.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {instances.length === 0 && (
-          <div className="card col-span-full grid place-items-center py-14 text-center">
-            <div>
-              <Gamepad2 size={30} className="mx-auto text-muted" />
-              <p className="mt-3 text-sm text-muted">{t("instances.empty")}</p>
-              <button className="btn btn-primary mt-4" onClick={openCreate}><Plus size={14} /> {t("instances.new")}</button>
-            </div>
+            );
+          })}
+          <div className="launcher-card launcher-card-new" onClick={openCreate}>
+            <span className="launcher-card-icon">+</span>
+            <span className="launcher-card-text">{t("instances.new")}</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {selected && (
-        <section className="card mt-5 p-4">
+        <section className="card mt-6 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <InstanceIcon instance={selected} />
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-sm font-semibold">{selected.config.name}</h3>
               <p className="truncate font-mono text-[10px] text-muted">{selected.path}</p>
             </div>
-            {!selected.runtime_ready && (
-              <button className="btn btn-secondary" disabled={busy} onClick={() => void install(selected.config.id)}>
-                <Download size={13} /> {t("instances.install")}
-              </button>
-            )}
-            <button className="btn btn-secondary" onClick={() => iconInput.current?.click()}><Layers size={13} /> {t("instances.icon")}</button>
+            <button className="btn btn-secondary" onClick={() => iconInput.current?.click()}><FolderOpen size={13} /> {t("instances.icon")}</button>
             <button className="btn btn-secondary" onClick={() => { setCloneName(`${selected.config.name} copy`); setModal("clone"); }}><Copy size={13} /> {t("instances.clone")}</button>
-            <button className="btn btn-ghost text-bad" onClick={() => setModal("delete")}><Trash2 size={13} /> {t("instances.delete")}</button>
+            <button className="btn btn-ghost text-bad" onClick={() => setModal("delete")}><X size={13} /> {t("instances.delete")}</button>
             <input ref={iconInput} type="file" accept="image/*" className="hidden" onChange={(event) => void setIcon(event.target.files)} />
           </div>
-          <div className="mt-4 grid gap-3 text-[11px] sm:grid-cols-4">
+          {!selected.runtime_ready && (
+            <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
+              <Download size={12} /> {t("instances.stateNeedsInstall")}
+              <button className="btn btn-secondary" disabled={busy} onClick={() => void install(selected.config.id)}><Download size={12} /> {t("instances.install")}</button>
+            </p>
+          )}
+          {selected.error && <p className="launcher-error mt-3"><AlertTriangle size={14} /> {selected.error}</p>}
+          <div className="mt-4 grid gap-1 text-[11px] sm:grid-cols-4">
             <p><span className="text-muted">{t("instances.mcVersion")}:</span> {selected.config.mc_version}</p>
             <p><span className="text-muted">{t("instances.loader")}:</span> {selected.config.loader} {selected.config.loader_version ?? ""}</p>
             <p><span className="text-muted">{t("instances.memory")}:</span> {selected.config.memory} MB</p>
             <p><span className="text-muted">{t("instances.runtime")}:</span> Java {selected.config.java_major}</p>
+            <p><span className="text-muted">{t("instances.username")}:</span> {selected.config.username}</p>
             <p><span className="text-muted">{t("instances.linkedPack")}:</span> {selected.config.linked_pack || "—"}</p>
             <p><span className="text-muted">{t("instances.linkedServer")}:</span> {selected.config.linked_server || "—"}</p>
-            <p><span className="text-muted">{t("instances.jvmArgs")}:</span> {selected.config.jvm_args.join(" ") || "—"}</p>
+            <p><span className="text-muted">{t("instances.jvmArgs")}:</span> {selected.config.jvm_args.join(" · ") || "—"}</p>
+            <p><span className="text-muted">{t("instances.mods")}:</span> {selected.mods}</p>
             <p><span className="text-muted">{t("instances.created")}:</span> {new Date(selected.config.created_at * 1000).toLocaleDateString()}</p>
+            <p><span className="text-muted">{t("instances.state")}:</span> {stateOf(selected).label}</p>
           </div>
-          {selected.error && <p className="launcher-error mt-3"><AlertTriangle size={14} /> {selected.error}</p>}
         </section>
       )}
 
       <section className="card mt-5 overflow-hidden">
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <Terminal size={14} className="text-accent" />
+            <Gamepad2 size={14} className="text-accent" />
             <span className="text-[12px] font-semibold">{t("launcher.console")}</span>
             {selected && <span className="font-mono text-[10px] text-muted">{selected.config.name}</span>}
           </div>
           <button className="btn btn-quiet text-[11px]" onClick={() => setLines([])}>{t("common.clear")}</button>
         </div>
-        <div className="console-box !m-3 !h-56" ref={consoleRef}>
+        <div className="console-box !m-3 !h-64" ref={consoleRef}>
           {activeLines.length === 0 ? (
             <p className="console-placeholder"><Gamepad2 size={13} /> {t("launcher.consoleHint")}</p>
           ) : (
@@ -460,7 +450,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
       </section>
 
       {(modal === "create" || modal === "edit") && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("instances.new")}>
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={modal === "create" ? t("instances.new") : t("instances.edit")}>
           <div className="modal-card instances-modal">
             <div className="modal-header">
               <span className="modal-icon running"><Gamepad2 size={18} /></span>
@@ -473,7 +463,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
             <div className="instances-form">
               <label className="flex flex-col gap-1">
                 <span className="launcher-label">{t("instances.name")}</span>
-                <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="My instance" />
+                <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Kitchen Sink" />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
@@ -539,11 +529,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
                     </select>
                   </label>
                   <label className="flex items-center gap-2 text-[11px]">
-                    <input
-                      type="checkbox"
-                      checked={form.fullscreen}
-                      onChange={(event) => setForm({ ...form, fullscreen: event.target.checked })}
-                    />
+                    <input type="checkbox" checked={form.fullscreen} onChange={(event) => setForm({ ...form, fullscreen: event.target.checked })} />
                     {t("launcher.fullscreen")}
                   </label>
                   {!form.fullscreen && (
@@ -573,7 +559,6 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
                   </label>
                 </>
               )}
-
               <div className="instances-preview">
                 <p className="roots-panel-title">{t("instances.preview")}</p>
                 <div className="mt-2 grid grid-cols-2 gap-y-1 text-[11px]">
@@ -591,7 +576,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
               <div className="flex gap-2">
                 <button className="btn btn-secondary" onClick={() => setModal(null)}>{t("common.close")}</button>
                 <button className="btn btn-primary" disabled={busy || !form.name.trim()} onClick={() => void save()}>
-                  {busy ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                  {busy ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
                   {modal === "create" ? t("instances.create") : t("common.save")}
                 </button>
               </div>
@@ -611,12 +596,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
       )}
 
       {modal === "delete" && selected && (
-        <ConfirmDeleteModal
-          kind="instance"
-          name={selected.config.name}
-          onCancel={() => setModal(null)}
-          onConfirm={remove}
-        />
+        <ConfirmDeleteModal kind="instance" name={selected.config.name} onCancel={() => setModal(null)} onConfirm={remove} />
       )}
     </div>
   );
