@@ -62,6 +62,7 @@ async fn main() {
         assets: Path::new("assets"),
         asset_index: "17",
         game_dir: &instance,
+        jvm_args: &[],
         options: &options,
         profile: &LaunchProfile::default(),
     });

@@ -30,6 +30,29 @@ fn main() {
     println!("CREATED_NEOFORGE id={} loader={} loader_version={:?} java={}",
         neoforge.config.id, neoforge.config.loader, neoforge.config.loader_version, neoforge.config.java_major);
 
+    // Estados explícitos: installing / error / ready.
+    let mut status_cfg = vanilla.config.clone();
+    status_cfg.installing = true;
+    std::fs::write(
+        std::path::Path::new(&vanilla.path).join("instance.json"),
+        serde_json::to_string_pretty(&status_cfg).unwrap(),
+    ).unwrap();
+    let installing = instance_list().unwrap().into_iter()
+        .find(|item| item.config.id == vanilla.config.id).unwrap();
+    println!("STATE_INSTALLING={}", installing.state);
+    assert_eq!(installing.state, "installing");
+
+    status_cfg.installing = false;
+    status_cfg.last_error = "Simulated failure".into();
+    std::fs::write(
+        std::path::Path::new(&vanilla.path).join("instance.json"),
+        serde_json::to_string_pretty(&status_cfg).unwrap(),
+    ).unwrap();
+    let failed = instance_list().unwrap().into_iter()
+        .find(|item| item.config.id == vanilla.config.id).unwrap();
+    println!("STATE_ERROR={} MESSAGE={}", failed.state, failed.error);
+    assert_eq!(failed.state, "error");
+
     let mut cfg: InstanceConfig = neoforge.config.clone();
     cfg.memory = 6144;
     cfg.username = "EditedTester".into();

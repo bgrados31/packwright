@@ -720,5 +720,11 @@
   "instances.install": "Instalar o tempo de execução",
   "delete.instanceTitle": "Excluir instância",
   "delete.instanceWarning": "A pasta da instância, seus mods e configurações serão excluídos permanentemente.",
-  "shortcuts.newInstance": "Crie uma nova instância"
+  "shortcuts.newInstance": "Crie uma nova instância",
+  "instances.statePlaying": "Jogando",
+  "instances.stateInstalling": "Instalando",
+  "instances.stateError": "Erro",
+  "instances.stateNeedsInstall": "Precisa de tempo de execução",
+  "instances.stateReady": "Pronto",
+  "instances.jvmArgsHint": "Um argumento JVM por linha. Aplicado quando a instância é iniciada."
 }

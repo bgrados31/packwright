@@ -720,5 +720,11 @@
   "instances.install": "Installieren Sie die Laufzeit",
   "delete.instanceTitle": "Instanz löschen",
   "delete.instanceWarning": "Der Instanzordner, seine Mods und Konfigurationen werden dauerhaft gelöscht.",
-  "shortcuts.newInstance": "Erstellen Sie eine neue Instanz"
+  "shortcuts.newInstance": "Erstellen Sie eine neue Instanz",
+  "instances.statePlaying": "Spielen",
+  "instances.stateInstalling": "Installation von",
+  "instances.stateError": "Fehler",
+  "instances.stateNeedsInstall": "Benötigt Laufzeit",
+  "instances.stateReady": "Bereit",
+  "instances.jvmArgsHint": "Ein JVM-Argument pro Zeile. Wird angewendet, wenn die Instanz startet."
 }

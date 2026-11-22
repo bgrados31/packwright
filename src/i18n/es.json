@@ -720,5 +720,11 @@
   "instances.install": "Instalar el tiempo de ejecución",
   "delete.instanceTitle": "Eliminar instancia",
   "delete.instanceWarning": "La carpeta de la instancia, sus modificaciones y configuraciones se eliminarán permanentemente.",
-  "shortcuts.newInstance": "Crear una nueva instancia"
+  "shortcuts.newInstance": "Crear una nueva instancia",
+  "instances.statePlaying": "Playing",
+  "instances.stateInstalling": "Installing",
+  "instances.stateError": "Error",
+  "instances.stateNeedsInstall": "Needs runtime",
+  "instances.stateReady": "Ready",
+  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts."
 }

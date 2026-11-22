@@ -832,6 +832,7 @@ pub struct LaunchInputs<'a> {
     pub assets: &'a Path,
     pub asset_index: &'a str,
     pub game_dir: &'a Path,
+    pub jvm_args: &'a [String],
     pub options: &'a LaunchOptions,
     pub profile: &'a LaunchProfile,
 }
@@ -844,8 +845,9 @@ pub fn build_launch_args(input: &LaunchInputs<'_>) -> Vec<String> {
     let username = options.username.clone().unwrap_or_else(|| profile.username.clone());
     let classpath = input.classpath.iter().map(|path| path.to_string_lossy().to_string())
         .collect::<Vec<_>>().join(&std::path::MAIN_SEPARATOR.to_string());
-    let mut args = vec![
-        format!("-Xmx{memory}M"),
+    let mut args: Vec<String> = vec![format!("-Xmx{memory}M")];
+    args.extend(input.jvm_args.iter().cloned());
+    args.extend(vec![
         format!("-Djava.library.path={}", input.natives.display()),
         "-cp".into(), classpath,
         input.main_class.to_string(),
@@ -856,7 +858,7 @@ pub fn build_launch_args(input: &LaunchInputs<'_>) -> Vec<String> {
         "--assetIndex".into(), input.asset_index.to_string(),
         "--accessToken".into(), "0".into(),
         "--userType".into(), "mojang".into(),
-    ];
+    ]);
     if options.fullscreen.unwrap_or(profile.fullscreen) {
         args.push("--fullscreen".into());
     } else {
@@ -887,7 +889,7 @@ pub async fn launch_game(
     current: &Mutex<Option<(String, u64)>>,
 ) -> Result<()> {
     let (game_dir, _) = prepare_instance(cfg, dir)?;
-    launch_game_at(cfg, &game_dir, dir, options, reporter, child, current).await
+    launch_game_at(cfg, &game_dir, dir, options, &[], reporter, child, current).await
 }
 
 pub async fn launch_game_at(
@@ -895,6 +897,7 @@ pub async fn launch_game_at(
     game_dir: &Path,
     label: &str,
     options: &LaunchOptions,
+    jvm_args: &[String],
     reporter: Option<Arc<dyn LaunchReporter>>,
     child: &Mutex<Option<Child>>,
     current: &Mutex<Option<(String, u64)>>,
@@ -953,6 +956,7 @@ pub async fn launch_game_at(
         assets: &runtime.assets,
         asset_index: &runtime.asset_index,
         game_dir: &instance,
+        jvm_args,
         options,
         profile: &profile,
     });

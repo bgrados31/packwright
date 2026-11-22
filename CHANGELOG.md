@@ -11,6 +11,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Ca
 - Nuevos comandos `instance_create/update/delete/clone/detail/list/install/play` e `icon_*`, con nombres seguros, sandbox de rutas y backup antes de sobrescribir metadatos.
 - Creación guiada con catálogo real de Minecraft, versión de loader (recomendada o concreta), vista previa (Java, mods estimados y estado) y atajo `Ctrl/Cmd+I` / acción en la paleta.
 
+- Configuración avanzada por instancia: resolución/fullscreen, argumentos JVM aplicados al arrancar y runtime Java; estados explícitos `installing`, `error`, `ready`, `needs-install` y `playing`.
 - Idiomas français, Deutsch y Português con cobertura completa del diccionario y selector en Ajustes; `Ctrl/Cmd+K` alterna entre los cinco idiomas soportados.
 
 ### Changed

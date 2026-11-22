@@ -42,7 +42,8 @@ export type InstanceInfo = {
   mods: number;
   last_played: number;
   playtime: number;
-  state: "playing" | "ready" | "needs-install" | "error";
+  state: "playing" | "installing" | "error" | "ready" | "needs-install";
+  error: string;
 };
 
 export type InstanceInput = {

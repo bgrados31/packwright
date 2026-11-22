@@ -35,6 +35,10 @@ pub struct InstanceConfig {
     pub linked_pack: String,
     pub linked_server: String,
     pub icon: String,
+    #[serde(default)]
+    pub installing: bool,
+    #[serde(default)]
+    pub last_error: String,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -47,6 +51,7 @@ impl Default for InstanceConfig {
             username: "Player".into(), fullscreen: false, width: 1280, height: 720,
             jvm_args: Vec::new(), java_major: 21, java_path: String::new(),
             linked_pack: String::new(), linked_server: String::new(), icon: String::new(),
+            installing: false, last_error: String::new(),
             created_at: 0, updated_at: 0,
         }
     }
@@ -61,6 +66,7 @@ pub struct InstanceInfo {
     pub last_played: u64,
     pub playtime: u64,
     pub state: String,
+    pub error: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,11 +142,16 @@ fn build_info(dir: &Path, playing_now: bool) -> Result<InstanceInfo> {
     let runtime_ready = launcher::runtime_info(&config.mc_version, &config.loader).is_some();
     let state_label = if playing_now {
         "playing"
+    } else if config.installing {
+        "installing"
+    } else if !config.last_error.is_empty() {
+        "error"
     } else if !runtime_ready {
         "needs-install"
     } else {
         "ready"
     };
+    let error = config.last_error.clone();
     Ok(InstanceInfo {
         config,
         path: dir.to_string_lossy().to_string(),
@@ -149,6 +160,7 @@ fn build_info(dir: &Path, playing_now: bool) -> Result<InstanceInfo> {
         last_played: last,
         playtime,
         state: state_label.into(),
+        error,
     })
 }
 
@@ -264,14 +276,34 @@ pub fn instance_clone(id: String, new_name: String) -> Result<InstanceInfo> {
     build_info(&target, false)
 }
 
+async fn ensure_runtime_for(id: &str, app: AppHandle) -> Result<()> {
+    let dir = path_of(id)?;
+    let mut config = read_config(&dir)?;
+    config.installing = true;
+    config.last_error.clear();
+    write_config(&dir, &config)?;
+
+    let http = crate::net::download_client()?;
+    let reporter = launcher_reporter(app, id.to_string());
+    let result = ensure_runtime(
+        &http, &config.mc_version, &config.loader,
+        config.loader_version.as_deref(), &dir, Some(reporter), id,
+    ).await;
+
+    if let Ok(mut latest) = read_config(&dir) {
+        latest.installing = false;
+        latest.last_error = match &result {
+            Ok(_) => String::new(),
+            Err(error) => error.to_string(),
+        };
+        let _ = write_config(&dir, &latest);
+    }
+    result.map(|_| ())
+}
+
 #[tauri::command]
 pub async fn instance_install(id: String, app: AppHandle) -> Result<()> {
-    let dir = path_of(&id)?;
-    let config = read_config(&dir)?;
-    let http = crate::net::download_client()?;
-    let reporter = launcher_reporter(app, id.clone());
-    ensure_runtime(&http, &config.mc_version, &config.loader, config.loader_version.as_deref(), &dir, Some(reporter), &id).await?;
-    Ok(())
+    ensure_runtime_for(&id, app).await
 }
 
 #[tauri::command]
@@ -292,6 +324,9 @@ pub async fn instance_play(
         launch_cfg.java_path = None;
     }
     sync_linked_pack(&dir, &config.linked_pack)?;
+    if launcher::runtime_info(&config.mc_version, &config.loader).is_none() {
+        ensure_runtime_for(&id, app.clone()).await?;
+    }
     let options = LaunchOptions {
         mc_version: config.mc_version.clone(),
         loader: config.loader.clone(),
@@ -307,7 +342,7 @@ pub async fn instance_play(
         height: Some(config.height),
     };
     let reporter = launcher_reporter(app, id.clone());
-    launch_game_at(&launch_cfg, &dir, &id, &options, Some(reporter), &state.child, &state.current).await
+    launch_game_at(&launch_cfg, &dir, &id, &options, &config.jvm_args, Some(reporter), &state.child, &state.current).await
 }
 
 #[tauri::command]

@@ -58,7 +58,7 @@ async fn main() {
     };
     let child: Mutex<Option<tokio::process::Child>> = Mutex::new(None);
     let current: Mutex<Option<(String, u64)>> = Mutex::new(None);
-    launch_game_at(&cfg, dir, &instance.config.id, &options, None, &child, &current)
+    launch_game_at(&cfg, dir, &instance.config.id, &options, &["-XX:+UseG1GC".into()], None, &child, &current)
         .await.expect("launch_game_at failed");
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
@@ -67,6 +67,7 @@ async fn main() {
     println!("launcher://line command: java {argv}");
     println!("launcher://line stdout:  STUB_JAVA_STARTED");
     println!("launcher://line stderr:  STUB_JAVA_READY");
+    assert!(argv.contains("-XX:+UseG1GC"));
     assert!(argv.contains("--username InstanceTester"));
     assert!(argv.contains("--server 127.0.0.1"));
     assert!(argv.contains("--port 25565"));

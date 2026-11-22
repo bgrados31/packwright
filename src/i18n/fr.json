@@ -720,5 +720,11 @@
   "instances.install": "Installer le runtime",
   "delete.instanceTitle": "Supprimer l'instance",
   "delete.instanceWarning": "Le dossier de l'instance, ses mods et configurations seront définitivement supprimés.",
-  "shortcuts.newInstance": "Créer une nouvelle instance"
+  "shortcuts.newInstance": "Créer une nouvelle instance",
+  "instances.statePlaying": "Jouer",
+  "instances.stateInstalling": "Installation de",
+  "instances.stateError": "Erreur",
+  "instances.stateNeedsInstall": "Nécessite un runtime",
+  "instances.stateReady": "Prêt",
+  "instances.jvmArgsHint": "Un argument JVM par ligne. Appliqué au démarrage de l'instance."
 }

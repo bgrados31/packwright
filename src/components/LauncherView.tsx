@@ -69,9 +69,13 @@ function InstanceIcon({ instance, className = "h-10 w-10 rounded-lg object-cover
   );
 }
 
-const emptyForm: InstanceInput & { memory: number; username: string; java_path: string } = {
+const emptyForm: InstanceInput & {
+  memory: number; username: string; java_path: string;
+  fullscreen: boolean; width: number; height: number; jvm_args: string;
+} = {
   name: "", mc_version: "1.21.1", loader: "vanilla", loader_version: null,
   linked_pack: "", linked_server: "", memory: 2048, username: "Player", java_path: "",
+  fullscreen: false, width: 1280, height: 720, jvm_args: "",
 };
 
 export default function LauncherView({ packs, createNonce = 0 }: Props) {
@@ -142,6 +146,16 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
     () => lines.filter((line) => line.id === (selected?.config.id ?? status.dir)),
     [lines, selected?.config.id, status.dir],
   );
+  const stateOf = (item: InstanceInfo) => {
+    switch (item.state) {
+      case "playing": return { label: t("instances.statePlaying"), tone: "ok" };
+      case "installing": return { label: t("instances.stateInstalling"), tone: "busy" };
+      case "error": return { label: t("instances.stateError"), tone: "bad" };
+      case "needs-install": return { label: t("instances.stateNeedsInstall"), tone: "bad" };
+      default: return { label: t("instances.stateReady"), tone: "ok" };
+    }
+  };
+
   const linkedPack = packs.find((pack) => pack.dir === form.linked_pack);
   const estimatedMods = linkedPack?.mod_count ?? 0;
 
@@ -157,6 +171,8 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
       name: c.name, mc_version: c.mc_version, loader: c.loader, loader_version: c.loader_version,
       linked_pack: c.linked_pack, linked_server: c.linked_server, memory: c.memory,
       username: c.username, java_path: c.java_path,
+      fullscreen: c.fullscreen, width: c.width, height: c.height,
+      jvm_args: c.jvm_args.join("\n"),
     });
     setError(null);
     setSelectedId(c.id);
@@ -182,6 +198,8 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
           loader_version: form.loader_version || null,
           linked_pack: form.linked_pack ?? "", linked_server: form.linked_server ?? "",
           memory: form.memory, username: form.username, java_path: form.java_path,
+          fullscreen: form.fullscreen, width: form.width, height: form.height,
+          jvm_args: form.jvm_args.split("\n").map((line) => line.trim()).filter(Boolean),
         };
         await invoke("instance_update", { config });
       }
@@ -330,6 +348,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {instances.map((instance) => {
           const isPlaying = status.running && status.dir === instance.config.id;
+          const state = stateOf(instance);
           return (
             <div key={instance.config.id} className={`launch-card ${selectedId === instance.config.id ? "selected" : ""} ${isPlaying ? "running" : ""}`}>
               <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSelectedId(instance.config.id)}>
@@ -347,6 +366,9 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
                   Java {instance.config.java_major}
                 </span>
                 <span className="chip">{instance.mods} {t("instances.mods")}</span>
+                <span className={`chip ${state.tone === "ok" ? "ok" : state.tone === "bad" ? "warn" : "chip-accent"}`}>
+                  {state.tone === "busy" ? <Loader2 size={10} className="spin" /> : null}{state.label}
+                </span>
                 <span className="ml-auto font-mono text-[10px] text-muted">{fmtDuration(instance.playtime)}</span>
               </div>
               <div className="mt-3 flex gap-2">
@@ -413,6 +435,7 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
             <p><span className="text-muted">{t("instances.jvmArgs")}:</span> {selected.config.jvm_args.join(" ") || "—"}</p>
             <p><span className="text-muted">{t("instances.created")}:</span> {new Date(selected.config.created_at * 1000).toLocaleDateString()}</p>
           </div>
+          {selected.error && <p className="launcher-error mt-3"><AlertTriangle size={14} /> {selected.error}</p>}
         </section>
       )}
 
@@ -514,6 +537,39 @@ export default function LauncherView({ packs, createNonce = 0 }: Props) {
                         <option key={runtime.major} value={runtime.path}>{runtime.label} — {runtime.path}</option>
                       ))}
                     </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={form.fullscreen}
+                      onChange={(event) => setForm({ ...form, fullscreen: event.target.checked })}
+                    />
+                    {t("launcher.fullscreen")}
+                  </label>
+                  {!form.fullscreen && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="launcher-label">{t("launcher.width")}</span>
+                        <input className="field" type="number" min={640} max={3840} value={form.width}
+                          onChange={(event) => setForm({ ...form, width: Number(event.target.value) })} />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="launcher-label">{t("launcher.height")}</span>
+                        <input className="field" type="number" min={480} max={2160} value={form.height}
+                          onChange={(event) => setForm({ ...form, height: Number(event.target.value) })} />
+                      </label>
+                    </div>
+                  )}
+                  <label className="flex flex-col gap-1">
+                    <span className="launcher-label">{t("instances.jvmArgs")}</span>
+                    <textarea
+                      className="field font-mono text-[11px]"
+                      rows={3}
+                      value={form.jvm_args}
+                      placeholder={"-XX:+UseG1GC\n-Dfml.earlyprogresswindow=false"}
+                      onChange={(event) => setForm({ ...form, jvm_args: event.target.value })}
+                    />
+                    <span className="text-[10px] text-muted">{t("instances.jvmArgsHint")}</span>
                   </label>
                 </>
               )}

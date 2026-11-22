@@ -720,5 +720,11 @@
   "instances.install": "Install runtime",
   "delete.instanceTitle": "Delete instance",
   "delete.instanceWarning": "The instance folder, its mods and configurations will be permanently deleted.",
-  "shortcuts.newInstance": "Create a new instance"
+  "shortcuts.newInstance": "Create a new instance",
+  "instances.statePlaying": "Playing",
+  "instances.stateInstalling": "Installing",
+  "instances.stateError": "Error",
+  "instances.stateNeedsInstall": "Needs runtime",
+  "instances.stateReady": "Ready",
+  "instances.jvmArgsHint": "One JVM argument per line. Applied when the instance starts."
 }
