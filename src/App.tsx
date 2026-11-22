@@ -110,6 +110,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [launcherCreateNonce, setLauncherCreateNonce] = useState(0);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [view, setView] = useState<SidebarView>("home");
@@ -413,6 +414,12 @@ export default function App() {
           event.preventDefault();
           setSelectedPack(null);
           setView("create");
+          return;
+        }
+        if (key === "i") {
+          event.preventDefault();
+          setView("launcher");
+          setLauncherCreateNonce((value) => value + 1);
           return;
         }
         const destinations: Record<string, SidebarView> = {
@@ -822,6 +829,7 @@ export default function App() {
     { id: "servers", label: t("nav.servers"), group: t("palette.groupNavigate"), icon: <Server size={14} />, hint: "⌘/Ctrl 3", run: () => { setSelectedPack(null); setView("servers"); } },
     { id: "settings", label: t("setup.settingsTitle"), group: t("palette.groupNavigate"), icon: <Settings2 size={14} />, hint: "⌘/Ctrl 4", run: () => { setSelectedPack(null); setView("settings"); } },
     { id: "launcher", label: t("nav.launcher"), group: t("palette.groupNavigate"), icon: <Gamepad2 size={14} />, hint: "⌘/Ctrl 5", run: () => setView("launcher") },
+    { id: "new-instance", label: t("instances.new"), group: t("palette.groupCreate"), icon: <Gamepad2 size={14} />, hint: "⌘/Ctrl I", run: () => { setView("launcher"); setLauncherCreateNonce((value) => value + 1); } },
     { id: "new", label: t("nav.newPack"), group: t("palette.groupCreate"), icon: <Plus size={14} />, hint: "⌘/Ctrl N", run: () => { setSelectedPack(null); setView("create"); } },
     { id: "profile", label: t("profiles.start"), group: t("palette.groupCreate"), icon: <Layers size={14} />, run: () => setProfileOpen(true) },
     { id: "import", label: t("import.title"), group: t("palette.groupCreate"), icon: <FileArchive size={14} />, run: () => setImportOpen(true) },
@@ -917,7 +925,7 @@ export default function App() {
         ) : view === "servers" ? (
           <ServersView packs={packs} />
         ) : view === "launcher" ? (
-          <LauncherView packs={packs} />
+          <LauncherView packs={packs} createNonce={launcherCreateNonce} />
         ) : view === "settings" ? (
           <div className="view-enter">
             <SettingsView

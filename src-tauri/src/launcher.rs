@@ -91,8 +91,8 @@ pub struct LaunchOptions {
 }
 
 pub struct LauncherState {
-    child: Mutex<Option<Child>>,
-    current: Mutex<Option<(String, u64)>>,
+    pub(crate) child: Mutex<Option<Child>>,
+    pub(crate) current: Mutex<Option<(String, u64)>>,
 }
 
 impl LauncherState {
@@ -190,16 +190,16 @@ struct History {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HistoryEntry {
-    dir: String,
-    at: u64,
-    seconds: u64,
+    pub dir: String,
+    pub at: u64,
+    pub seconds: u64,
 }
 
 fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-fn data_dir() -> Result<PathBuf> {
+pub(crate) fn data_dir() -> Result<PathBuf> {
     let dir = dirs::data_local_dir()
         .ok_or_else(|| AppError::Config("No local data directory".into()))?
         .join("packwright")
@@ -208,7 +208,7 @@ fn data_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
-fn runtime_dir() -> Result<PathBuf> {
+pub(crate) fn runtime_dir() -> Result<PathBuf> {
     let dir = data_dir()?.join("runtime");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -260,6 +260,10 @@ fn read_profiles() -> HashMap<String, LaunchProfile> {
 pub trait LaunchReporter: Send + Sync {
     fn progress(&self, stage: &str, percent: u32, label: &str);
     fn line(&self, stream: &str, text: &str);
+}
+
+pub(crate) fn launcher_reporter(app: AppHandle, id: String) -> Arc<dyn LaunchReporter> {
+    Arc::new(TauriReporter { app, id })
 }
 
 struct TauriReporter {
@@ -558,7 +562,7 @@ pub async fn install_modded(
     })
 }
 
-async fn ensure_runtime(
+pub(crate) async fn ensure_runtime(
     http: &reqwest::Client,
     mc: &str,
     loader: &str,
@@ -882,15 +886,28 @@ pub async fn launch_game(
     child: &Mutex<Option<Child>>,
     current: &Mutex<Option<(String, u64)>>,
 ) -> Result<()> {
+    let (game_dir, _) = prepare_instance(cfg, dir)?;
+    launch_game_at(cfg, &game_dir, dir, options, reporter, child, current).await
+}
+
+pub async fn launch_game_at(
+    cfg: &config::AppConfig,
+    game_dir: &Path,
+    label: &str,
+    options: &LaunchOptions,
+    reporter: Option<Arc<dyn LaunchReporter>>,
+    child: &Mutex<Option<Child>>,
+    current: &Mutex<Option<(String, u64)>>,
+) -> Result<()> {
     if child.lock().await.is_some() {
         return Err(AppError::Validation("A game is already running".into()));
     }
     let major = crate::launcher_java::required_java(&options.mc_version);
-    let java = crate::launcher_java::java_for(major, &cfg)
+    let java = crate::launcher_java::java_for(major, cfg)
         .ok_or_else(|| AppError::NotFound(format!("Java {major} is not installed. Install it from Launcher → Runtimes.")))?;
 
-    let (instance, pack) = prepare_instance(cfg, dir)?;
-    let id = dir.to_string();
+    let instance = game_dir.to_path_buf();
+    let id = label.to_string();
     let runtime = match runtime_info(&options.mc_version, &options.loader) {
         Some((base, root)) => {
             let saved: VersionJson = serde_json::from_str(&std::fs::read_to_string(base.join("version.json"))?)?;
@@ -927,7 +944,7 @@ pub async fn launch_game(
         }
     };
 
-    let profile = read_profiles().remove(dir).unwrap_or_default();
+    let profile = read_profiles().remove(label).unwrap_or_default();
     let args = build_launch_args(&LaunchInputs {
         mc: &options.mc_version,
         main_class: &runtime.main_class,
@@ -940,7 +957,7 @@ pub async fn launch_game(
         profile: &profile,
     });
 
-    emit(reporter.as_ref(), &id, "launch", 0, &format!("Starting {} …", pack.file_name().unwrap_or_default().to_string_lossy()));
+    emit(reporter.as_ref(), &id, "launch", 0, &format!("Starting {label} …"));
     line(reporter.as_ref(), &id, "command", &format!("java -Xmx{}M -cp … {}", options.memory.unwrap_or(profile.memory), runtime.main_class));
     let mut command = Command::new(&java);
     command.kill_on_drop(true).args(&args).current_dir(&instance)
@@ -949,7 +966,7 @@ pub async fn launch_game(
     let mut game_child = command.spawn()
         .map_err(|e| AppError::Process(format!("Could not start Minecraft: {e}")))?;
     let started = now();
-    *current.lock().await = Some((dir.to_string(), started));
+    *current.lock().await = Some((label.to_string(), started));
 
     let stdout = game_child.stdout.take().ok_or_else(|| AppError::Process("No stdout".into()))?;
     let stderr = game_child.stderr.take().ok_or_else(|| AppError::Process("No stderr".into()))?;

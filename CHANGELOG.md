@@ -7,6 +7,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Ca
 
 ### Added
 
+- Gestor de instancias completo en Launcher: entidades propias e independientes con `instance.json`, icono y carpeta; crear, listar, detallar, editar, clonar y eliminar con confirmación por nombre.
+- Nuevos comandos `instance_create/update/delete/clone/detail/list/install/play` e `icon_*`, con nombres seguros, sandbox de rutas y backup antes de sobrescribir metadatos.
+- Creación guiada con catálogo real de Minecraft, versión de loader (recomendada o concreta), vista previa (Java, mods estimados y estado) y atajo `Ctrl/Cmd+I` / acción en la paleta.
+
 - Idiomas français, Deutsch y Português con cobertura completa del diccionario y selector en Ajustes; `Ctrl/Cmd+K` alterna entre los cinco idiomas soportados.
 
 ### Changed

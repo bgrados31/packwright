@@ -26,6 +26,8 @@ pub async fn stop_all(app: &AppHandle) {
     if let Some(state) = app.try_state::<crate::playit::PlayitState>() {
         state.shutdown().await;
     }
+    // Las instancias gestionadas usan este mismo estado: al detener el launcher
+    // también se cierra el juego de cualquier instancia (instance_play).
     if let Some(state) = app.try_state::<crate::launcher::LauncherState>() {
         state.shutdown().await;
     }

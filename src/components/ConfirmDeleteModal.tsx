@@ -6,7 +6,7 @@ import { messageOf } from "../lib/error";
 import { onBackdropClick, useDialogKeyboard } from "../lib/useDialog";
 
 type Props = {
-  kind: "pack" | "server";
+  kind: "pack" | "server" | "instance";
   name: string;
   onCancel: () => void;
   onConfirm: () => Promise<void>;
@@ -37,7 +37,11 @@ export default function ConfirmDeleteModal({ kind, name, onCancel, onConfirm }: 
     }
   };
 
-  const title = kind === "pack" ? t("delete.packTitle") : t("delete.serverTitle");
+  const title = kind === "pack"
+    ? t("delete.packTitle")
+    : kind === "instance"
+      ? t("delete.instanceTitle")
+      : t("delete.serverTitle");
 
   return createPortal(
     <div className="modal-backdrop" onClick={onBackdropClick(() => { if (!busy) onCancel(); })} role="dialog" aria-modal="true" aria-label={title}>
@@ -62,7 +66,7 @@ export default function ConfirmDeleteModal({ kind, name, onCancel, onConfirm }: 
         <div className="delete-modal-body">
           <div className="delete-warning">
             <AlertTriangle size={14} className="shrink-0" />
-            <span>{kind === "pack" ? t("delete.packWarning") : t("delete.serverWarning")}</span>
+            <span>{kind === "pack" ? t("delete.packWarning") : kind === "instance" ? t("delete.instanceWarning") : t("delete.serverWarning")}</span>
           </div>
           {kind === "server" && (
             <p className="mt-2 text-[11px] text-muted">{t("delete.stopHint")}</p>

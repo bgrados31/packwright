@@ -15,6 +15,7 @@ const GROUPS: Group[] = [
       { keys: [MOD, "K"], label: "shortcuts.commandPalette" },
       { keys: ["?"], label: "shortcuts.help" },
       { keys: [MOD, "N"], label: "shortcuts.newPack" },
+      { keys: [MOD, "I"], label: "shortcuts.newInstance" },
     ],
   },
   {

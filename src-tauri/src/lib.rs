@@ -9,6 +9,7 @@ pub mod launcher_java;
 mod import;
 mod files;
 mod instance_files;
+pub mod instances;
 mod meta;
 mod mods;
 pub mod net;
@@ -107,6 +108,16 @@ pub fn run() {
             launcher::launcher_status,
             launcher::launcher_stop,
             launcher::launcher_history,
+            instances::instance_list,
+            instances::instance_detail,
+            instances::instance_create,
+            instances::instance_update,
+            instances::instance_delete,
+            instances::instance_clone,
+            instances::instance_install,
+            instances::instance_play,
+            instances::instance_icon_set,
+            instances::instance_icon_get,
             git::git_init,
             git::git_status,
             git::git_commit,

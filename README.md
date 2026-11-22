@@ -59,8 +59,10 @@ Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripci
 - Barra superior con búsqueda global, migas de pan y accesos rápidos; atajos `Ctrl/Cmd+1..4` para navegar, `Ctrl/Cmd+N` para crear un pack y `?` para ver todos los atajos.
 - Consola flotante, command palette agrupada (`Ctrl/Cmd+K`) e i18n en **español, inglés, francés, alemán y portugués**, con idiomas cargados bajo demanda.
 
-### Lanzador propio
-- Ejecuta **vanilla, Fabric, Quilt, Forge y NeoForge** dentro de la app: instala el runtime (o ejecuta el instalador oficial del loader), sincroniza los mods del pack y lanza el juego con su classpath real.
+### Lanzador propio y gestor de instancias
+- **Instancias independientes** estilo ATLauncher: crear desde cero o desde un pack, listar, ver detalle, editar, clonar y borrar con confirmación; cada una con carpeta, icono y metadatos propios.
+- Ejecuta **vanilla, Fabric, Quilt, Forge y NeoForge** dentro de la app: instala el runtime (o ejecuta el instalador oficial del loader), sincroniza los mods del pack vinculado y lanza el juego con su classpath real.
+- Creación guiada con versiones reales de Minecraft, versión concreta del loader (o recomendada), vista previa y Java calculado automáticamente; «Jugar y conectar» arranca tu servidor y une al cliente.
 - **JDK gestionado** estilo ATLauncher: selecciona Java 8/17/21 según la versión de Minecraft y lo descarga de Adoptium/Microsoft sin que el usuario instale nada.
 - Perfiles por pack (nombre, RAM, pantalla), consola en vivo, tiempo de juego y parada limpia del proceso.
 - **Integración única servidor ↔ cliente**: elige uno de tus servidores, se arranca automáticamente y el cliente entra directamente en `127.0.0.1:puerto`.

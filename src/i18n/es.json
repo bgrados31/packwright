@@ -3,7 +3,6 @@
   "nav.newPack": "Nuevo modpack",
   "nav.toggleTheme": "Cambiar tema",
   "topbar.search": "Buscar comandos, packs, ajustes…",
-
   "welcome.eyebrow": "ESTUDIO DE MODPACKS",
   "welcome.title": "Crea el pack que quieres jugar.",
   "welcome.subtitle": "Packwright reúne tus mods, metadatos y espacio de trabajo en una sola app local. Empieza con un nombre y una versión de Minecraft — nosotros hacemos el resto.",
@@ -19,7 +18,6 @@
   "workspace.label": "Espacio de trabajo",
   "workspace.ready": "Packwiz listo",
   "workspace.notReady": "Packwiz no detectado",
-
   "form.name": "Nombre",
   "form.namePlaceholder": "Mi modpack",
   "form.author": "Autor",
@@ -40,7 +38,6 @@
   "form.creating": "Creando…",
   "form.packwizMissing": "No se encontró packwiz. Instálalo o indícalo en ajustes.",
   "form.autoHint": "Las versiones se actualizan solas al cambiar el loader o Minecraft.",
-
   "packs.title": "Tus modpacks",
   "packs.count": "{count} packs",
   "packs.countOne": "{count} pack",
@@ -51,7 +48,6 @@
   "packs.folder": "Abrir carpeta",
   "packs.noDescription": "Sin descripción",
   "packs.modCount": "{count} mods",
-
   "editor.back": "Todos los packs",
   "editor.files": "Archivos",
   "editor.details": "Detalles",
@@ -106,7 +102,6 @@
   "editor.deleteFailed": "No se pudo eliminar el archivo",
   "editor.created": "Creado {name}",
   "editor.createFailed": "No se pudo crear el archivo",
-
   "details.title": "Detalles del pack",
   "details.subtitle": "Esta información aparece al compartir o publicar el pack.",
   "details.summary": "Resumen",
@@ -125,7 +120,6 @@
   "details.noSummary": "Sin resumen",
   "details.iconReady": "Icono: configurado",
   "details.iconMissing": "Icono: pendiente",
-
   "editor.assetsTitle": "Visuales",
   "editor.assetsBody": "Icono, banner y galería se guardan dentro del pack y se muestran en su tarjeta.",
   "editor.iconSection": "Icono del pack",
@@ -137,7 +131,6 @@
   "editor.noBanner": "Sin banner subido",
   "editor.removeImage": "Quitar",
   "editor.uploading": "Subiendo…",
-
   "mods.title": "Mods",
   "mods.subtitle": "{count} mods en este pack",
   "mods.installed": "Instalados",
@@ -185,7 +178,6 @@
   "mods.shown": "{shown} de {total}",
   "mods.openModrinth": "Ver en Modrinth",
   "mods.selected": "{count} mods seleccionados",
-
   "catalog.results": "{count} resultados",
   "catalog.types.mod": "Mod",
   "catalog.types.resourcepack": "Resource pack",
@@ -242,11 +234,9 @@
   "mods.pinnedHint": "Versión bloqueada",
   "mods.manualHint": "Manual · sin actualización automática",
   "mods.autoHintShort": "Actualización automática",
-
   "output.empty": "Esperando operaciones…",
   "debug.title": "Consola de debug",
   "debug.collapse": "Contraer",
-
   "export.button": "Exportar",
   "import.title": "Importar modpack",
   "import.subtitle": "Convierte un .mrpack existente en un pack editable.",
@@ -322,7 +312,6 @@
   "export.stageIndex": "Leyendo índice",
   "export.stageMods": "Obteniendo mods",
   "export.stagePacking": "Empaquetando .mrpack",
-
   "setup.title": "Bienvenido a Packwright",
   "setup.subtitle": "Unos ajustes antes de empezar. Podrás cambiarlos todos después.",
   "setup.settingsTitle": "Ajustes",
@@ -354,18 +343,15 @@
   "setup.reviewLoader": "Loader por defecto",
   "setup.reviewLanguage": "Idioma",
   "setup.noneSelected": "Ninguno seleccionado",
-
   "language.english": "English",
   "language.spanish": "Español",
   "language.french": "Français",
   "language.german": "Deutsch",
   "language.portuguese": "Português",
-
   "launcher.atlauncher": "ATLauncher",
   "launcher.prism": "Prism Launcher",
   "launcher.modrinth": "Modrinth App",
   "launcher.multimc": "MultiMC",
-
   "nav.home": "Inicio",
   "nav.modpacks": "Modpacks",
   "nav.servers": "Servidores",
@@ -413,7 +399,6 @@
   "launcher.empty": "Aún no hay packs. Crea uno para jugarlo aquí.",
   "launcher.external": "lanzador externo",
   "launcher.unsupported": "Los packs Forge/NeoForge siguen usando el Play externo. Vanilla, Fabric y Quilt funcionan aquí de forma nativa.",
-
   "packs.subtitle": "Gestionando {count} packs en tu espacio de trabajo",
   "packs.search": "Buscar packs…",
   "packs.sort": "Ordenar por",
@@ -432,7 +417,6 @@
   "packs.clearFilters": "Limpiar filtros",
   "packs.viewGrid": "Vista de cuadrícula",
   "packs.viewList": "Vista de lista",
-
   "home.eyebrow": "RESUMEN",
   "home.title": "Tu espacio de trabajo de un vistazo.",
   "home.subtitle": "Todo lo que estás construyendo, en un solo lugar.",
@@ -444,7 +428,6 @@
   "home.heroBadge": "Nuevo · 0.1.0",
   "home.explore": "Explorar modpacks",
   "home.whatsNew": "Novedades de Packwright",
-
   "settings.subtitle": "Gestiona preferencias, integraciones y opciones avanzadas.",
   "settings.updates": "Actualizaciones",
   "settings.updateCurrent": "Versión actual",
@@ -505,7 +488,6 @@
   "settings.installing": "Instalando…",
   "settings.retry": "Reintentar",
   "settings.packwizReady": "Instalación finalizada",
-
   "common.close": "Cerrar",
   "common.clear": "Limpiar",
   "common.save": "Guardar",
@@ -703,5 +685,40 @@
   "delete.deletePack": "Eliminar modpack",
   "delete.deleteServer": "Eliminar servidor",
   "delete.successPack": "Modpack eliminado",
-  "delete.successServer": "Servidor eliminado"
+  "delete.successServer": "Servidor eliminado",
+  "instances.title": "Lanzacohetes",
+  "instances.subtitle": "Administre instancias independientes de Minecraft: créelas, clónelas, configúrelas y reprodúzcalas con su propio tiempo de ejecución de Java.",
+  "instances.yourInstances": "Tus instancias",
+  "instances.new": "Nueva instancia",
+  "instances.mods": "modificaciones",
+  "instances.edit": "Editar instancia",
+  "instances.details": "Detalles",
+  "instances.empty": "Aún no hay casos. Crea uno para empezar a jugar.",
+  "instances.icon": "Cambiar icono",
+  "instances.clone": "Clon",
+  "instances.delete": "Borrar",
+  "instances.mcVersion": "versión minecraft",
+  "instances.loader": "Cargador",
+  "instances.loaderVersion": "Versión del cargador",
+  "instances.recommended": "Último recomendado",
+  "instances.memory": "Memoria",
+  "instances.runtime": "tiempo de ejecución de Java",
+  "instances.linkedPack": "paquete vinculado",
+  "instances.linkedServer": "Servidor vinculado",
+  "instances.jvmArgs": "argumentos de JVM",
+  "instances.created": "Creado",
+  "instances.name": "Nombre",
+  "instances.version": "Versión",
+  "instances.java": "Java",
+  "instances.state": "Estado",
+  "instances.willInstall": "Se instalará el tiempo de ejecución",
+  "instances.localOnly": "Almacenado localmente · no se requiere cuenta",
+  "instances.preview": "Avance",
+  "instances.formHint": "Elija una versión y un cargador reales de Minecraft; Java se selecciona automáticamente.",
+  "instances.create": "Crear instancia",
+  "instances.managedRuntime": "Gestionado por Packwright (recomendado)",
+  "instances.install": "Instalar el tiempo de ejecución",
+  "delete.instanceTitle": "Eliminar instancia",
+  "delete.instanceWarning": "La carpeta de la instancia, sus modificaciones y configuraciones se eliminarán permanentemente.",
+  "shortcuts.newInstance": "Crear una nueva instancia"
 }

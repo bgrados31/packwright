@@ -14,6 +14,46 @@ export type PackInfo = {
   banner: string | null;
 };
 
+export type InstanceConfig = {
+  id: string;
+  name: string;
+  mc_version: string;
+  loader: string;
+  loader_version: string | null;
+  memory: number;
+  username: string;
+  fullscreen: boolean;
+  width: number;
+  height: number;
+  jvm_args: string[];
+  java_major: number;
+  java_path: string;
+  linked_pack: string;
+  linked_server: string;
+  icon: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type InstanceInfo = {
+  config: InstanceConfig;
+  path: string;
+  runtime_ready: boolean;
+  mods: number;
+  last_played: number;
+  playtime: number;
+  state: "playing" | "ready" | "needs-install" | "error";
+};
+
+export type InstanceInput = {
+  name: string;
+  mc_version: string;
+  loader: string;
+  loader_version?: string | null;
+  linked_pack?: string;
+  linked_server?: string;
+};
+
 export type JavaRuntime = {
   major: number;
   path: string;

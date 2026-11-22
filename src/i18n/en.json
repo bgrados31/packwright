@@ -3,7 +3,6 @@
   "nav.newPack": "New modpack",
   "nav.toggleTheme": "Toggle theme",
   "topbar.search": "Search commands, packs, settings…",
-
   "welcome.eyebrow": "MODPACK STUDIO",
   "welcome.title": "Build the pack you want to play.",
   "welcome.subtitle": "Packwright keeps your mods, metadata and workspace in one local app. Start with a name and a Minecraft version — we handle the rest.",
@@ -19,7 +18,6 @@
   "workspace.label": "Workspace",
   "workspace.ready": "Packwiz ready",
   "workspace.notReady": "Packwiz not detected",
-
   "form.name": "Name",
   "form.namePlaceholder": "My modpack",
   "form.author": "Author",
@@ -40,7 +38,6 @@
   "form.creating": "Creating…",
   "form.packwizMissing": "Packwiz was not found. Install it or set its path in settings.",
   "form.autoHint": "Version lists update automatically when you change the loader or Minecraft version.",
-
   "packs.title": "Your modpacks",
   "packs.count": "{count} packs",
   "packs.countOne": "{count} pack",
@@ -51,7 +48,6 @@
   "packs.folder": "Open folder",
   "packs.noDescription": "No description",
   "packs.modCount": "{count} mods",
-
   "editor.back": "All packs",
   "editor.files": "Files",
   "editor.details": "Details",
@@ -106,7 +102,6 @@
   "editor.deleteFailed": "Could not delete file",
   "editor.created": "Created {name}",
   "editor.createFailed": "Could not create file",
-
   "details.title": "Pack details",
   "details.subtitle": "This information appears when sharing or publishing the pack.",
   "details.summary": "Summary",
@@ -125,7 +120,6 @@
   "details.noSummary": "No summary yet",
   "details.iconReady": "Icon: configured",
   "details.iconMissing": "Icon: missing",
-
   "editor.assetsTitle": "Visuals",
   "editor.assetsBody": "Icon, banner and gallery are stored inside the pack and shown on its card.",
   "editor.iconSection": "Pack icon",
@@ -137,7 +131,6 @@
   "editor.noBanner": "No banner uploaded",
   "editor.removeImage": "Remove",
   "editor.uploading": "Uploading…",
-
   "mods.title": "Mods",
   "mods.subtitle": "{count} mods in this pack",
   "mods.installed": "Installed",
@@ -185,7 +178,6 @@
   "mods.shown": "{shown} of {total}",
   "mods.openModrinth": "View on Modrinth",
   "mods.selected": "{count} mods selected",
-
   "catalog.results": "{count} results",
   "catalog.types.mod": "Mod",
   "catalog.types.resourcepack": "Resource pack",
@@ -242,11 +234,9 @@
   "mods.pinnedHint": "Version locked",
   "mods.manualHint": "Manual · no auto-update",
   "mods.autoHintShort": "Auto-update enabled",
-
   "output.empty": "Waiting for operations…",
   "debug.title": "Debug console",
   "debug.collapse": "Collapse",
-
   "export.button": "Export",
   "import.title": "Import modpack",
   "import.subtitle": "Turn an existing .mrpack into an editable pack.",
@@ -322,7 +312,6 @@
   "export.stageIndex": "Reading index",
   "export.stageMods": "Retrieving mods",
   "export.stagePacking": "Packing .mrpack",
-
   "setup.title": "Welcome to Packwright",
   "setup.subtitle": "A few settings before we start. You can change all of them later.",
   "setup.settingsTitle": "Settings",
@@ -354,18 +343,15 @@
   "setup.reviewLoader": "Default loader",
   "setup.reviewLanguage": "Language",
   "setup.noneSelected": "None selected",
-
   "language.english": "English",
   "language.spanish": "Español",
   "language.french": "Français",
   "language.german": "Deutsch",
   "language.portuguese": "Português",
-
   "launcher.atlauncher": "ATLauncher",
   "launcher.prism": "Prism Launcher",
   "launcher.modrinth": "Modrinth App",
   "launcher.multimc": "MultiMC",
-
   "nav.home": "Home",
   "nav.modpacks": "Modpacks",
   "nav.servers": "Servers",
@@ -413,7 +399,6 @@
   "launcher.empty": "No packs yet. Create one to play it here.",
   "launcher.external": "external launcher",
   "launcher.unsupported": "Forge/NeoForge packs still use the external Play flow. Vanilla, Fabric and Quilt run natively here.",
-
   "packs.subtitle": "Managing {count} packs in your workspace",
   "packs.search": "Search packs…",
   "packs.sort": "Sort by",
@@ -432,7 +417,6 @@
   "packs.clearFilters": "Clear filters",
   "packs.viewGrid": "Grid view",
   "packs.viewList": "List view",
-
   "home.eyebrow": "OVERVIEW",
   "home.title": "Your workspace at a glance.",
   "home.subtitle": "Everything you are building, in one place.",
@@ -444,7 +428,6 @@
   "home.heroBadge": "New · 0.1.0",
   "home.explore": "Explore modpacks",
   "home.whatsNew": "What's new in Packwright",
-
   "settings.subtitle": "Manage preferences, integrations and advanced options.",
   "settings.updates": "Updates",
   "settings.updateCurrent": "Current version",
@@ -505,7 +488,6 @@
   "settings.installing": "Installing…",
   "settings.retry": "Retry",
   "settings.packwizReady": "Installation finished",
-
   "common.close": "Close",
   "common.clear": "Clear",
   "common.save": "Save",
@@ -703,5 +685,40 @@
   "delete.deletePack": "Delete modpack",
   "delete.deleteServer": "Delete server",
   "delete.successPack": "Modpack deleted",
-  "delete.successServer": "Server deleted"
+  "delete.successServer": "Server deleted",
+  "instances.title": "Launcher",
+  "instances.subtitle": "Manage independent Minecraft instances: create, clone, configure and play them with your own Java runtime.",
+  "instances.yourInstances": "Your instances",
+  "instances.new": "New instance",
+  "instances.mods": "mods",
+  "instances.edit": "Edit instance",
+  "instances.details": "Details",
+  "instances.empty": "No instances yet. Create one to start playing.",
+  "instances.icon": "Change icon",
+  "instances.clone": "Clone",
+  "instances.delete": "Delete",
+  "instances.mcVersion": "Minecraft version",
+  "instances.loader": "Loader",
+  "instances.loaderVersion": "Loader version",
+  "instances.recommended": "Latest recommended",
+  "instances.memory": "Memory",
+  "instances.runtime": "Java runtime",
+  "instances.linkedPack": "Linked pack",
+  "instances.linkedServer": "Linked server",
+  "instances.jvmArgs": "JVM arguments",
+  "instances.created": "Created",
+  "instances.name": "Name",
+  "instances.version": "Version",
+  "instances.java": "Java",
+  "instances.state": "Status",
+  "instances.willInstall": "Runtime will be installed",
+  "instances.localOnly": "Stored locally · no account required",
+  "instances.preview": "Preview",
+  "instances.formHint": "Choose a real Minecraft version and loader; Java is selected automatically.",
+  "instances.create": "Create instance",
+  "instances.managedRuntime": "Managed by Packwright (recommended)",
+  "instances.install": "Install runtime",
+  "delete.instanceTitle": "Delete instance",
+  "delete.instanceWarning": "The instance folder, its mods and configurations will be permanently deleted.",
+  "shortcuts.newInstance": "Create a new instance"
 }

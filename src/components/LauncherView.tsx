@@ -4,77 +4,105 @@ import { listen } from "@tauri-apps/api/event";
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
+  ChevronRight,
   Clock,
-  Cpu,
+  Copy,
   Download,
   Gamepad2,
-  Globe,
+  Layers,
   Loader2,
+  Pencil,
   Play,
+  Plus,
   Rocket,
-  Server as ServerIcon,
   Square,
   Terminal,
-  Users,
+  Trash2,
   Wifi,
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { messageOf } from "../lib/error";
 import type {
+  InstanceConfig,
+  InstanceInfo,
+  InstanceInput,
   JavaRuntime,
-  LauncherInstance,
   LauncherProgress,
   LauncherStatus,
+  LoaderVersion,
+  McVersion,
   OpLine,
   PackInfo,
   ServerInfo,
 } from "../lib/types";
-import PackImage from "./PackImage";
-import { Tag } from "./ui";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 
-type LaunchConfig = {
-  username: string;
-  memory: number;
-  fullscreen: boolean;
-  width: number;
-  height: number;
-  server?: string;
-  port?: number;
-};
+type Props = { packs: PackInfo[]; createNonce?: number };
+
+function requiredJava(mc: string): number {
+  const legacy = mc.trim().startsWith("1.");
+  const parts = mc.trim().replace(/^1\./, "").split(".").map(Number);
+  const major = parts[0] || (legacy ? 8 : 21);
+  const minor = parts[1] || 0;
+  if (!legacy) return 21;
+  return major >= 21 || (major === 20 && minor >= 5) ? 21 : major >= 17 ? 17 : 8;
+}
 
 function fmtDuration(seconds: number) {
   if (!seconds) return "—";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-export default function LauncherView({ packs }: { packs: PackInfo[] }) {
+function InstanceIcon({ instance, className = "h-10 w-10 rounded-lg object-cover" }: { instance: InstanceInfo; className?: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    invoke<string>("instance_icon_get", { id: instance.config.id })
+      .then((url) => { if (!cancelled) setSrc(url); })
+      .catch(() => { if (!cancelled) setSrc(null); });
+    return () => { cancelled = true; };
+  }, [instance.config.id, instance.config.updated_at]);
+  return src ? <img src={src} alt="" className={className} /> : (
+    <span className={`${className} grid place-items-center bg-subtle text-accent`}><Gamepad2 size={16} /></span>
+  );
+}
+
+const emptyForm: InstanceInput & { memory: number; username: string; java_path: string } = {
+  name: "", mc_version: "1.21.1", loader: "vanilla", loader_version: null,
+  linked_pack: "", linked_server: "", memory: 2048, username: "Player", java_path: "",
+};
+
+export default function LauncherView({ packs, createNonce = 0 }: Props) {
   const { t } = useI18n();
-  const [instances, setInstances] = useState<LauncherInstance[]>([]);
-  const [runtimes, setRuntimes] = useState<JavaRuntime[]>([]);
+  const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
+  const [versions, setVersions] = useState<McVersion[]>([]);
+  const [loaderVersions, setLoaderVersions] = useState<LoaderVersion[]>([]);
+  const [runtimes, setRuntimes] = useState<JavaRuntime[]>([]);
   const [status, setStatus] = useState<LauncherStatus>({ running: false, dir: "", started: 0 });
   const [progress, setProgress] = useState<LauncherProgress | null>(null);
   const [lines, setLines] = useState<OpLine[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [modal, setModal] = useState<string | null>(null);
-  const [installing, setInstalling] = useState<number[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [modal, setModal] = useState<"create" | "edit" | "clone" | "delete" | null>(null);
+  const [form, setForm] = useState({ ...emptyForm });
+  const [cloneName, setCloneName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const iconInput = useRef<HTMLInputElement>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
-    void invoke<LauncherInstance[]>("launcher_instances").then(setInstances).catch((cause) => setError(messageOf(cause)));
-    void invoke<JavaRuntime[]>("runtime_java_list").then(setRuntimes).catch(() => undefined);
+    void invoke<InstanceInfo[]>("instance_list").then(setInstances).catch((cause) => setError(messageOf(cause)));
     void invoke<ServerInfo[]>("server_list").then(setServers).catch(() => setServers([]));
+    void invoke<JavaRuntime[]>("runtime_java_list").then(setRuntimes).catch(() => undefined);
     void invoke<LauncherStatus>("launcher_status").then(setStatus).catch(() => undefined);
   }, []);
 
   useEffect(() => {
     refresh();
+    void invoke<McVersion[]>("versions_catalog").then(setVersions).catch(() => setVersions([]));
     const timer = window.setInterval(() => {
       void invoke<LauncherStatus>("launcher_status").then(setStatus).catch(() => undefined);
     }, 1500);
@@ -83,7 +111,6 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
       if (event.payload.stage === "done") refresh();
     });
     const offLines = listen<OpLine>("launcher://line", (event) => {
-      if (event.payload.id === "command") return;
       setLines((current) => [...current.slice(-199), event.payload]);
     });
     return () => {
@@ -94,91 +121,70 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
   }, [refresh]);
 
   useEffect(() => {
-    consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight });
-  }, [lines]);
+    if (!createNonce) return;
+    setForm({ ...emptyForm });
+    setModal("create");
+  }, [createNonce]);
 
-  const active = instances.find((item) => item.dir === selected)
-    ?? instances.find((item) => item.dir === status.dir)
-    ?? null;
-  const visibleLines = useMemo(
-    () => lines.filter((line) => line.id === (active?.dir ?? selected)),
-    [lines, active?.dir, selected],
+  useEffect(() => {
+    if (!form.loader || form.loader === "vanilla") { setLoaderVersions([]); return; }
+    let cancelled = false;
+    void invoke<LoaderVersion[]>("versions_loader", { loader: form.loader, mcVersion: form.mc_version })
+      .then((list) => { if (!cancelled) setLoaderVersions(list); })
+      .catch(() => { if (!cancelled) setLoaderVersions([]); });
+    return () => { cancelled = true; };
+  }, [form.loader, form.mc_version]);
+
+  useEffect(() => { consoleRef.current?.scrollTo({ top: consoleRef.current.scrollHeight }); }, [lines]);
+
+  const selected = instances.find((item) => item.config.id === selectedId) ?? null;
+  const activeLines = useMemo(
+    () => lines.filter((line) => line.id === (selected?.config.id ?? status.dir)),
+    [lines, selected?.config.id, status.dir],
   );
+  const linkedPack = packs.find((pack) => pack.dir === form.linked_pack);
+  const estimatedMods = linkedPack?.mod_count ?? 0;
 
-  const installJava = async (major: number) => {
-    setInstalling((current) => [...current, major]);
+  const openCreate = () => {
+    setForm({ ...emptyForm });
     setError(null);
-    try {
-      await invoke("runtime_java_install", { major });
-      refresh();
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      setInstalling((current) => current.filter((item) => item !== major));
-    }
+    setModal("create");
   };
 
-  const installPack = async (item: LauncherInstance) => {
+  const openEdit = (instance: InstanceInfo) => {
+    const c = instance.config;
+    setForm({
+      name: c.name, mc_version: c.mc_version, loader: c.loader, loader_version: c.loader_version,
+      linked_pack: c.linked_pack, linked_server: c.linked_server, memory: c.memory,
+      username: c.username, java_path: c.java_path,
+    });
+    setError(null);
+    setSelectedId(c.id);
+    setModal("edit");
+  };
+
+  const save = async () => {
     setBusy(true);
     setError(null);
     try {
-      await invoke("launcher_install", {
-        dir: item.dir,
-        mcVersion: item.mc || "1.21.1",
-        loader: item.loader || "vanilla",
-        loaderVersion: null,
-      });
-      refresh();
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stop = async () => {
-    try {
-      await invoke("launcher_stop");
-      setStatus({ running: false, dir: "", started: 0 });
-    } catch (cause) {
-      setError(messageOf(cause));
-    }
-  };
-
-  const startServerAndJoin = async (server: ServerInfo) => {
-    await invoke("server_start", { name: server.name, id: `launcher-join-${Date.now()}` });
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1000));
-      const list = await invoke<ServerInfo[]>("server_list");
-      if (list.find((item) => item.name === server.name)?.running) return;
-    }
-    throw new Error(t("launcher.serverTimeout"));
-  };
-
-  const launch = async (item: LauncherInstance, config: LaunchConfig, autoStartServer?: ServerInfo) => {
-    setBusy(true);
-    setError(null);
-    try {
-      if (autoStartServer && !autoStartServer.running) {
-        await startServerAndJoin(autoStartServer);
+      if (modal === "create") {
+        await invoke("instance_create", {
+          input: {
+            name: form.name, mc_version: form.mc_version, loader: form.loader,
+            loader_version: form.loader_version || null,
+            linked_pack: form.linked_pack ?? "", linked_server: form.linked_server ?? "",
+          },
+        });
+      } else if (modal === "edit" && selected) {
+        const config: InstanceConfig = {
+          ...selected.config,
+          name: form.name, mc_version: form.mc_version, loader: form.loader,
+          loader_version: form.loader_version || null,
+          linked_pack: form.linked_pack ?? "", linked_server: form.linked_server ?? "",
+          memory: form.memory, username: form.username, java_path: form.java_path,
+        };
+        await invoke("instance_update", { config });
       }
-      await invoke("launcher_play", {
-        dir: item.dir,
-        options: {
-          mcVersion: item.mc || "1.21.1",
-          loader: item.loader || "vanilla",
-          loaderVersion: null,
-          memory: config.memory,
-          username: config.username,
-          server: config.server,
-          port: config.port,
-          fullscreen: config.fullscreen,
-          width: config.width,
-          height: config.height,
-        },
-      });
-      setSelected(item.dir);
-      setLines([]);
       setModal(null);
       refresh();
     } catch (cause) {
@@ -188,20 +194,92 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
     }
   };
 
-  const launchFromModal = (item: LauncherInstance, config: LaunchConfig, server: ServerInfo | null) => {
-    if (!item.runtime_ready) {
-      void installPack(item).then(() => {
-        const updated = { ...item, runtime_ready: true };
-        void launch(updated, config, server ?? undefined);
-      });
-      return;
+  const install = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await invoke("instance_install", { id });
+      refresh();
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
     }
-    void launch(item, config, server ?? undefined);
   };
 
-  const ready = instances.filter((item) => item.runtime_ready).length;
-  const totalPlaytime = instances.reduce((sum, item) => sum + item.playtime, 0);
-  const needed = [...new Set(instances.map((item) => item.java_major))];
+  const play = async (instance: InstanceInfo, server?: ServerInfo | null) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (!instance.runtime_ready) await invoke("instance_install", { id: instance.config.id });
+      let address: string | undefined;
+      let port: number | undefined;
+      if (server) {
+        if (!server.running) {
+          await invoke("server_start", { name: server.name, id: `instance-${Date.now()}` });
+          for (let i = 0; i < 12; i += 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            const list = await invoke<ServerInfo[]>("server_list");
+            if (list.find((item) => item.name === server.name)?.running) break;
+          }
+        }
+        address = "127.0.0.1";
+        port = server.port;
+      }
+      await invoke("instance_play", {
+        id: instance.config.id,
+        server: address ?? null,
+        port: port ?? null,
+      });
+      setSelectedId(instance.config.id);
+      setLines([]);
+      refresh();
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    await invoke("launcher_stop");
+    setStatus({ running: false, dir: "", started: 0 });
+    refresh();
+  };
+
+  const clone = async () => {
+    if (!selected || !cloneName.trim()) return;
+    setBusy(true);
+    try {
+      const created = await invoke<InstanceInfo>("instance_clone", { id: selected.config.id, newName: cloneName.trim() });
+      setModal(null);
+      setSelectedId(created.config.id);
+      refresh();
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!selected) return;
+    try {
+      await invoke("instance_delete", { id: selected.config.id, confirm: selected.config.name });
+      setModal(null);
+      setSelectedId(null);
+      refresh();
+    } catch (cause) {
+      setError(messageOf(cause));
+    }
+  };
+
+  const setIcon = async (files: FileList | null) => {
+    if (!selected || !files?.length) return;
+    const bytes = new Uint8Array(await files[0].arrayBuffer());
+    await invoke("instance_icon_set", { id: selected.config.id, bytes: Array.from(bytes) });
+    refresh();
+  };
 
   return (
     <div className="view-enter">
@@ -209,21 +287,25 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
         <div className="launcher-hero-grid" />
         <div className="relative z-10">
           <span className="mc-hero-badge"><Rocket size={12} /> {t("launcher.badge")}</span>
-          <h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("launcher.title")}</h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-6 text-muted">{t("launcher.subtitle")}</p>
+          <h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("instances.title")}</h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-6 text-muted">{t("instances.subtitle")}</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <span className="hero-pill"><Gamepad2 size={12} /> {instances.length} {t("launcher.packs")}</span>
-            <span className="hero-pill"><Check size={12} /> {ready} {t("launcher.ready")}</span>
-            <span className="hero-pill"><Clock size={12} /> {fmtDuration(totalPlaytime)} {t("launcher.played")}</span>
+            <span className="hero-pill"><Gamepad2 size={12} /> {instances.length} {t("instances.title")}</span>
+            <span className="hero-pill"><Check size={12} /> {instances.filter((item) => item.runtime_ready).length} {t("launcher.ready")}</span>
+            <span className="hero-pill"><Clock size={12} /> {fmtDuration(instances.reduce((sum, item) => sum + item.playtime, 0))} {t("launcher.played")}</span>
           </div>
         </div>
         <div className="launcher-hero-art"><Gamepad2 size={96} strokeWidth={0.8} /></div>
       </div>
 
+      <div className="mt-5 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{t("instances.yourInstances")}</h2>
+        <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> {t("instances.new")}</button>
+      </div>
+
       {error && (
         <div className="launcher-error mt-4">
-          <AlertTriangle size={15} />
-          <span className="min-w-0 flex-1">{error}</span>
+          <AlertTriangle size={15} /><span className="min-w-0 flex-1">{error}</span>
           <button className="icon-btn !h-6 !w-6" onClick={() => setError(null)} aria-label={t("common.close")}><X size={13} /></button>
         </div>
       )}
@@ -232,10 +314,8 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
         <div className="launcher-now mt-4">
           <span className="status-dot inline-block h-2 w-2 rounded-full bg-ok" />
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold">{t("launcher.nowPlaying")}: {instances.find((item) => item.dir === status.dir)?.name ?? status.dir}</p>
-            <p className="font-mono text-[10px] text-muted">
-              {t("launcher.session")} {fmtDuration(Math.max(0, Math.floor(Date.now() / 1000) - status.started))}
-            </p>
+            <p className="text-[12px] font-semibold">{t("launcher.nowPlaying")}: {instances.find((item) => item.config.id === status.dir)?.config.name ?? status.dir}</p>
+            <p className="font-mono text-[10px] text-muted">{t("launcher.session")} {fmtDuration(Math.max(0, Math.floor(Date.now() / 1000) - status.started))}</p>
           </div>
           {progress && (
             <div className="launcher-progress">
@@ -247,289 +327,241 @@ export default function LauncherView({ packs }: { packs: PackInfo[] }) {
         </div>
       )}
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="card p-4">
-          <div className="flex items-center gap-2">
-            <Cpu size={15} className="text-accent" />
-            <h2 className="text-sm font-semibold">{t("launcher.runtimes")}</h2>
-          </div>
-          <p className="mt-1 text-[11px] leading-5 text-muted">{t("launcher.runtimeHint")}</p>
-          <div className="mt-3 space-y-2">
-            {runtimes.filter((item) => !item.system).map((runtime) => {
-              const requiredBy = instances.filter((item) => item.java_major === runtime.major).length;
-              return (
-                <div key={runtime.major} className="runtime-row">
-                  <span className={`runtime-dot ${runtime.installed ? "ok" : ""}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-medium">Java {runtime.major}</p>
-                    <p className="truncate font-mono text-[10px] text-muted">
-                      {runtime.installed ? runtime.home : t("launcher.notInstalled")}
-                    </p>
-                  </div>
-                  {requiredBy > 0 && <span className="chip">{requiredBy}</span>}
-                  {!runtime.installed && (
-                    <button
-                      className="btn btn-secondary !px-2 !py-1 text-[11px]"
-                      disabled={installing.includes(runtime.major)}
-                      onClick={() => void installJava(runtime.major)}
-                      title={t("launcher.installJava")}
-                    >
-                      {installing.includes(runtime.major) ? <Loader2 size={12} className="spin" /> : <Download size={12} />}
-                    </button>
-                  )}
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {instances.map((instance) => {
+          const isPlaying = status.running && status.dir === instance.config.id;
+          return (
+            <div key={instance.config.id} className={`launch-card ${selectedId === instance.config.id ? "selected" : ""} ${isPlaying ? "running" : ""}`}>
+              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSelectedId(instance.config.id)}>
+                <InstanceIcon instance={instance} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold">{instance.config.name}</p>
+                  <p className="truncate font-mono text-[10px] text-muted">
+                    MC {instance.config.mc_version} · {instance.config.loader}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-          {needed.some((major) => !runtimes.some((runtime) => runtime.major === major && runtime.installed)) && (
-            <p className="mt-3 text-[10px] text-muted">{t("launcher.autoHint")}</p>
-          )}
-        </section>
-
-        <section>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t("launcher.instances")}</h2>
-            <span className="font-mono text-[10px] text-muted">{instances.length}</span>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {instances.map((item) => {
-              const pack = packs.find((entry) => entry.dir === item.dir);
-              const running = status.running && status.dir === item.dir;
-              return (
-                <div key={item.dir} className={`launch-card ${running ? "running" : ""} ${selected === item.dir ? "selected" : ""}`}>
-                  <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSelected(item.dir)}>
-                    <PackImage dir={item.dir} path={pack?.icon ?? null} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold">{item.name}</p>
-                      <p className="truncate font-mono text-[10px] text-muted">
-                        MC {item.mc || "—"} · {item.loader || "vanilla"}
-                      </p>
-                    </div>
-                  </button>
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <Tag seed={item.loader || "vanilla"}>{item.loader || "vanilla"}</Tag>
-                    <span className={`runtime-chip ${item.runtime_ready ? "ok" : ""}`}>
-                      {item.runtime_ready ? <Check size={10} /> : <Download size={10} />}
-                      Java {item.java_major}
-                    </span>
-                    <span className="ml-auto flex items-center gap-1 font-mono text-[10px] text-muted">
-                      <Clock size={10} /> {fmtDuration(item.playtime)}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      className="btn btn-primary flex-1"
-                      disabled={busy || (status.running && !running)}
-                      onClick={() => setModal(item.dir)}
-                    >
-                      {running ? <Square size={13} /> : item.runtime_ready ? <Play size={13} /> : <Download size={13} />}
-                      {running ? t("launcher.stop") : item.runtime_ready ? t("launcher.play") : t("launcher.installAndPlay")}
+              </button>
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <span className={`runtime-chip ${instance.runtime_ready ? "ok" : ""}`}>
+                  {instance.runtime_ready ? <Check size={10} /> : <Download size={10} />}
+                  Java {instance.config.java_major}
+                </span>
+                <span className="chip">{instance.mods} {t("instances.mods")}</span>
+                <span className="ml-auto font-mono text-[10px] text-muted">{fmtDuration(instance.playtime)}</span>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  className="btn btn-primary flex-1"
+                  disabled={busy || (status.running && !isPlaying)}
+                  onClick={() => void play(instance)}
+                >
+                  {isPlaying ? <Square size={13} /> : instance.runtime_ready ? <Play size={13} /> : <Download size={13} />}
+                  {isPlaying ? t("launcher.stop") : instance.runtime_ready ? t("launcher.play") : t("launcher.installAndPlay")}
+                </button>
+                <button className="btn btn-secondary" onClick={() => openEdit(instance)} title={t("instances.edit")}><Pencil size={13} /></button>
+                <button className="btn btn-secondary" onClick={() => setSelectedId(instance.config.id)} title={t("instances.details")}><ChevronRight size={13} /></button>
+              </div>
+              {servers.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {servers.slice(0, 3).map((server) => (
+                    <button key={server.name} className="server-choice !py-1 text-[10px]" disabled={busy || (status.running && !isPlaying)}
+                      onClick={() => void play(instance, server)}>
+                      <Wifi size={11} /> {server.name}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setSelected(item.dir)} title={t("launcher.console")}>
-                      <Terminal size={13} />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              );
-            })}
-            {instances.length === 0 && (
-              <div className="card col-span-full grid place-items-center py-12 text-sm text-muted">{t("launcher.empty")}</div>
-            )}
+              )}
+            </div>
+          );
+        })}
+        {instances.length === 0 && (
+          <div className="card col-span-full grid place-items-center py-14 text-center">
+            <div>
+              <Gamepad2 size={30} className="mx-auto text-muted" />
+              <p className="mt-3 text-sm text-muted">{t("instances.empty")}</p>
+              <button className="btn btn-primary mt-4" onClick={openCreate}><Plus size={14} /> {t("instances.new")}</button>
+            </div>
           </div>
-        </section>
+        )}
       </div>
+
+      {selected && (
+        <section className="card mt-5 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <InstanceIcon instance={selected} />
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-semibold">{selected.config.name}</h3>
+              <p className="truncate font-mono text-[10px] text-muted">{selected.path}</p>
+            </div>
+            {!selected.runtime_ready && (
+              <button className="btn btn-secondary" disabled={busy} onClick={() => void install(selected.config.id)}>
+                <Download size={13} /> {t("instances.install")}
+              </button>
+            )}
+            <button className="btn btn-secondary" onClick={() => iconInput.current?.click()}><Layers size={13} /> {t("instances.icon")}</button>
+            <button className="btn btn-secondary" onClick={() => { setCloneName(`${selected.config.name} copy`); setModal("clone"); }}><Copy size={13} /> {t("instances.clone")}</button>
+            <button className="btn btn-ghost text-bad" onClick={() => setModal("delete")}><Trash2 size={13} /> {t("instances.delete")}</button>
+            <input ref={iconInput} type="file" accept="image/*" className="hidden" onChange={(event) => void setIcon(event.target.files)} />
+          </div>
+          <div className="mt-4 grid gap-3 text-[11px] sm:grid-cols-4">
+            <p><span className="text-muted">{t("instances.mcVersion")}:</span> {selected.config.mc_version}</p>
+            <p><span className="text-muted">{t("instances.loader")}:</span> {selected.config.loader} {selected.config.loader_version ?? ""}</p>
+            <p><span className="text-muted">{t("instances.memory")}:</span> {selected.config.memory} MB</p>
+            <p><span className="text-muted">{t("instances.runtime")}:</span> Java {selected.config.java_major}</p>
+            <p><span className="text-muted">{t("instances.linkedPack")}:</span> {selected.config.linked_pack || "—"}</p>
+            <p><span className="text-muted">{t("instances.linkedServer")}:</span> {selected.config.linked_server || "—"}</p>
+            <p><span className="text-muted">{t("instances.jvmArgs")}:</span> {selected.config.jvm_args.join(" ") || "—"}</p>
+            <p><span className="text-muted">{t("instances.created")}:</span> {new Date(selected.config.created_at * 1000).toLocaleDateString()}</p>
+          </div>
+        </section>
+      )}
 
       <section className="card mt-5 overflow-hidden">
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Terminal size={14} className="text-accent" />
             <span className="text-[12px] font-semibold">{t("launcher.console")}</span>
-            {active && <span className="font-mono text-[10px] text-muted">{active.name}</span>}
+            {selected && <span className="font-mono text-[10px] text-muted">{selected.config.name}</span>}
           </div>
           <button className="btn btn-quiet text-[11px]" onClick={() => setLines([])}>{t("common.clear")}</button>
         </div>
         <div className="console-box !m-3 !h-56" ref={consoleRef}>
-          {visibleLines.length === 0 ? (
+          {activeLines.length === 0 ? (
             <p className="console-placeholder"><Gamepad2 size={13} /> {t("launcher.consoleHint")}</p>
           ) : (
-            visibleLines.map((line, index) => (
+            activeLines.map((line, index) => (
               <p key={`${line.id}-${index}`} className={`console-line ${line.stream === "stderr" ? "err" : ""}`}>{line.line}</p>
             ))
           )}
         </div>
       </section>
 
-      {modal && (
-        <LaunchModal
-          item={instances.find((item) => item.dir === modal)!}
-          servers={servers}
-          busy={busy}
-          onClose={() => setModal(null)}
-          onLaunch={launchFromModal}
-        />
-      )}
-    </div>
-  );
-}
+      {(modal === "create" || modal === "edit") && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("instances.new")}>
+          <div className="modal-card instances-modal">
+            <div className="modal-header">
+              <span className="modal-icon running"><Gamepad2 size={18} /></span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold">{modal === "create" ? t("instances.new") : t("instances.edit")}</h2>
+                <p className="text-[11px] text-muted">{t("instances.formHint")}</p>
+              </div>
+              <button className="icon-btn" onClick={() => setModal(null)} aria-label={t("common.close")}><X size={16} /></button>
+            </div>
+            <div className="instances-form">
+              <label className="flex flex-col gap-1">
+                <span className="launcher-label">{t("instances.name")}</span>
+                <input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="My instance" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="launcher-label">{t("instances.mcVersion")}</span>
+                  <select className="field" value={form.mc_version} onChange={(event) => setForm({ ...form, mc_version: event.target.value, loader_version: null })}>
+                    {versions.filter((version) => version.kind === "release").slice(0, 60).map((version) => (
+                      <option key={version.id} value={version.id}>{version.id}</option>
+                    ))}
+                    {versions.length === 0 && <option value={form.mc_version}>{form.mc_version}</option>}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="launcher-label">{t("instances.loader")}</span>
+                  <select className="field" value={form.loader} onChange={(event) => setForm({ ...form, loader: event.target.value, loader_version: null })}>
+                    {["vanilla", "fabric", "quilt", "forge", "neoforge"].map((loader) => <option key={loader} value={loader}>{loader}</option>)}
+                  </select>
+                </label>
+              </div>
+              {form.loader !== "vanilla" && (
+                <label className="flex flex-col gap-1">
+                  <span className="launcher-label">{t("instances.loaderVersion")}</span>
+                  <select className="field" value={form.loader_version ?? ""} onChange={(event) => setForm({ ...form, loader_version: event.target.value || null })}>
+                    <option value="">{t("instances.recommended")}</option>
+                    {loaderVersions.map((version) => <option key={version.id} value={version.id}>{version.id}{version.stable ? " ✓" : ""}</option>)}
+                  </select>
+                </label>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="launcher-label">{t("instances.linkedPack")}</span>
+                  <select className="field" value={form.linked_pack} onChange={(event) => setForm({ ...form, linked_pack: event.target.value })}>
+                    <option value="">—</option>
+                    {packs.map((pack) => <option key={pack.dir} value={pack.dir}>{pack.name}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="launcher-label">{t("instances.linkedServer")}</span>
+                  <select className="field" value={form.linked_server} onChange={(event) => setForm({ ...form, linked_server: event.target.value })}>
+                    <option value="">—</option>
+                    {servers.map((server) => <option key={server.name} value={server.name}>{server.name} ({server.port})</option>)}
+                  </select>
+                </label>
+              </div>
+              {modal === "edit" && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="launcher-label">{t("instances.memory")}: {form.memory} MB</span>
+                      <input type="range" min={512} max={8192} step={512} value={form.memory} onChange={(event) => setForm({ ...form, memory: Number(event.target.value) })} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="launcher-label">{t("launcher.username")}</span>
+                      <input className="field" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-1">
+                    <span className="launcher-label">{t("instances.runtime")}</span>
+                    <select className="field" value={form.java_path} onChange={(event) => setForm({ ...form, java_path: event.target.value })}>
+                      <option value="">{t("instances.managedRuntime")}</option>
+                      {runtimes.filter((runtime) => runtime.installed).map((runtime) => (
+                        <option key={runtime.major} value={runtime.path}>{runtime.label} — {runtime.path}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
 
-function LaunchModal({
-  item,
-  servers,
-  busy,
-  onClose,
-  onLaunch,
-}: {
-  item: LauncherInstance;
-  servers: ServerInfo[];
-  busy: boolean;
-  onClose: () => void;
-  onLaunch: (item: LauncherInstance, config: LaunchConfig, server: ServerInfo | null) => void;
-}) {
-  const { t } = useI18n();
-  const [username, setUsername] = useState("Player");
-  const [memory, setMemory] = useState(2048);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [width, setWidth] = useState(1280);
-  const [height, setHeight] = useState(720);
-  const [serverName, setServerName] = useState("");
-  const [custom, setCustom] = useState("");
-  const [advanced, setAdvanced] = useState(false);
-
-  useEffect(() => {
-    void invoke<{ memory?: number; username?: string; fullscreen?: boolean; width?: number; height?: number }>("launcher_profile", { dir: item.dir })
-      .then((profile) => {
-        if (profile.memory) setMemory(profile.memory);
-        if (profile.username) setUsername(profile.username);
-        if (typeof profile.fullscreen === "boolean") setFullscreen(profile.fullscreen);
-        if (profile.width) setWidth(profile.width);
-        if (profile.height) setHeight(profile.height);
-      })
-      .catch(() => undefined);
-  }, [item.dir]);
-
-  const chosenServer = servers.find((server) => server.name === serverName) ?? null;
-  const config: LaunchConfig = {
-    username: username.trim() || "Player",
-    memory,
-    fullscreen,
-    width,
-    height,
-    server: chosenServer ? "127.0.0.1" : custom.trim() || undefined,
-    port: chosenServer?.port,
-  };
-
-  const save = () => {
-    void invoke("launcher_profile_set", {
-      dir: item.dir,
-      profile: {
-        memory,
-        username: config.username,
-        fullscreen,
-        width,
-        height,
-        java_major: item.java_major,
-        auto_runtime: true,
-      },
-    });
-  };
-
-  return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={t("launcher.options")}>
-      <div className="modal-card launcher-modal">
-        <div className="modal-header">
-          <span className="modal-icon running"><Gamepad2 size={18} /></span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold">{item.name}</h2>
-            <p className="text-[11px] text-muted">
-              MC {item.mc} · {item.loader} · Java {item.java_major}
-            </p>
-          </div>
-          <button className="icon-btn" onClick={onClose} aria-label={t("common.close")}><X size={16} /></button>
-        </div>
-
-        <div className="launcher-modal-body">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="launcher-label"><Users size={12} /> {t("launcher.username")}</span>
-              <input className="field" value={username} onChange={(event) => setUsername(event.target.value)} maxLength={16} />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="launcher-label"><Cpu size={12} /> {t("launcher.memory")}: {memory} MB</span>
-              <input type="range" min={512} max={8192} step={512} value={memory} onChange={(event) => setMemory(Number(event.target.value))} />
-            </label>
-          </div>
-
-          <div className="mt-3">
-            <span className="launcher-label"><Wifi size={12} /> {t("launcher.connect")}</span>
-            <div className="mt-1.5 grid gap-2">
-              <button
-                className={`server-choice ${!serverName && !custom ? "active" : ""}`}
-                onClick={() => { setServerName(""); setCustom(""); }}
-              >
-                <Globe size={13} /> {t("launcher.singleplayer")}
-              </button>
-              {servers.map((server) => (
-                <button
-                  key={server.name}
-                  className={`server-choice ${serverName === server.name ? "active" : ""}`}
-                  onClick={() => { setServerName(server.name); setCustom(""); }}
-                >
-                  <ServerIcon size={13} />
-                  <span className="min-w-0 flex-1 truncate text-left">{server.name}</span>
-                  <span className="font-mono text-[10px] text-muted">127.0.0.1:{server.port}</span>
-                  {!server.running && <span className="chip chip-accent">{t("launcher.autoStart")}</span>}
+              <div className="instances-preview">
+                <p className="roots-panel-title">{t("instances.preview")}</p>
+                <div className="mt-2 grid grid-cols-2 gap-y-1 text-[11px]">
+                  <span className="text-muted">{t("instances.name")}</span><span className="truncate">{form.name || "—"}</span>
+                  <span className="text-muted">{t("instances.version")}</span><span>Minecraft {form.mc_version} · {form.loader} {form.loader_version ?? ""}</span>
+                  <span className="text-muted">{t("instances.java")}</span><span>Java {requiredJava(form.mc_version)}{form.java_path ? " (custom)" : " (managed)"}</span>
+                  <span className="text-muted">{t("instances.mods")}</span><span>{estimatedMods}</span>
+                  <span className="text-muted">{t("instances.state")}</span><span>{t("instances.willInstall")}</span>
+                </div>
+              </div>
+              {error && <p className="text-[11px] text-bad">{error}</p>}
+            </div>
+            <div className="modal-footer">
+              <span className="text-[10px] text-muted">{t("instances.localOnly")}</span>
+              <div className="flex gap-2">
+                <button className="btn btn-secondary" onClick={() => setModal(null)}>{t("common.close")}</button>
+                <button className="btn btn-primary" disabled={busy || !form.name.trim()} onClick={() => void save()}>
+                  {busy ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                  {modal === "create" ? t("instances.create") : t("common.save")}
                 </button>
-              ))}
-              <div className="flex items-center gap-2">
-                <input
-                  className="field !py-1.5 text-[11px]"
-                  placeholder={t("launcher.customServer")}
-                  value={custom}
-                  onChange={(event) => { setCustom(event.target.value); setServerName(""); }}
-                />
-                <ChevronDown size={13} className="text-muted" />
               </div>
             </div>
           </div>
-
-          <button className="mt-3 text-[11px] text-muted hover:text-ink" onClick={() => setAdvanced((value) => !value)}>
-            {t("launcher.advanced")} {advanced ? "▴" : "▾"}
-          </button>
-          {advanced && (
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 text-[11px]">
-                <input type="checkbox" checked={fullscreen} onChange={(event) => setFullscreen(event.target.checked)} />
-                {t("launcher.fullscreen")}
-              </label>
-              {!fullscreen && (
-                <>
-                  <div className="flex items-center gap-2 text-[11px]">
-                    {t("launcher.width")} <input className="field !w-20 !px-2 !py-1" type="number" value={width} onChange={(event) => setWidth(Number(event.target.value))} />
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px]">
-                    {t("launcher.height")} <input className="field !w-20 !px-2 !py-1" type="number" value={height} onChange={(event) => setHeight(Number(event.target.value))} />
-                  </div>
-                </>
-              )}
-            </div>
-          )}
         </div>
+      )}
 
-        <div className="modal-footer">
-          <span className="text-[10px] text-muted">{t("launcher.localOnly")}</span>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={() => { save(); onClose(); }}>{t("common.close")}</button>
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() => { save(); onLaunch(item, config, chosenServer); }}
-            >
-              {busy ? <Loader2 size={14} className="spin" /> : item.runtime_ready ? <Play size={14} /> : <Download size={14} />}
-              {item.runtime_ready ? t("launcher.play") : t("launcher.installAndPlay")}
-            </button>
+      {modal === "clone" && selected && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card" style={{ maxWidth: 420 }}>
+            <div className="modal-header"><span className="modal-icon running"><Copy size={18} /></span><div className="flex-1"><h2 className="text-sm font-semibold">{t("instances.clone")}</h2></div><button className="icon-btn" onClick={() => setModal(null)}><X size={16} /></button></div>
+            <div className="p-4"><input className="field" value={cloneName} onChange={(event) => setCloneName(event.target.value)} /></div>
+            <div className="modal-footer"><span /><div className="flex gap-2"><button className="btn btn-secondary" onClick={() => setModal(null)}>{t("common.close")}</button><button className="btn btn-primary" disabled={!cloneName.trim()} onClick={() => void clone()}>{t("instances.clone")}</button></div></div>
           </div>
         </div>
-      </div>
+      )}
+
+      {modal === "delete" && selected && (
+        <ConfirmDeleteModal
+          kind="instance"
+          name={selected.config.name}
+          onCancel={() => setModal(null)}
+          onConfirm={remove}
+        />
+      )}
     </div>
   );
 }
