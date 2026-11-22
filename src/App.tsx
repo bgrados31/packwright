@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { fireAndForget, messageOf as errorText } from "./lib/error";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -22,26 +22,26 @@ import "./App.css";
 
 import CreatePackForm from "./components/CreatePackForm";
 import WelcomeView from "./components/WelcomeView";
-import PackEditor from "./components/PackEditor";
+const PackEditor = lazy(() => import("./components/PackEditor"));
 import SetupView from "./components/SetupView";
 import Sidebar, { type SidebarView } from "./components/Sidebar";
 import PacksView from "./components/PacksView";
 import HomeView from "./components/HomeView";
-import SettingsView from "./components/SettingsView";
-import ServersView from "./components/ServersView";
-import LauncherView from "./components/LauncherView";
-import ExportModal from "./components/ExportModal";
+const SettingsView = lazy(() => import("./components/SettingsView"));
+const ServersView = lazy(() => import("./components/ServersView"));
+const LauncherView = lazy(() => import("./components/LauncherView"));
+const ExportModal = lazy(() => import("./components/ExportModal"));
 import Toasts, { type Toast } from "./components/Toasts";
 import Topbar from "./components/Topbar";
 import ShortcutsModal from "./components/ShortcutsModal";
 import UpdateToast from "./components/UpdateToast";
 import DebugConsole from "./components/DebugConsole";
-import ImportModal from "./components/ImportModal";
-import ProfileModal from "./components/ProfileModal";
+const ImportModal = lazy(() => import("./components/ImportModal"));
+const ProfileModal = lazy(() => import("./components/ProfileModal"));
 import CommandPalette, { type PaletteAction } from "./components/CommandPalette";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import type { PackProfile } from "./lib/profiles";
-import { useI18n, type TranslationKey } from "./i18n";
+import { isLocale, nextLocale, useI18n, type TranslationKey } from "./i18n";
 import {
   type AppConfig,
   type CreatePackInput,
@@ -169,7 +169,7 @@ export default function App() {
     try {
       const saved = await invoke<AppConfig>("config_set", { config: next });
       setConfig(saved);
-      if (saved.locale === "en" || saved.locale === "es") setLocale(saved.locale);
+      if (isLocale(saved.locale)) setLocale(saved.locale);
       await loadPacks();
     } catch (cause) {
       setError(errorText(cause));
@@ -851,7 +851,7 @@ export default function App() {
       label: t("setup.language"),
       group: t("palette.groupPreferences"),
       icon: <Globe size={14} />,
-      run: () => setLocale(locale === "en" ? "es" : "en"),
+      run: () => setLocale(nextLocale(locale)),
     },
     {
       id: "shortcuts",
@@ -865,6 +865,7 @@ export default function App() {
   const inSetup = config === null || !config.setup_complete;
 
   return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted">{t("editor.loading")}</div>}>
     <div className={`min-h-screen bg-bg text-ink ${inSetup ? "" : "app-shell"} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <a className="skip-link" href="#main-content">{t("common.skipToContent")}</a>
       {!inSetup && (
@@ -1108,5 +1109,6 @@ export default function App() {
         <DebugConsole onClose={() => void saveConfig({ ...config, debug_console: false })} />
       )}
     </div>
+    </Suspense>
   );
 }

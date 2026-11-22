@@ -72,7 +72,7 @@ export type AppConfig = {
   workspace: string;
   packwiz_path: string | null;
   serve_port: number;
-  locale: "en" | "es";
+  locale: "en" | "es" | "fr" | "de" | "pt";
   atlauncher_path: string | null;
   java_path: string | null;
   setup_complete: boolean;

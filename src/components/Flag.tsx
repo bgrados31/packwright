@@ -1,10 +1,40 @@
 type Props = {
-  code: "gb" | "es";
+  code: "gb" | "es" | "fr" | "de" | "pt";
   className?: string;
 };
 
 /** Banderas en SVG: Windows no renderiza los emoji de bandera y muestra solo las letras. */
 export default function Flag({ code, className = "" }: Props) {
+  if (code === "fr") {
+    return (
+      <svg className={`flag-icon ${className}`} viewBox="0 0 60 40" aria-hidden="true">
+        <rect width="60" height="40" fill="#fff" />
+        <rect width="20" height="40" fill="#0055A4" />
+        <rect x="40" width="20" height="40" fill="#EF4135" />
+      </svg>
+    );
+  }
+
+  if (code === "de") {
+    return (
+      <svg className={`flag-icon ${className}`} viewBox="0 0 60 40" aria-hidden="true">
+        <rect width="60" height="40" fill="#000" />
+        <rect y="13.33" width="60" height="13.34" fill="#DD0000" />
+        <rect y="26.67" width="60" height="13.33" fill="#FFCE00" />
+      </svg>
+    );
+  }
+
+  if (code === "pt") {
+    return (
+      <svg className={`flag-icon ${className}`} viewBox="0 0 60 40" aria-hidden="true">
+        <rect width="60" height="40" fill="#DA291C" />
+        <rect width="24" height="40" fill="#006600" />
+        <circle cx="24" cy="20" r="7" fill="#FFE900" stroke="#DA291C" strokeWidth="2" />
+      </svg>
+    );
+  }
+
   if (code === "es") {
     return (
       <svg className={`flag-icon ${className}`} viewBox="0 0 60 40" aria-hidden="true">

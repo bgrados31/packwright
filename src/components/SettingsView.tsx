@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { createPortal } from "react-dom";
 import { Check, Download, FolderOpen, Info, Moon, RotateCw, Sun, TriangleAlert, WandSparkles } from "lucide-react";
-import { LOCALES, useI18n, type TranslationKey } from "../i18n";
+import { isLocale, LOCALES, useI18n, type TranslationKey } from "../i18n";
 import { LOADERS, type AppConfig, type JavaInfo, type LauncherInfo, type PackwizStatus } from "../lib/types";
 import { fireAndForget } from "../lib/error";
 import Flag from "./Flag";
@@ -153,7 +153,7 @@ export default function SettingsView({ config, theme, onThemeChange, packwizFoun
   };
 
   const changeLocale = (value: string) => {
-    if (value === "en" || value === "es") patch({ locale: value });
+    if (isLocale(value)) patch({ locale: value });
   };
 
   return (

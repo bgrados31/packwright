@@ -57,7 +57,7 @@ Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripci
 - Explorador con panel único de raíces y drag & drop: mueve archivos a otras carpetas o reordénalos visualmente (el orden se guarda por carpeta).
 - **Play** en un paso: `packwiz serve` + instancia de prueba (symlink) + watcher + launcher. Detecta automáticamente Prism, Modrinth App, MultiMC y ATLauncher instalados; puedes marcar el preferido en Ajustes y la instancia se crea en su carpeta de instancias cuando el formato es compatible.
 - Barra superior con búsqueda global, migas de pan y accesos rápidos; atajos `Ctrl/Cmd+1..4` para navegar, `Ctrl/Cmd+N` para crear un pack y `?` para ver todos los atajos.
-- Consola flotante, command palette agrupada (`Ctrl/Cmd+K`) e i18n español/inglés.
+- Consola flotante, command palette agrupada (`Ctrl/Cmd+K`) e i18n en **español, inglés, francés, alemán y portugués**, con idiomas cargados bajo demanda.
 
 ### Lanzador propio
 - Ejecuta **vanilla, Fabric, Quilt, Forge y NeoForge** dentro de la app: instala el runtime (o ejecuta el instalador oficial del loader), sincroniza los mods del pack y lanza el juego con su classpath real.

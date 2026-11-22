@@ -7,6 +7,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Ca
 
 ### Added
 
+- Idiomas français, Deutsch y Português con cobertura completa del diccionario y selector en Ajustes; `Ctrl/Cmd+K` alterna entre los cinco idiomas soportados.
+
+### Changed
+
+- Carga diferida de idiomas y de las vistas pesadas (editor, servidores, launcher, ajustes, modales): el bundle inicial pasa de ~592 kB a ~313 kB (gzip 162 → 93 kB).
+
 - Launcher integrado para vanilla/Fabric/Quilt/Forge/NeoForge: instala el runtime (cliente, librerías, assets y natives) o ejecuta el instalador oficial del loader, y arranca Minecraft dentro de la app con los mods del pack sincronizados, consola en vivo y perfil por pack.
 - Gestor de JDK propios: descarga automática de Java 8/17/21 desde Adoptium/Microsoft, selección por versión de Minecraft y uso sin `JAVA_HOME` ni instalación manual.
 - «Play & connect»: arranca automáticamente un servidor de Packwright y conecta el cliente a `127.0.0.1:puerto`; también acepta direcciones personalizadas.
