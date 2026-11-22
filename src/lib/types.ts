@@ -14,6 +14,60 @@ export type PackInfo = {
   banner: string | null;
 };
 
+export type JavaRuntime = {
+  major: number;
+  path: string;
+  home: string;
+  installed: boolean;
+  system: boolean;
+  label: string;
+};
+
+export type LaunchProfile = {
+  memory: number;
+  username: string;
+  fullscreen: boolean;
+  width: number;
+  height: number;
+  java_major: number;
+  auto_runtime: boolean;
+};
+
+export type LauncherInstance = {
+  dir: string;
+  name: string;
+  mc: string;
+  loader: string;
+  java_major: number;
+  java_path: string;
+  runtime_ready: boolean;
+  prepared: boolean;
+  last_played: number;
+  playtime: number;
+};
+
+export type LauncherStatus = {
+  running: boolean;
+  dir: string;
+  started: number;
+};
+
+export type LauncherProgress = {
+  id: string;
+  stage: string;
+  percent: number;
+  label: string;
+};
+
+export type InstanceStatus = {
+  available: boolean;
+  path: string;
+  mode: "onesix" | "atlauncher" | "";
+  file_count: number;
+  mod_jars: number;
+  error: string | null;
+};
+
 export type AppConfig = {
   workspace: string;
   packwiz_path: string | null;

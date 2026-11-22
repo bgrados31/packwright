@@ -24,6 +24,7 @@ export default function CommandPalette({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useDialogKeyboard(onClose);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -32,11 +33,28 @@ export default function CommandPalette({
     const needle = query.trim().toLowerCase();
     if (!needle) return actions;
     return actions.filter((action) =>
-      `${action.label} ${action.group}`.toLowerCase().includes(needle),
+      `${action.label} ${action.group} ${action.hint ?? ""}`.toLowerCase().includes(needle),
     );
   }, [actions, query]);
 
+  const groups = useMemo(() => {
+    const result: Array<{ name: string; items: Array<{ action: PaletteAction; index: number }> }> = [];
+    filtered.forEach((action, index) => {
+      const group = result.find((entry) => entry.name === action.group);
+      if (group) group.items.push({ action, index });
+      else result.push({ name: action.group, items: [{ action, index }] });
+    });
+    return result;
+  }, [filtered]);
+
   useEffect(() => { setSelected(0); }, [query]);
+
+  // Keep the highlighted action visible when navigating with the keyboard.
+  useEffect(() => {
+    listRef.current
+      ?.querySelector(`[data-index="${selected}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
 
   const run = (action?: PaletteAction) => {
     if (!action) return;
@@ -78,28 +96,34 @@ export default function CommandPalette({
           />
           <button className="icon-btn !h-6 !w-6" onClick={onClose} title={t("palette.close")} aria-label={t("palette.close")}><X size={14} /></button>
         </div>
-        <div className="command-palette-list">
+        <div className="command-palette-list" ref={listRef}>
           {filtered.length === 0 && <p className="p-4 text-center text-[12px] text-muted">{t("palette.empty")}</p>}
-          {filtered.map((action, index) => (
-            <button
-              key={action.id}
-              className={`command-item ${index === selected ? "active" : ""}`}
-              onMouseEnter={() => setSelected(index)}
-              onClick={() => run(action)}
-            >
-              <span className="text-accent">{action.icon}</span>
-              <span className="min-w-0 flex-1 truncate text-left">
-                <span className="block text-[12px]">{action.label}</span>
-                <span className="block text-[10px] text-muted">{action.group}</span>
-              </span>
-              {action.hint && <kbd>{action.hint}</kbd>}
-            </button>
+          {groups.map((group) => (
+            <div key={group.name} className="command-group">
+              <p className="command-group-title">{group.name}</p>
+              {group.items.map(({ action, index }) => (
+                <button
+                  key={action.id}
+                  data-index={index}
+                  className={`command-item ${index === selected ? "active" : ""}`}
+                  onMouseEnter={() => setSelected(index)}
+                  onClick={() => run(action)}
+                >
+                  <span className="text-accent">{action.icon}</span>
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    <span className="block text-[12px]">{action.label}</span>
+                  </span>
+                  {action.hint && <kbd>{action.hint}</kbd>}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
         <div className="command-palette-foot">
           <span>↑↓ {t("palette.navigate")}</span>
           <span>↵ {t("palette.select")}</span>
           <span>esc {t("palette.close")}</span>
+          {filtered.length > 0 && <span className="ml-auto font-mono">{filtered.length} {t("palette.results")}</span>}
         </div>
       </div>
     </div>,

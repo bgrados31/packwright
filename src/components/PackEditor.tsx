@@ -1,16 +1,19 @@
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, ExternalLink, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Rocket, Settings2, Trash2, X } from "lucide-react";
+import { ChevronRight, Copy, ExternalLink, FolderOpen, Gamepad2, GitBranch, ImagePlus, Loader2, PackageOpen, Play, Rocket, Search, Settings2, Trash2, X } from "lucide-react";
+
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useI18n } from "../i18n";
 import type {
   AppConfig,
   FileEntry,
   HistoryEntry,
+  InstanceStatus,
   ModOperation,
   OpenFile,
   PackMeta,
+  TreeNode,
 } from "../lib/types";
 import { fireAndForget, messageOf } from "../lib/error";
 import type { EditorSettings } from "./CodeEditor";
@@ -21,6 +24,7 @@ import PackImage from "./PackImage";
 import { Checkbox, ContextMenu, Tag, type ContextMenuItem } from "./ui";
 import DevInstanceModal from "./DevInstanceModal";
 import GitPanel from "./GitPanel";
+import QuickOpen, { type QuickFile } from "./QuickOpen";
 import PublishModal from "./PublishModal";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
@@ -33,6 +37,7 @@ type Props = {
   loader: string | null;
   theme: "light" | "dark";
   files: FileEntry[];
+  allRoots: string[];
   openFiles: OpenFile[];
   activeKey: string | null;
   config: AppConfig;
@@ -58,6 +63,7 @@ type Props = {
   onRenameFile: (root: string, path: string, name: string) => void;
   onDeleteFile: (root: string, path: string) => void;
   onNewFile: (root: string, parent: string, name: string) => void;
+  onMoveFile: (root: string, path: string, targetDir: string) => void;
   onMetaChange: (meta: PackMeta) => void;
   onSaveMeta: () => void;
   onUseIcon: () => void;
@@ -68,6 +74,7 @@ type Props = {
   modsRevision: number;
   onModOperation: (operation: ModOperation) => void;
   onDeletePack: () => void;
+  onLaunch: (dir: string) => void;
 };
 
 export default function PackEditor(props: Props) {
@@ -92,6 +99,61 @@ export default function PackEditor(props: Props) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; key: string; path: string } | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [trees, setTrees] = useState<Record<string, TreeNode[]>>({});
+  const [instance, setInstance] = useState<InstanceStatus | null>(null);
+  const [instanceHidden, setInstanceHidden] = useState(false);
+
+  const refreshInstance = () => {
+    void invoke<InstanceStatus>("instance_status", { dir: props.dir })
+      .then(setInstance)
+      .catch(() => setInstance(null));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setInstance(null);
+    invoke<InstanceStatus>("instance_status", { dir: props.dir })
+      .then((status) => { if (!cancelled) setInstance(status); })
+      .catch(() => { if (!cancelled) setInstance(null); });
+    return () => { cancelled = true; };
+  }, [props.dir]);
+
+  useEffect(() => {
+    if (tab !== "files") return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setQuickOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab]);
+
+  const instanceRoot = Boolean(instance?.available) && !instanceHidden;
+  const roots = useMemo(() => {
+    const base = props.config.editor_roots.filter((root) => root !== "instance");
+    return instanceRoot ? [...base, "instance"] : base;
+  }, [props.config.editor_roots, instanceRoot]);
+  const allRoots = instanceRoot
+    ? [...new Set([...props.allRoots, "instance"])]
+    : props.allRoots;
+  const quickFiles = useMemo<QuickFile[]>(() => {
+    const result: QuickFile[] = [];
+    const binary = /\.(jar|zip|png|jpe?g|gif|webp|ogg|wav|mp3|mp4|nbt|dat|bin|class|so|dll|exe|pdf)$/i;
+    Object.entries(trees).forEach(([root, nodes]) => {
+      const visit = (items: TreeNode[]) => {
+        items.forEach((node) => {
+          if (node.kind === "file") {
+            if (!binary.test(node.name)) result.push({ root, path: node.path, name: node.name });
+          } else visit(node.children);
+        });
+      };
+      visit(nodes);
+    });
+    return result.sort((a, b) => a.path.localeCompare(b.path));
+  }, [trees]);
 
   const activeTab = props.openFiles.find((file) => file.key === props.activeKey) ?? null;
   const dirty = activeTab ? activeTab.content !== activeTab.saved : false;
@@ -159,6 +221,9 @@ export default function PackEditor(props: Props) {
           <button className="btn btn-ghost" onClick={() => setGitOpen(true)} title={t("git.title")}>
             <GitBranch size={14} /> {t("git.title")}
           </button>
+          <button className="btn btn-primary" onClick={() => props.onLaunch(props.dir)} title={t("launcher.playPack")}>
+            <Gamepad2 size={14} /> {t("launcher.play")}
+          </button>
           <button className="btn btn-secondary" onClick={() => setDevOpen(true)} title={t("dev.auto")}>
             <Play size={14} /> {t("dev.play")}
           </button>
@@ -201,18 +266,48 @@ export default function PackEditor(props: Props) {
       </div>
 
       {tab === "files" ? (
-        <div className="editor-shell mt-6">
+        <>
+        {instance?.available ? (
+          <div className="instance-bar mt-4">
+            <Gamepad2 size={14} className="shrink-0 text-accent" />
+            <span className="instance-bar-label">{t("editor.root.instance")}</span>
+            <code className="instance-bar-path" title={instance.path}>{instance.path}</code>
+            <span className="instance-bar-meta">
+              {instance.mod_jars} {t("editor.instanceMods")} · {instance.file_count} {t("editor.instanceFiles")}
+            </span>
+            <button
+              className="btn btn-quiet text-[11px]"
+              onClick={() => fireAndForget(invoke("open_path", { path: instance.path }))}
+              title={t("editor.openFolder")}
+            >
+              <FolderOpen size={12} /> {t("editor.openFolder")}
+            </button>
+          </div>
+        ) : (
+          <div className="instance-bar instance-bar-empty mt-4">
+            <Gamepad2 size={14} className="shrink-0 text-muted" />
+            <span className="min-w-0 flex-1 truncate text-muted">
+              {instance?.error ?? t("editor.instanceMissing")}
+            </span>
+            <button className="btn btn-quiet text-[11px]" onClick={() => setDevOpen(true)}>
+              <Play size={12} /> {t("dev.play")}
+            </button>
+          </div>
+        )}
+        <div className="editor-shell">
           <FileTree
             dir={props.dir}
-            roots={props.config.editor_roots}
-            allRoots={["pack", "packwiz", "packwright"]}
+            roots={roots}
+            allRoots={allRoots}
             activeKey={props.activeKey}
             revision={props.treeRevision}
             onOpen={props.onOpenFile}
-            onToggleRoot={props.onToggleRoot}
+            onToggleRoot={(root) => root === "instance" ? setInstanceHidden((value) => !value) : props.onToggleRoot(root)}
             onRename={props.onRenameFile}
             onDelete={props.onDeleteFile}
             onNewFile={props.onNewFile}
+            onMove={props.onMoveFile}
+            onTreesChange={setTrees}
           />
 
           <div className="editor-main">
@@ -243,6 +338,9 @@ export default function PackEditor(props: Props) {
                   }}
                   title={file.path}
                 >
+                  <span className={`editor-tab-root editor-tab-root-${file.root}`}>
+                    {file.root === "instance" ? "GAME" : file.root.slice(0, 3).toUpperCase()}
+                  </span>
                   <span className="truncate">{file.name}</span>
                   {file.content !== file.saved && <span className="editor-dirty-dot" />}
                   <span
@@ -253,7 +351,15 @@ export default function PackEditor(props: Props) {
                   </span>
                 </button>
               ))}
-              <button className="icon-btn ml-auto !h-6 !w-6" onClick={() => setSettingsOpen((value) => !value)} title={t("editor.settings")}>
+              <button
+                className="icon-btn ml-auto !h-6 !w-6"
+                onClick={() => setQuickOpen(true)}
+                title={`${t("editor.quickOpen")} (Ctrl/Cmd+P)`}
+                aria-label={t("editor.quickOpen")}
+              >
+                <Search size={13} />
+              </button>
+              <button className="icon-btn !h-6 !w-6" onClick={() => setSettingsOpen((value) => !value)} title={t("editor.settings")}>
                 <Settings2 size={13} />
               </button>
             </div>
@@ -300,7 +406,17 @@ export default function PackEditor(props: Props) {
             {activeTab ? (
               <>
                 <div className="editor-info">
-                  <span className="truncate font-mono text-muted">{activeTab.path}</span>
+                  <div className="editor-breadcrumbs" title={`${activeTab.root}:${activeTab.path}`}>
+                    <span className={`quick-root quick-root-${activeTab.root}`}>
+                      {activeTab.root === "instance" ? "GAME" : activeTab.root.toUpperCase()}
+                    </span>
+                    {activeTab.path.split("/").map((part, index, parts) => (
+                      <span key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
+                        <ChevronRight size={10} className="shrink-0 text-muted" />
+                        <span className={`truncate font-mono ${index === parts.length - 1 ? "text-ink" : "text-muted"}`}>{part}</span>
+                      </span>
+                    ))}
+                  </div>
                   <div className="flex items-center gap-3">
                     {dirty && <span className="text-muted">{t("editor.unsaved")}</span>}
                     {activeTab.diagnostics.length > 0 ? (
@@ -359,6 +475,8 @@ export default function PackEditor(props: Props) {
                   <span>Ln {cursor.line}, Col {cursor.column}</span>
                   <span>{settings.tabSize} {t("editor.spaces")}</span>
                   <span>UTF-8</span>
+                  <span>{activeTab.root === "instance" ? t("editor.root.instance") : activeTab.root}</span>
+                  <span>{(activeTab.content.length / 1024).toFixed(1)} KB</span>
                   <span>{activeTab.path.split(".").pop()?.toUpperCase() ?? "TXT"}</span>
                 </div>
               </>
@@ -367,6 +485,7 @@ export default function PackEditor(props: Props) {
             )}
           </div>
         </div>
+        </>
       ) : tab === "mods" ? (
         <div className="view-enter mt-6">
           <ModsView
@@ -715,7 +834,7 @@ export default function PackEditor(props: Props) {
             launcherPaths={props.config.launcher_paths ?? {}}
             servePort={props.config.serve_port || 8080}
             preferredLauncher={props.config.preferred_launcher}
-            onClose={() => setDevOpen(false)}
+            onClose={() => { setDevOpen(false); refreshInstance(); }}
           />,
           document.body,
         )}
@@ -734,6 +853,16 @@ export default function PackEditor(props: Props) {
           ] as ContextMenuItem[]}
         />
       )}
+
+      {quickOpen &&
+        createPortal(
+          <QuickOpen
+            files={quickFiles}
+            onClose={() => setQuickOpen(false)}
+            onOpen={(root, path, name) => props.onOpenFile(root, path, name)}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

@@ -1,14 +1,17 @@
-mod config;
+pub mod config;
 mod dev;
 mod error;
 mod export;
 mod git;
 mod launchers;
+pub mod launcher;
+pub mod launcher_java;
 mod import;
 mod files;
+mod instance_files;
 mod meta;
 mod mods;
-mod net;
+pub mod net;
 mod model;
 mod paths;
 mod pack;
@@ -21,10 +24,21 @@ mod shutdown;
 mod process;
 mod versions;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use pack::AppState;
 use process::CommandRunner;
+use launcher::runtime_java_list;
+
+#[tauri::command]
+async fn runtime_java_install(major: u32, app: tauri::AppHandle) -> error::Result<launcher_java::JavaRuntime> {
+    let report = |stage: &str, percent: u32, label: &str| {
+        let _ = app.emit("launcher://progress", serde_json::json!({
+            "id": format!("java-{major}"), "stage": stage, "percent": percent, "label": label,
+        }));
+    };
+    launcher_java::install_jdk_core(major, Some(&report)).await
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,6 +61,7 @@ pub fn run() {
             app.manage(dev::DevState::new(app.handle().clone()));
             app.manage(server::ServerState::new(app.handle().clone()));
             app.manage(playit::PlayitState::new(app.handle().clone()));
+            app.manage(launcher::LauncherState::new(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +97,16 @@ pub fn run() {
             dev::dev_launch,
             dev::dev_stop,
             dev::dev_status,
+            runtime_java_list,
+            runtime_java_install,
+            launcher::launcher_instances,
+            launcher::launcher_profile,
+            launcher::launcher_profile_set,
+            launcher::launcher_install,
+            launcher::launcher_play,
+            launcher::launcher_status,
+            launcher::launcher_stop,
+            launcher::launcher_history,
             git::git_init,
             git::git_status,
             git::git_commit,
@@ -140,6 +165,7 @@ pub fn run() {
             files::pack_files,
             files::pack_tree,
             files::file_rename,
+            files::file_move,
             files::file_delete,
             files::file_new,
             files::file_read,
@@ -147,6 +173,14 @@ pub fn run() {
             files::file_validate,
             files::file_history,
             files::file_restore,
+            instance_files::instance_status,
+            instance_files::instance_tree,
+            instance_files::instance_file_read,
+            instance_files::instance_file_write,
+            instance_files::instance_file_new,
+            instance_files::instance_file_rename,
+            instance_files::instance_file_move,
+            instance_files::instance_file_delete,
             meta::meta_get,
             meta::meta_set,
             meta::pack_icon_set_default,

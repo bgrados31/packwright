@@ -20,6 +20,35 @@ monaco.languages.setMonarchTokensProvider("toml", {
   },
 });
 
+// Archivos de configuración de Minecraft: options.txt, .properties, .cfg, .ini.
+monaco.languages.register({ id: "properties" });
+monaco.languages.setMonarchTokensProvider("properties", {
+  tokenizer: {
+    root: [
+      [/\s*[#!].*$/, "comment"],
+      [/^\s*\[[^\]]+\]/, "type"],
+      [/[\w.\-]+(?=\s*[=:])/, "variable"],
+      [/[=:]/, "operator"],
+      [/"[^"]*"|'[^']*'/, "string"],
+      [/\b(true|false|-?\d+(?:\.\d+)?)\b/, "number"],
+    ],
+  },
+});
+
+// Logs del juego y del servidor: resaltamos niveles y excepciones.
+monaco.languages.register({ id: "mcLog" });
+monaco.languages.setMonarchTokensProvider("mcLog", {
+  tokenizer: {
+    root: [
+      [/\[\d{2}:\d{2}:\d{2}(?:\.\d+)?\]/, "comment"],
+      [/\b(FATAL|ERROR|Exception|Caused by)\b/i, "type"],
+      [/\b(WARN|WARNING)\b/i, "keyword"],
+      [/\b(INFO|DEBUG|TRACE)\b/i, "string"],
+      [/\b\d{1,3}(?:\.\d{1,3}){3}\b/, "number"],
+    ],
+  },
+});
+
 monaco.editor.defineTheme("packwright-light", {
   base: "vs",
   inherit: true,

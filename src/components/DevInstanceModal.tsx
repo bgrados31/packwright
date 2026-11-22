@@ -16,7 +16,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Instance = { path: string; mods_linked: boolean; overrides: number };
+type Instance = { path: string; mods_linked: boolean; overrides: number; mode: "onesix" | "atlauncher"; command: string };
 type Status = { running: boolean; watching: boolean };
 
 export default function DevInstanceModal({ dir, launcherPaths, servePort, preferredLauncher, onClose }: Props) {
@@ -56,7 +56,11 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, prefer
   useOpLine((line) => {
     const id = line.id;
     if (!(id === "dev-watch" || id.startsWith("dev-") || id.startsWith("serve-"))) return;
-    setLines((previous) => [...previous.slice(-39), line]);
+    // Avisos de logging de Java: ruido del bootstrap, no errores de la app.
+    if (/^SLF4J\b/.test(line.line)) return;
+    // packwiz escribe estos mensajes de arranque en stderr; los mostramos en gris.
+    const startup = /^(Loading modpack|Running on port)\b/.test(line.line);
+    setLines((previous) => [...previous.slice(-39), startup ? { ...line, stream: "stdout" } : line]);
   }, []);
 
   /** Un solo botón: serve + instancia + watcher + launcher. */
@@ -118,7 +122,12 @@ export default function DevInstanceModal({ dir, launcherPaths, servePort, prefer
             <div className="min-w-0 text-[11px] text-muted">
               <p className="truncate font-mono">{instance?.path ?? t("dev.pathHint")}</p>
               {instance && (
-                <p className="mt-1">{t("dev.modsLinked")}: {instance.mods_linked ? t("dev.yes") : t("dev.no")} · {t("dev.overrides")}: {instance.overrides}</p>
+                <>
+                  <p className="mt-1">{t("dev.modsLinked")}: {instance.mods_linked ? t("dev.yes") : t("dev.no")} · {t("dev.overrides")}: {instance.overrides}</p>
+                  {instance.mode === "atlauncher" && (
+                    <p className="mt-1 truncate font-mono text-[10px] text-accent" title={instance.command}>{instance.command}</p>
+                  )}
+                </>
               )}
               <p className="mt-1">{t("dev.metadataHint")}</p>
             </div>

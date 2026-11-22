@@ -1,6 +1,6 @@
 import {
-  Boxes,
   Command,
+  Gamepad2,
   LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "../i18n";
 
-export type SidebarView = "home" | "packs" | "servers" | "instances" | "create" | "editor" | "settings";
+export type SidebarView = "home" | "packs" | "servers" | "launcher" | "create" | "editor" | "settings";
 
 type Props = {
   collapsed: boolean;
@@ -22,7 +22,9 @@ type Props = {
   onPacks: () => void;
   onSettings: () => void;
   onServers: () => void;
+  onLauncher: () => void;
   packsCount: number;
+  packwizReady?: boolean;
 };
 
 type ItemProps = {
@@ -95,13 +97,25 @@ export default function Sidebar(props: Props) {
           onClick={props.onServers}
         />
         <NavItem
-          icon={Boxes}
-          label={t("nav.instances")}
+          icon={Gamepad2}
+          label={t("nav.launcher")}
+          active={props.active === "launcher"}
           collapsed={props.collapsed}
-          disabled
-          badge={props.collapsed ? undefined : t("nav.soon")}
+          onClick={props.onLauncher}
         />
       </nav>
+
+      <div
+        className={`sidebar-status ${props.collapsed ? "collapsed" : ""}`}
+        title={props.packwizReady ? t("workspace.ready") : t("workspace.notReady")}
+      >
+        <span
+          className={`status-dot inline-block h-1.5 w-1.5 shrink-0 rounded-full ${props.packwizReady ? "bg-ok" : "bg-bad"}`}
+        />
+        {!props.collapsed && (
+          <span className="truncate">{props.packwizReady ? t("workspace.ready") : t("workspace.notReady")}</span>
+        )}
+      </div>
 
       <div className="sidebar-footer">
         <button className="sidebar-item" onClick={props.onCommands} title={t("palette.title")}>

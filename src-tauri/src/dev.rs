@@ -18,6 +18,72 @@ pub struct DevInstance {
     pub path: String,
     pub mods_linked: bool,
     pub overrides: usize,
+    /// `atlauncher` usa instance.json + preLaunchCommand; `onesix` usa packwiz.url.
+    pub mode: String,
+    /// Comando exacto que ATLauncher ejecutará antes de arrancar Minecraft.
+    pub command: String,
+}
+
+const BOOTSTRAP_URL: &str = "https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar";
+
+/// ATLauncher limpia el nombre a solo alfanuméricos para la carpeta.
+fn safe_instance_name(name: &str) -> String {
+    let value: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    if value.is_empty() { "packwright".into() } else { value }
+}
+
+fn pseudo_uuid(seed: &str) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in seed.as_bytes().iter().chain(nanos.to_string().as_bytes()) {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    let a = hash as u32;
+    let b = (hash >> 32) as u16;
+    let c = ((hash >> 48) as u16 & 0x0fff) | 0x4000;
+    let d = ((hash >> 8) as u16 & 0x3fff) | 0x8000;
+    let e = hash & 0x0000_ffff_ffff_ffff;
+    format!("{a:08x}-{b:04x}-{c:04x}-{d:04x}-{e:012x}")
+}
+
+fn atlauncher_instances(cfg: &config::AppConfig) -> Result<PathBuf> {
+    let info = crate::launchers::detect(cfg)
+        .into_iter()
+        .find(|item| item.key == "atlauncher")
+        .ok_or_else(|| AppError::NotFound("ATLauncher is not detected".into()))?;
+    let base = info
+        .instances_dir
+        .map(PathBuf::from)
+        .or_else(|| info.data_dir.map(|dir| PathBuf::from(dir).join("instances")))
+        .ok_or_else(|| AppError::NotFound("ATLauncher instances folder not found".into()))?;
+    std::fs::create_dir_all(&base)?;
+    Ok(base)
+}
+
+/// Busca una instancia ya instalada con el mismo MC + loader para usarla de
+/// plantilla. ATLauncher guarda en instance.json el manifest completo de la
+/// versión (bibliotecas, mainClass, assets...), imposible de inventar aquí.
+fn atlauncher_template(instances: &Path, mc: &str, loader: &str) -> Option<(PathBuf, Value)> {
+    let entries = std::fs::read_dir(instances).ok()?;
+    for entry in entries.flatten() {
+        let root = entry.path();
+        let text = std::fs::read_to_string(root.join("instance.json")).ok()?;
+        let value: Value = serde_json::from_str(&text).ok()?;
+        if value.get("id").and_then(Value::as_str) != Some(mc) {
+            continue;
+        }
+        let loader_type = value
+            .pointer("/launcher/loaderVersion/type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if !loader_type.eq_ignore_ascii_case(loader) {
+            continue;
+        }
+        return Some((root, value));
+    }
+    None
 }
 
 #[derive(Debug, Serialize)]
@@ -67,7 +133,7 @@ fn instance_path(cfg: &config::AppConfig, dir: &str) -> Result<PathBuf> {
     Ok(cfg.workspace.join(".packwright").join("instances").join(name))
 }
 
-fn copy_dir_all(source: &Path, destination: &Path) -> Result<usize> {
+pub(crate) fn copy_dir_all(source: &Path, destination: &Path) -> Result<usize> {
     if !source.is_dir() {
         return Ok(0);
     }
@@ -196,10 +262,126 @@ fn migrate_metadata(cfg: &config::AppConfig, dir: &str, pack: &Path, instance: &
     }
 }
 
+pub(crate) fn active_instance_dir(cfg: &config::AppConfig, dir: &str, pack: &Path) -> Result<PathBuf> {
+    if use_atlauncher(cfg) {
+        let info = model::read_pack_info(pack).ok();
+        let name = info.map(|value| value.name).unwrap_or_else(|| dir.to_string());
+        Ok(atlauncher_instances(cfg)?.join(safe_instance_name(&name)))
+    } else {
+        instance_path(cfg, dir)
+    }
+}
+
+pub(crate) fn use_atlauncher(cfg: &config::AppConfig) -> bool {
+    let all = crate::launchers::detect(cfg);
+    if let Some(key) = cfg.preferred_launcher.as_deref() {
+        if key == "atlauncher" {
+            return true;
+        }
+        if let Some(info) = all.iter().find(|item| item.key == key && item.found && item.executable.is_some()) {
+            return info.integration == "import";
+        }
+    }
+    let has_full = all.iter().any(|item| {
+        item.found && item.integration == "full" && item.executable.is_some()
+    });
+    !has_full && all.iter().any(|item| item.key == "atlauncher" && item.found)
+}
+
+/// ATLauncher no entiende OneSix, pero sí ejecuta un comando antes de arrancar
+/// cada instancia (`launcher.preLaunchCommand`). Clonamos una instancia ya
+/// instalada del mismo MC + loader y le enchufamos packwiz-installer apuntando
+/// al `packwiz serve` local. El launcher también admite `--launch <carpeta>`.
+async fn prepare_atlauncher(
+    cfg: &config::AppConfig,
+    pack: &Path,
+    dir: &str,
+    serve_port: u16,
+) -> Result<DevInstance> {
+    let info = model::read_pack_info(pack).ok();
+    let mc = info.as_ref().and_then(|value| value.minecraft_version.clone())
+        .ok_or_else(|| AppError::Validation("pack.toml has no Minecraft version".into()))?;
+    let loader = info.as_ref().and_then(|value| value.loader.clone())
+        .ok_or_else(|| AppError::Validation("pack.toml has no loader".into()))?;
+
+    let instances = atlauncher_instances(cfg)?;
+    let (_, template) = atlauncher_template(&instances, &mc, &loader).ok_or_else(|| {
+        AppError::NotFound(format!(
+            "ATLauncher needs an existing {mc} {loader} instance to use as a template. Create one in ATLauncher first, then press Play again."
+        ))
+    })?;
+
+    let name = info.as_ref().map(|value| value.name.clone()).unwrap_or_else(|| dir.to_string());
+    let folder = safe_instance_name(&name);
+    let instance = instances.join(&folder);
+    std::fs::create_dir_all(&instance)?;
+
+    let mut json = template;
+    let launcher = json
+        .pointer_mut("/launcher")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| AppError::Parse("ATLauncher template has no launcher block".into()))?;
+    let serve = format!("http://localhost:{serve_port}");
+    let command = format!("$INST_JAVA -jar packwiz-installer-bootstrap.jar {serve}/pack.toml");
+    launcher.insert("name".into(), json!(name));
+    launcher.insert("pack".into(), json!("Packwright"));
+    launcher.insert("description".into(), json!(info.as_ref().and_then(|v| v.description.clone()).unwrap_or_default()));
+    launcher.insert("version".into(), json!(info.as_ref().and_then(|v| v.version.clone()).unwrap_or_else(|| "1.0.0".into())));
+    launcher.insert("vanillaInstance".into(), json!(true));
+    launcher.insert("enableCommands".into(), json!(true));
+    launcher.insert("preLaunchCommand".into(), json!(command));
+    launcher.insert("postExitCommand".into(), json!(""));
+    launcher.insert("wrapperCommand".into(), json!(""));
+    launcher.insert("mods".into(), json!([]));
+    launcher.insert("ignoredUpdates".into(), json!([]));
+    launcher.insert("ignoreAllUpdates".into(), json!(true));
+    launcher.insert("numPlays".into(), json!(0));
+    if let Some(obj) = json.as_object_mut() {
+        obj.insert("uuid".into(), json!(pseudo_uuid(&folder)));
+    }
+
+    // packwiz-installer se descarga una sola vez y se reutiliza en cada arranque.
+    let jar = instance.join("packwiz-installer-bootstrap.jar");
+    if !jar.is_file() {
+        let bytes = crate::net::download_client()?
+            .get(BOOTSTRAP_URL)
+            .send()
+            .await
+            .map_err(|e| AppError::Process(format!("Could not download packwiz-installer: {e}")))?
+            .error_for_status()
+            .map_err(|e| AppError::Process(format!("packwiz-installer download failed: {e}")))?
+            .bytes()
+            .await
+            .map_err(|e| AppError::Process(format!("Could not read packwiz-installer: {e}")))?;
+        std::fs::write(&jar, bytes)?;
+    }
+
+    let overrides = copy_dir_all(&pack.join("overrides"), &instance)?;
+    copy_dir_all(&pack.join("mods"), &instance.join("mods"))?;
+    std::fs::write(
+        instance.join("instance.json"),
+        serde_json::to_string_pretty(&json).unwrap_or_default(),
+    )?;
+    migrate_metadata(cfg, dir, pack, &instance);
+
+    Ok(DevInstance {
+        path: instance.to_string_lossy().to_string(),
+        mods_linked: true,
+        overrides,
+        mode: "atlauncher".into(),
+        command,
+    })
+}
+
 #[tauri::command]
-pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
+pub async fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
     let cfg = config::load()?;
     let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?).canonicalize()?;
+
+    if use_atlauncher(&cfg) {
+        return prepare_atlauncher(&cfg, &pack, &dir, cfg.serve_port).await;
+    }
+
     let instance = instance_path(&cfg, &dir)?;
     std::fs::create_dir_all(&instance)?;
     let mods_linked = link_or_copy(&pack.join("mods"), &instance.join("mods"))?;
@@ -209,6 +391,8 @@ pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
         path: instance.to_string_lossy().to_string(),
         mods_linked,
         overrides,
+        mode: "onesix".into(),
+        command: String::new(),
     })
 }
 
@@ -216,7 +400,7 @@ pub fn dev_instance_prepare(dir: String) -> Result<DevInstance> {
 pub fn dev_watch_start(state: tauri::State<'_, DevState>, dir: String) -> Result<()> {
     let cfg = config::load()?;
     let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?).canonicalize()?;
-    let instance = instance_path(&cfg, &dir)?;
+    let instance = active_instance_dir(&cfg, &dir, &pack)?;
     let overrides_root = pack.join("overrides");
     std::fs::create_dir_all(&overrides_root)?;
     let app = state.app.clone();
@@ -276,7 +460,8 @@ pub async fn dev_launch(
     id: String,
 ) -> Result<()> {
     let cfg = config::load()?;
-    let instance = instance_path(&cfg, &dir)?;
+    let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack")?).canonicalize()?;
+    let instance = active_instance_dir(&cfg, &dir, &pack)?;
     let program = executable
         .filter(|value| !value.is_empty())
         .or_else(|| launcher_executable(&cfg))
@@ -291,10 +476,28 @@ pub async fn dev_launch(
     }
     *guard = None;
 
+    let is_atlauncher = Path::new(&program)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_lowercase().contains("atlauncher"))
+        .unwrap_or(false);
+    let atlauncher_folder = if is_atlauncher {
+        let pack = cfg.workspace.join(crate::paths::safe_component(&dir, "pack").unwrap_or_default());
+        let info = model::read_pack_info(&pack).ok();
+        let name = info.map(|value| value.name).unwrap_or_else(|| dir.clone());
+        Some(safe_instance_name(&name))
+    } else {
+        None
+    };
+
     let mut command = Command::new(&program);
+    command.kill_on_drop(true);
+    if let Some(folder) = atlauncher_folder.as_deref() {
+        // ATLauncher no acepta la ruta de una instancia OneSix: usa su flag propio.
+        command.args(["--launch", folder]);
+    } else {
+        command.arg(&instance);
+    }
     command
-        .kill_on_drop(true)
-        .arg(&instance)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::process::hide_console_window(command.as_std_mut());
@@ -352,4 +555,42 @@ pub async fn dev_status(state: tauri::State<'_, DevState>) -> Result<DevStatus> 
         *child = None;
     }
     Ok(DevStatus { running: !exited, watching })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn atlauncher_bridge_writes_prelaunch_command() {
+        let cfg = match config::load() { Ok(cfg) => cfg, Err(_) => return };
+        let instances = match atlauncher_instances(&cfg) { Ok(path) => path, Err(_) => return };
+        let pack_name = match std::fs::read_dir(&cfg.workspace)
+            .ok()
+            .and_then(|entries| entries.flatten().find(|entry| entry.path().join("pack.toml").is_file()))
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+        {
+            Some(name) => name,
+            None => return,
+        };
+        let pack = match cfg.workspace.join(&pack_name).canonicalize() { Ok(pack) => pack, Err(_) => return };
+        let info = match model::read_pack_info(&pack) { Ok(info) => info, Err(_) => return };
+        let (mc, loader) = match (info.minecraft_version, info.loader) {
+            (Some(mc), Some(loader)) => (mc, loader),
+            _ => return,
+        };
+        if atlauncher_template(&instances, &mc, &loader).is_none() {
+            return;
+        }
+
+        let result = prepare_atlauncher(&cfg, &pack, &pack_name, cfg.serve_port).await.unwrap();
+        let root = Path::new(&result.path);
+        let json: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join("instance.json")).unwrap(),
+        ).unwrap();
+        assert_eq!(result.mode, "atlauncher");
+        assert_eq!(json.pointer("/launcher/preLaunchCommand").and_then(Value::as_str), Some(result.command.as_str()));
+        assert_eq!(json.pointer("/launcher/enableCommands").and_then(Value::as_bool), Some(true));
+        assert!(root.join("packwiz-installer-bootstrap.jar").is_file());
+    }
 }

@@ -32,8 +32,13 @@ function languageFor(path: string): string {
   if (lower.endsWith(".md")) return "markdown";
   if (lower.endsWith(".yml") || lower.endsWith(".yaml")) return "yaml";
   if (lower.endsWith(".xml")) return "xml";
-  if (lower.endsWith(".log") || lower.endsWith(".properties") || lower.endsWith(".cfg") || lower.endsWith(".conf")) return "plaintext";
-  return "toml";
+  if (lower.endsWith(".log")) return "mcLog";
+  if (lower.endsWith(".properties") || lower.endsWith(".cfg") || lower.endsWith(".conf") || lower.endsWith(".ini")) return "properties";
+  if (lower.endsWith(".lua")) return "lua";
+  if (lower.endsWith(".sh") || lower.endsWith(".bat")) return "shell";
+  if (lower.endsWith(".js") || lower.endsWith(".ts")) return "javascript";
+  if (lower.endsWith(".toml")) return "toml";
+  return "plaintext";
 }
 
 export default function CodeEditor({ theme, path, value, diagnostics, settings, onChange, onCursor }: Props) {
@@ -54,7 +59,6 @@ export default function CodeEditor({ theme, path, value, diagnostics, settings, 
     automaticLayout: true,
     folding: true,
     glyphMargin: true,
-    lineNumbersMinChars: 3,
     bracketPairColorization: { enabled: true },
     guides: { bracketPairs: true, indentation: true },
     renderWhitespace: "selection" as const,
@@ -62,7 +66,17 @@ export default function CodeEditor({ theme, path, value, diagnostics, settings, 
     quickSuggestions: true,
     suggestOnTriggerCharacters: true,
     formatOnPaste: true,
-    scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false },
+    stickyScroll: { enabled: true },
+    cursorBlinking: "smooth" as const,
+    cursorSmoothCaretAnimation: "on" as const,
+    autoClosingBrackets: "languageDefined" as const,
+    autoClosingQuotes: "languageDefined" as const,
+    foldingHighlight: true,
+    overviewRulerLanes: 3,
+    fixedOverflowWidgets: true,
+    wordWrapColumn: 100,
+    lineNumbersMinChars: 4,
+    scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
   }), [fontSize, tabSize, minimap, wordWrap]);
 
   useEffect(() => {

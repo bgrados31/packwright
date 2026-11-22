@@ -26,4 +26,7 @@ pub async fn stop_all(app: &AppHandle) {
     if let Some(state) = app.try_state::<crate::playit::PlayitState>() {
         state.shutdown().await;
     }
+    if let Some(state) = app.try_state::<crate::launcher::LauncherState>() {
+        state.shutdown().await;
+    }
 }

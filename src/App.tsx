@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fireAndForget, messageOf as errorText } from "./lib/error";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   FileArchive,
+  Gamepad2,
   Globe,
   House,
+  Keyboard,
   Layers,
   LayoutGrid,
   Moon,
@@ -27,8 +29,11 @@ import PacksView from "./components/PacksView";
 import HomeView from "./components/HomeView";
 import SettingsView from "./components/SettingsView";
 import ServersView from "./components/ServersView";
+import LauncherView from "./components/LauncherView";
 import ExportModal from "./components/ExportModal";
 import Toasts, { type Toast } from "./components/Toasts";
+import Topbar from "./components/Topbar";
+import ShortcutsModal from "./components/ShortcutsModal";
 import UpdateToast from "./components/UpdateToast";
 import DebugConsole from "./components/DebugConsole";
 import ImportModal from "./components/ImportModal";
@@ -104,9 +109,9 @@ export default function App() {
   const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [modsRevision, setModsRevision] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastTimers = useRef<number[]>([]);
   const [view, setView] = useState<SidebarView>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("packwright-sidebar") === "collapsed",
@@ -341,7 +346,10 @@ export default function App() {
     setActiveKey(key);
     if (openFiles.some((file) => file.key === key)) return;
     try {
-      const text = await invoke<string>("file_read", { dir: selectedPack, path });
+      const text = await invoke<string>(
+        root === "instance" ? "instance_file_read" : "file_read",
+        { dir: selectedPack, path },
+      );
       setOpenFiles((current) => [
         ...current,
         { key, root, path, name, content: text, saved: text, diagnostics: [] },
@@ -360,12 +368,15 @@ export default function App() {
   const saveFile = useCallback(async () => {
     if (!selectedPack || !activeTab || activeTab.content === activeTab.saved) return;
     try {
-      await invoke("file_write", { dir: selectedPack, path: activeTab.path, content: activeTab.content });
+      await invoke(
+        activeTab.root === "instance" ? "instance_file_write" : "file_write",
+        { dir: selectedPack, path: activeTab.path, content: activeTab.content },
+      );
       setOpenFiles((current) =>
         current.map((file) => (file.key === activeTab.key ? { ...file, saved: file.content } : file)),
       );
       setTreeRevision((value) => value + 1);
-      await loadPacks();
+      if (activeTab.root !== "instance") await loadPacks();
     } catch (cause) {
       setError(errorText(cause));
     }
@@ -373,23 +384,53 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const target = event.target as HTMLElement | null;
       const editing = Boolean(
         target?.isContentEditable ||
           target?.closest?.("input, textarea, select, [contenteditable='true']"),
       );
-      if (event.key.toLowerCase() === "s") {
-        // Save is useful even from the editor, so only skip unrelated text fields.
-        if (editing && !target?.closest?.(".monaco-editor")) return;
-        event.preventDefault();
-        void saveFile();
-      }
-      if (event.key.toLowerCase() === "k") {
-        // Don't steal Ctrl/Cmd+K from text inputs (e.g. search boxes).
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      // Modal dialogs own the keyboard (Escape/Tab); keep Ctrl/Cmd+K as a toggle.
+      const inDialog = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+      if (inDialog && key !== "k") return;
+
+      if (mod && !event.altKey) {
+        if (key === "s") {
+          // Save is useful even from the editor, so only skip unrelated text fields.
+          if (editing && !target?.closest?.(".monaco-editor")) return;
+          event.preventDefault();
+          void saveFile();
+          return;
+        }
         if (editing) return;
+        if (key === "k") {
+          event.preventDefault();
+          setPaletteOpen((value) => !value);
+          return;
+        }
+        if (key === "n") {
+          event.preventDefault();
+          setSelectedPack(null);
+          setView("create");
+          return;
+        }
+        const destinations: Record<string, SidebarView> = {
+          "1": "home", "2": "packs", "3": "servers", "4": "settings", "5": "launcher",
+        };
+        const destination = destinations[key];
+        if (destination) {
+          event.preventDefault();
+          setSelectedPack(null);
+          setView(destination);
+        }
+        return;
+      }
+
+      // "?" opens the shortcuts sheet from anywhere outside a text field.
+      if (!mod && !event.altKey && event.key === "?" && !editing) {
         event.preventDefault();
-        setPaletteOpen((value) => !value);
+        setShortcutsOpen(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -467,17 +508,12 @@ export default function App() {
     }
   };
 
-  useEffect(() => () => {
-    toastTimers.current.forEach((timer) => window.clearTimeout(timer));
-  }, []);
-
   const dismissToast = (id: string) =>
     setToasts((current) => current.filter((item) => item.id !== id));
 
-  const pushToast = (title: string, state: Toast["state"] = "success", detail?: string) => {
+  const pushToast = (title: string, state: Toast["state"] = "success", detail?: string, duration?: number) => {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setToasts((current) => [...current, { id, title, detail, state }]);
-    toastTimers.current.push(window.setTimeout(() => dismissToast(id), 3200));
+    setToasts((current) => [...current, { id, title, detail, state, duration }]);
   };
 
   const refreshTree = () => {
@@ -503,9 +539,12 @@ export default function App() {
   const renameFile = async (root: string, path: string, name: string) => {
     if (!selectedPack) return;
     try {
-      const updated = await invoke<string>("file_rename", { dir: selectedPack, path, newName: name });
+      const updated = await invoke<string>(
+        root === "instance" ? "instance_file_rename" : "file_rename",
+        { dir: selectedPack, path, newName: name },
+      );
       const oldKey = fileKey(root, path);
-      const newRoot = rootForPath(updated);
+      const newRoot = root === "instance" ? "instance" : rootForPath(updated);
       const newKey = fileKey(newRoot, updated);
       setOpenFiles((current) =>
         current.map((file) =>
@@ -522,10 +561,33 @@ export default function App() {
     }
   };
 
+  const moveFile = async (root: string, path: string, targetDir: string) => {
+    if (!selectedPack) return;
+    try {
+      const updated = await invoke<string>(
+        root === "instance" ? "instance_file_move" : "file_move",
+        { dir: selectedPack, path, targetDir },
+      );
+      const oldKey = fileKey(root, path);
+      const newKey = fileKey(root, updated);
+      const name = updated.split("/").pop() ?? updated;
+      setOpenFiles((current) =>
+        current.map((file) =>
+          file.key === oldKey ? { ...file, key: newKey, path: updated, name } : file,
+        ),
+      );
+      setActiveKey((current) => (current === oldKey ? newKey : current));
+      refreshTree();
+      pushToast(t("editor.moved", { name }));
+    } catch (cause) {
+      pushToast(t("editor.moveFailed"), "error", errorText(cause));
+    }
+  };
+
   const deleteFile = async (root: string, path: string) => {
     if (!selectedPack) return;
     try {
-      await invoke("file_delete", { dir: selectedPack, path });
+      await invoke(root === "instance" ? "instance_file_delete" : "file_delete", { dir: selectedPack, path });
       const key = fileKey(root, path);
       setOpenFiles((current) => current.filter((file) => file.key !== key));
       setActiveKey((current) => (current === key ? null : current));
@@ -536,12 +598,15 @@ export default function App() {
     }
   };
 
-  const newFile = async (_root: string, parent: string, name: string) => {
+  const newFile = async (root: string, parent: string, name: string) => {
     if (!selectedPack) return;
     try {
-      const created = await invoke<string>("file_new", { dir: selectedPack, parent, name });
+      const created = await invoke<string>(
+        root === "instance" ? "instance_file_new" : "file_new",
+        { dir: selectedPack, parent, name },
+      );
       refreshTree();
-      await openFile(rootForPath(created), created, created.split("/").pop() ?? created);
+      await openFile(root === "instance" ? "instance" : rootForPath(created), created, created.split("/").pop() ?? created);
       pushToast(t("editor.created", { name }));
     } catch (cause) {
       pushToast(t("editor.createFailed"), "error", errorText(cause));
@@ -626,7 +691,7 @@ export default function App() {
       }
     };
 
-    setToasts((current) => [...current, { id, title: label(), state: "running" }]);
+    setToasts((current) => [...current, { id, title: label(), state: "running", duration: 4200 }]);
 
     let unlisten: (() => void) | undefined;
     const ready = listen<OpLine>("operation://line", (event) => {
@@ -726,7 +791,6 @@ export default function App() {
       );
     } finally {
       unlisten?.();
-      toastTimers.current.push(window.setTimeout(() => dismissToast(id), 4200));
     }
   };
 
@@ -753,11 +817,12 @@ export default function App() {
   const activeView: SidebarView = selectedPack && view === "editor" ? "editor" : view;
 
   const paletteActions = useMemo<PaletteAction[]>(() => [
-    { id: "home", label: t("nav.home"), group: t("palette.groupNavigate"), icon: <House size={14} />, run: () => setView("home") },
-    { id: "packs", label: t("nav.modpacks"), group: t("palette.groupNavigate"), icon: <LayoutGrid size={14} />, run: () => setView("packs") },
-    { id: "servers", label: t("nav.servers"), group: t("palette.groupNavigate"), icon: <Server size={14} />, run: () => setView("servers") },
-    { id: "settings", label: t("setup.settingsTitle"), group: t("palette.groupNavigate"), icon: <Settings2 size={14} />, run: () => setView("settings") },
-    { id: "new", label: t("nav.newPack"), group: t("palette.groupCreate"), icon: <Plus size={14} />, run: () => setView("create") },
+    { id: "home", label: t("nav.home"), group: t("palette.groupNavigate"), icon: <House size={14} />, hint: "⌘/Ctrl 1", run: () => { setSelectedPack(null); setView("home"); } },
+    { id: "packs", label: t("nav.modpacks"), group: t("palette.groupNavigate"), icon: <LayoutGrid size={14} />, hint: "⌘/Ctrl 2", run: () => { setSelectedPack(null); setView("packs"); } },
+    { id: "servers", label: t("nav.servers"), group: t("palette.groupNavigate"), icon: <Server size={14} />, hint: "⌘/Ctrl 3", run: () => { setSelectedPack(null); setView("servers"); } },
+    { id: "settings", label: t("setup.settingsTitle"), group: t("palette.groupNavigate"), icon: <Settings2 size={14} />, hint: "⌘/Ctrl 4", run: () => { setSelectedPack(null); setView("settings"); } },
+    { id: "launcher", label: t("nav.launcher"), group: t("palette.groupNavigate"), icon: <Gamepad2 size={14} />, hint: "⌘/Ctrl 5", run: () => setView("launcher") },
+    { id: "new", label: t("nav.newPack"), group: t("palette.groupCreate"), icon: <Plus size={14} />, hint: "⌘/Ctrl N", run: () => { setSelectedPack(null); setView("create"); } },
     { id: "profile", label: t("profiles.start"), group: t("palette.groupCreate"), icon: <Layers size={14} />, run: () => setProfileOpen(true) },
     { id: "import", label: t("import.title"), group: t("palette.groupCreate"), icon: <FileArchive size={14} />, run: () => setImportOpen(true) },
     {
@@ -788,11 +853,20 @@ export default function App() {
       icon: <Globe size={14} />,
       run: () => setLocale(locale === "en" ? "es" : "en"),
     },
+    {
+      id: "shortcuts",
+      label: t("palette.shortcuts"),
+      group: t("palette.groupHelp"),
+      icon: <Keyboard size={14} />,
+      hint: "?",
+      run: () => setShortcutsOpen(true),
+    },
   ], [t, theme, locale, selectedPack, setLocale]);
   const inSetup = config === null || !config.setup_complete;
 
   return (
     <div className={`min-h-screen bg-bg text-ink ${inSetup ? "" : "app-shell"} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <a className="skip-link" href="#main-content">{t("common.skipToContent")}</a>
       {!inSetup && (
         <Sidebar
           collapsed={sidebarCollapsed}
@@ -802,12 +876,27 @@ export default function App() {
           onHome={() => { setSelectedPack(null); setView("home"); }}
           onPacks={() => { setSelectedPack(null); setView("packs"); }}
           onServers={() => { setSelectedPack(null); setView("servers"); }}
+          onLauncher={() => setView("launcher")}
           onSettings={() => { setSelectedPack(null); setView("settings"); }}
           packsCount={packs.length}
+          packwizReady={Boolean(packwiz?.found)}
         />
       )}
 
-      <main className={inSetup ? "mx-auto max-w-5xl px-6 py-10" : "main-area px-8 py-8"}>
+      <main className={inSetup ? "mx-auto max-w-5xl px-6 py-10" : "main-area"} id="main-content">
+        {!inSetup && (
+          <Topbar
+            view={activeView}
+            packName={activePack?.name ?? selectedPack}
+            workspace={config?.workspace ?? ""}
+            theme={theme}
+            onCommands={() => setPaletteOpen(true)}
+            onShortcuts={() => setShortcutsOpen(true)}
+            onToggleTheme={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
+            onNewPack={() => { setSelectedPack(null); setView("create"); }}
+          />
+        )}
+        <div className={inSetup ? undefined : "main-content px-8 py-8"}>
         {error && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-bad/30 bg-bad/5 px-4 py-2.5 text-sm text-bad">
             <span>{error}</span>
@@ -826,6 +915,8 @@ export default function App() {
           />
         ) : view === "servers" ? (
           <ServersView packs={packs} />
+        ) : view === "launcher" ? (
+          <LauncherView packs={packs} />
         ) : view === "settings" ? (
           <div className="view-enter">
             <SettingsView
@@ -885,6 +976,7 @@ export default function App() {
               loader={activePack?.loader ?? null}
               theme={theme}
               files={files}
+              allRoots={["pack", "packwiz", "packwright"]}
               openFiles={openFiles}
               activeKey={activeKey}
               config={config!}
@@ -910,6 +1002,7 @@ export default function App() {
               onRenameFile={(root, path, name) => void renameFile(root, path, name)}
               onDeleteFile={(root, path) => void deleteFile(root, path)}
               onNewFile={(root, parent, name) => void newFile(root, parent, name)}
+              onMoveFile={(root, path, targetDir) => void moveFile(root, path, targetDir)}
               onReorderFiles={reorderFiles}
               onCloseOthers={closeOthers}
               onCloseAll={closeAll}
@@ -932,6 +1025,7 @@ export default function App() {
               modsRevision={modsRevision}
               onModOperation={(operation) => void runModOperation(operation)}
               onDeletePack={() => selectedPack && setDeletePackTarget(selectedPack)}
+              onLaunch={(dir) => { setSelectedPack(dir); setView("launcher"); }}
             />
           </div>
         ) : view === "packs" && packs.length === 0 ? (
@@ -959,6 +1053,7 @@ export default function App() {
             onDelete={(dir) => setDeletePackTarget(dir)}
           />
         )}
+        </div>
       </main>
 
       {exportTarget &&
@@ -1004,6 +1099,8 @@ export default function App() {
       {paletteOpen && (
         <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />
       )}
+
+      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
 
       <Toasts items={toasts} onDismiss={dismissToast} />
       <UpdateToast />

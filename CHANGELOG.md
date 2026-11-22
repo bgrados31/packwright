@@ -3,6 +3,31 @@
 Todas las Novedades Relevantes de Packwright se documentan en este archivo.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Cada push a `main` publica una release con versión patch nueva (`0.1.0` → `0.1.1` → `0.1.2`, ver `.github/workflows/release.yml`); las notas de cada release se generan desde los commits entre tags.
 
+## [Unreleased]
+
+### Added
+
+- Launcher integrado para vanilla/Fabric/Quilt/Forge/NeoForge: instala el runtime (cliente, librerías, assets y natives) o ejecuta el instalador oficial del loader, y arranca Minecraft dentro de la app con los mods del pack sincronizados, consola en vivo y perfil por pack.
+- Gestor de JDK propios: descarga automática de Java 8/17/21 desde Adoptium/Microsoft, selección por versión de Minecraft y uso sin `JAVA_HOME` ni instalación manual.
+- «Play & connect»: arranca automáticamente un servidor de Packwright y conecta el cliente a `127.0.0.1:puerto`; también acepta direcciones personalizadas.
+- Vista **Launcher** en la barra lateral, botón Jugar en el editor, atajo `Ctrl/Cmd+5` y acción en la paleta de comandos.
+
+- Nueva raíz **Game instance** en el editor: explora y edita los archivos reales de la instancia (`config/`, `mods/`, `options.txt`, logs…) junto a los del pack, con backups atómicos y sandbox de rutas.
+- Apertura rápida de archivos con `Ctrl/Cmd+P` entre todas las raíces, con búsqueda por nombre, ruta y subsecuencia.
+- Resaltado de sintaxis para `.properties`/`.cfg`/`.ini` y logs de Minecraft, además de LTS, sticky scroll, autocompletado y cuidado del cursor en Monaco.
+
+- Barra superior global con migas de pan, búsqueda de comandos y acciones rápidas (tema, nueva instancia, atajos).
+- Panel de atajos de teclado accesible con `?` o desde la paleta de comandos: `Ctrl/Cmd+1..4` para navegar, `Ctrl/Cmd+N` para crear un pack y `Ctrl/Cmd+S` para guardar.
+- Enlace de salto al contenido y anillo de foco visible en los nuevos controles.
+- Drag & drop en el explorador: arrastrar un archivo a una carpeta lo mueve de verdad (en pack e instancia, con misma raíz y sandbox); soltarlo sobre otro archivo reordena la vista y se guarda por carpeta.
+
+### Changed
+
+- Paleta de comandos agrupada por categorías, con recuento de resultados, pistas de atajos y scroll automático sobre la opción seleccionada.
+- Notificaciones con barra de progreso, pausa al pasar el ratón y ciclo de vida gestionado por cada toast (los avisos en curso ya no caducan).
+- La barra lateral muestra en vivo si Packwiz está disponible.
+- «Configure roots» es ahora un único panel en la cabecera del explorador, en lugar de repetirse bajo cada raíz.
+
 ## [0.1.0] — 2026-11-21
 
 ### Added

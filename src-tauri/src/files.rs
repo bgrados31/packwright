@@ -236,6 +236,48 @@ pub fn file_rename(dir: String, path: String, new_name: String) -> Result<String
         .replace('\\', "/"))
 }
 
+/// Mueve un archivo a otra carpeta de la misma raíz del pack (drag & drop).
+#[tauri::command]
+pub fn file_move(dir: String, path: String, target_dir: String) -> Result<String> {
+    let root = pack_root(&dir)?;
+    if is_protected(&path) {
+        return Err(AppError::Validation("This file is managed by packwiz and cannot be moved".into()));
+    }
+    let source = resolve(&root, &path)?;
+    if !source.is_file() {
+        return Err(AppError::NotFound(format!("File does not exist: {path}")));
+    }
+    let folder = if target_dir.trim().is_empty() {
+        root.clone()
+    } else {
+        resolve(&root, &target_dir)?
+    };
+    if !folder.is_dir() {
+        return Err(AppError::Validation(format!("Target folder does not exist: {target_dir}")));
+    }
+    let name = source
+        .file_name()
+        .ok_or_else(|| AppError::Validation("Empty file name".into()))?;
+    let target = folder.join(name);
+    if target.exists() {
+        return Err(AppError::Validation("A file with that name already exists".into()));
+    }
+    let parent = target
+        .parent()
+        .unwrap_or(&root)
+        .canonicalize()
+        .map_err(|_| AppError::Validation("Invalid target folder".into()))?;
+    if !parent.starts_with(&root) {
+        return Err(AppError::Validation("Path outside the pack".into()));
+    }
+    std::fs::rename(&source, &target)?;
+    Ok(target
+        .strip_prefix(&root)
+        .unwrap_or(&target)
+        .to_string_lossy()
+        .replace('\\', "/"))
+}
+
 #[tauri::command]
 pub fn file_delete(dir: String, path: String) -> Result<()> {
     let root = pack_root(&dir)?;

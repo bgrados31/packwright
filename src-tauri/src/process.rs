@@ -184,7 +184,7 @@ impl CommandRunner {
 }
 
 /// Elimina secuencias ANSI (color) del output de packwiz.
-fn strip_ansi(input: &str) -> String {
+pub(crate) fn strip_ansi(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
     while let Some(ch) = chars.next() {

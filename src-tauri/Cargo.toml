@@ -32,10 +32,7 @@ base64 = "0.22"
 notify = "6"
 tauri-plugin-updater = "2.14.1"
 tauri-plugin-process = "2.4.0"
-
-
-[target.'cfg(target_os = "macos")'.dependencies]
-flate2 = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 tar = "0.4"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

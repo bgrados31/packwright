@@ -52,9 +52,18 @@ Todo ocurre en tu equipo. Sin cuentas, sin servidores de terceros, sin suscripci
 
 ### Editor y flujo de desarrollo
 - Editor **Monaco** local con TOML/JSON/YAML/MD/XML, validación en vivo, guardado atómico e historial con restore.
-- Árbol multi-root (Pack / Packwiz / Packwright), pestañas reordenables, renombrado y menús contextuales.
+- Árbol multi-root (Pack / Packwiz / Packwright / **Game instance**): edita también los archivos reales de la instancia de juego (configs, `options.txt`, logs y mods `.jar` visibles como binarios) con backups y rutas sandboxeadas.
+- Apertura rápida de cualquier archivo con `Ctrl/Cmd+P`, migas de ruta, pestañas con insignia de raíz y Monaco con resaltado para TOML, JSON, YAML, `.properties` y logs.
+- Explorador con panel único de raíces y drag & drop: mueve archivos a otras carpetas o reordénalos visualmente (el orden se guarda por carpeta).
 - **Play** en un paso: `packwiz serve` + instancia de prueba (symlink) + watcher + launcher. Detecta automáticamente Prism, Modrinth App, MultiMC y ATLauncher instalados; puedes marcar el preferido en Ajustes y la instancia se crea en su carpeta de instancias cuando el formato es compatible.
-- Consola flotante, command palette (`Ctrl/Cmd+K`) e i18n español/inglés.
+- Barra superior con búsqueda global, migas de pan y accesos rápidos; atajos `Ctrl/Cmd+1..4` para navegar, `Ctrl/Cmd+N` para crear un pack y `?` para ver todos los atajos.
+- Consola flotante, command palette agrupada (`Ctrl/Cmd+K`) e i18n español/inglés.
+
+### Lanzador propio
+- Ejecuta **vanilla, Fabric, Quilt, Forge y NeoForge** dentro de la app: instala el runtime (o ejecuta el instalador oficial del loader), sincroniza los mods del pack y lanza el juego con su classpath real.
+- **JDK gestionado** estilo ATLauncher: selecciona Java 8/17/21 según la versión de Minecraft y lo descarga de Adoptium/Microsoft sin que el usuario instale nada.
+- Perfiles por pack (nombre, RAM, pantalla), consola en vivo, tiempo de juego y parada limpia del proceso.
+- **Integración única servidor ↔ cliente**: elige uno de tus servidores, se arranca automáticamente y el cliente entra directamente en `127.0.0.1:puerto`.
 
 ### Servidores propios
 - Templates Vanilla, Paper, Purpur, Forge, NeoForge, Fabric y Velocity con setup automático.
@@ -137,6 +146,15 @@ Tests:
 ```bash
 bun run build            # typecheck + build del frontend
 cd src-tauri && cargo test
+```
+
+Verificación del launcher (descargas reales y procesos reales):
+
+```bash
+cd src-tauri
+cargo run --example verify_launcher -- --install-jdk  # manifiesto de Mojang, mods, JDK 21
+cargo run --example verify_launch                    # arranca Java con --server/--port
+cargo run --example verify_forge                     # ejecuta --installClient de NeoForge
 ```
 
 **Requisitos:** [Bun](https://bun.sh/) ≥ 1.4, [Rust](https://rustup.rs/) estable, MSVC Build Tools en Windows y [packwiz](https://packwiz.infra.link/installation/) en el PATH.
